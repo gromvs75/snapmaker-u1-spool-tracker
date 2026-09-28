@@ -1,74 +1,42 @@
-# 📖 Snapmaker U1 Spool Tracker — Beginner's Manual
+# Snapmaker U1 Spool Tracker — user manual
 
-A clear, non-technical guide to setting up and using **Snapmaker U1 Spool Tracker** with your Snapmaker U1 4-toolhead 3D printer.
+## 1. Install
 
----
+Download a published macOS or Windows build from the project's Releases page when v1.0.1 is available. On Mac, move `SnapmakerSpoolTracker.app` to `/Applications` and open it. If macOS blocks the unsigned app, use the standard context-menu **Open** action. On Windows, extract `SnapmakerSpoolTracker.exe` into a stable folder and run it. The app appears in the menu bar or system tray. Starting it a second time opens the existing dashboard.
 
-## 🎯 What Problem Does This Solve?
+## 2. Set up inventory
 
-The Snapmaker U1 features 4 independent toolheads. During long multi-color or multi-material prints:
-1. If a spool runs out while you are away, the printer enters an indefinite pause.
-2. The heated bed automatically cools down after a timeout for safety.
-3. As the bed cools, the print contracts, detaches from the plate, and ruins hours of work and material.
+Open **Configure Spools & Slots** from the tray, or visit `http://127.0.0.1:8765`. The first launch contains no spools or slot assignments. Add each physical spool with a name, material and actual remaining grams. Assign Slot 1 to T0, Slot 2 to T1, Slot 3 to T2 and Slot 4 to T3. Save the assignments. Deleting a spool clears its assignment. Edit remaining grams after a **real print** or when you weigh a spool.
 
-**This utility checks filament requirements BEFORE exporting from OrcaSlicer.** If any active spool doesn't have enough material, it stops the export and pops up a clear desktop alert.
+The **Safety reserve** is added to each used toolhead's requirement for the preflight comparison. It is not deducted from inventory. It starts at 0 g.
 
----
+## 3. Connect Snapmaker Orca / OrcaSlicer
 
-## 📥 Step 1: Install on macOS
+In **Print Settings → Others → Post-processing scripts**, enter the executable path followed by a semicolon and save the process preset:
 
-1. Head to the project Releases page and download `SnapmakerSpoolTracker-macOS.zip`.
-2. Double-click the downloaded zip to reveal `SnapmakerSpoolTracker.app`.
-3. Drag `SnapmakerSpoolTracker.app` into your Mac's **Applications** folder.
-4. Launch the application from **Applications**.
-5. A four-dot colored icon will appear in the top macOS menu bar next to your clock.
+```text
+/Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+```
 
-> **💡 Tip:** To automatically launch at system startup:  
-> Open *System Settings* → *General* → *Login Items* → click **«+»** and add `SnapmakerSpoolTracker`.
+```text
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+```
 
----
+Replace the Windows path with the actual location. Quote paths containing spaces. If running from source on Mac, use the absolute path to `run_hook.sh;` after installing dependencies in `venv`.
 
-## ⚙️ Step 2: Configure Slicer (Snapmaker Orca)
+## 4. Export and review
 
-This step only needs to be performed once:
+When Orca calls the script, it checks the G-code's per-tool filament usage against the assigned spools. If all used toolheads have enough material, export continues without a popup. The dashboard shows the latest result for T0–T3, including spool, required grams, remaining grams, and status.
 
-1. Open **Snapmaker Orca** (or standard OrcaSlicer).
-2. On the left side under **Process**, turn on the **Advanced** toggle.
-3. Switch to the **Others** tab.
-4. Scroll all the way down to **Post-processing scripts**.
-5. Paste the following line (including the trailing semicolon `;`):
-   `/Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;`
-6. Click the small disk icon (Save) next to your process profile and save it under a clear name (e.g. `0.20mm Standard (Spool Tracker)`).
+If a used toolhead has no spool or insufficient material, choose **Cancel Export** to stop or **Proceed Anyway** to continue knowingly. If the G-code is unreadable or lacks valid per-tool usage metadata, export fails closed and shows an error. The app never edits or removes the G-code.
 
----
+**Export does not consume filament.** Re-exporting five times leaves the inventory unchanged. Update the remaining weight after a real print.
 
-## 🎛️ Step 3: Manage Your Spools
+## 5. Data and troubleshooting
 
-1. Click the colored four-dot icon in your top menu bar.
-2. Select **"Configure Spools & Slots..."** (or visit `http://127.0.0.1:8765` directly in any web browser).
-3. Select your preferred language in the top right corner.
+macOS data: `~/Library/Application Support/SnapmakerSpoolTracker/`
+Windows data: `%LOCALAPPDATA%\SnapmakerSpoolTracker\`
 
-### Adding New Spools:
-- Under **"Add New Spool"**, enter Name, Material, and remaining grams.
-- Click **"+ Add Spool"**.
+An existing valid `spools_u1.json` beside the old app or script is copied into the new data directory on first launch. The old file remains. If the database is corrupt, the app keeps it, makes a timestamped copy in `backups/`, and reports the error. `tracker.log` in the same directory helps diagnosis. Restore a good backup or contact the maintainer; the app will not silently replace the inventory.
 
-### Mapping to Toolheads:
-- Under **"Active Slots Configuration"**, select which spool is loaded into each head:
-  - **Slot 1** = Toolhead **T0**
-  - **Slot 2** = Toolhead **T1**
-  - **Slot 3** = Toolhead **T2**
-  - **Slot 4** = Toolhead **T3**
-- Click **"Save Slot Assignments"**.
-
----
-
-## 🚀 Step 4: Daily Printing & Alerts
-
-Use OrcaSlicer exactly as you normally do:
-1. Slice your 3D model.
-2. Click **Export G-code** (or Print).
-
-- **Sufficient filament:** The G-code exports instantly and consumed grams are automatically deducted.
-- **Insufficient filament:** The export halts immediately and a native modal pops up on screen showing exact shortfalls and preventing bed cooling failures.
-
-   
+Test with a small actual slice and deliberate shortage before relying on the hook for a long print. The tracker checks inventory estimates; it cannot detect physical tangles, failed feeding, or material mismatch.

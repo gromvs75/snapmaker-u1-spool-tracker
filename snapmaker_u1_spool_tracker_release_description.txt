@@ -1,31 +1,9 @@
-### What's New in v1.0.0:
-* 🎯 **Automatic Filament Runout Protection:** Pre-flight G-code verification on export in OrcaSlicer / Snapmaker Orca.
-* 🛑 **Bed Cooling Prevention:** Alerts before export to avoid paused prints cooling down and detaching from the build plate.
-* 🌐 **Multi-Language Web UI:** English, Deutsch, Русский, Українська, Español.
-* 💻 **Cross-Platform:** Native stand-alone builds for both **macOS** and **Windows** (zero Python or terminal setup required).
+Draft release notes — v1.0.1 (do not publish before manual validation)
 
----
+Snapmaker U1 Spool Tracker checks per-tool G-code filament requirements against four assigned physical spools. This patch release moves inventory to per-user application storage, migrates valid legacy data, protects writes, and reports corrupted data instead of silently resetting it. A missing or invalid usage line now stops export. Warnings on macOS and Windows offer Cancel Export and Proceed Anyway.
 
-### Installation & Quick Start
+Export does not deduct filament. Adjust remaining grams after a real print. A configurable per-tool safety reserve is used for preflight only. The dashboard shows the last result for T0–T3.
 
-#### 🍏 For macOS:
-1. Download **`SnapmakerSpoolTracker-macOS.zip`** below and extract it.
-2. Drag **`SnapmakerSpoolTracker.app`** into your `/Applications` folder and launch it.
-3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add:
-   ```text
-   /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
-   ```
+macOS: move the unsigned app to /Applications. Windows: keep the exe in a stable folder. Set the app executable as a Snapmaker Orca / OrcaSlicer post-processing script with a trailing semicolon. See README.md, MANUAL_EN.md, and MANUAL_RU.md for exact paths, migration details, and first-run instructions.
 
-#### 🪟 For Windows:
-1. Download **`SnapmakerSpoolTracker-Windows.zip`** below and extract it to any convenient folder (e.g. `C:\Tools\SnapmakerSpoolTracker`).
-2. Run **`SnapmakerSpoolTracker.exe`** (a tray icon will appear near the system clock).
-3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add the path to the exe (with trailing `;`):
-   ```text
-   C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
-   ```
-   *(Replace with your actual folder path where you placed the file)*.
-
----
-
-### 📖 Full Beginner's Manual
-For step-by-step instructions on setting up spools and slots, see [MANUAL_EN.md](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/main/MANUAL_EN.md).
+Before release: test a real slice, a shortage with Cancel and Proceed, a missing metadata file, existing inventory migration, and the Windows artifact from GitHub Actions. No release is created by CI.

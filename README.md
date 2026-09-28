@@ -1,47 +1,52 @@
-<img width="1200" height="630" alt="preview_banner" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
-# 🎯 Snapmaker U1 Spool Tracker
+<img width="1200" height="630" alt="Snapmaker U1 Spool Tracker" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
 
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Snapmaker](https://img.shields.io/badge/printer-Snapmaker%20U1-orange.svg)](https://snapmaker.com)
+# Snapmaker U1 Spool Tracker
 
-**Intelligent 4-toolhead filament inventory management and automatic runout protection for Snapmaker U1 & OrcaSlicer / Snapmaker Orca.**
+A small, local-first preflight utility for Snapmaker U1 and Snapmaker Orca / OrcaSlicer. It compares the per-tool filament requirement in G-code with four physical spool assignments: Slot 1 → T0 through Slot 4 → T3.
 
----
+## What it does
 
-## 🛑 The Problem
+- Keeps a local inventory of physical spools and remaining grams.
+- Checks `; filament used [g] = ...` before G-code export. An unassigned spool or insufficient material opens a native Cancel Export / Proceed Anyway dialog.
+- Cancelling returns a nonzero exit code. Proceed Anyway and a successful check return zero. The G-code is not modified.
+- A missing or invalid per-tool usage line is an error and cancels export. The latest result, with one row per toolhead, is shown on the dashboard.
+- Export never deducts filament. After a real print, update the spool's remaining grams manually in the dashboard. Re-exporting a file cannot consume inventory.
+- A configurable reserve in grams is added to each **used** toolhead's requirement for the check only. The default is 0 g.
 
-When running large multi-color or multi-material prints on the Snapmaker U1:
-1. **Unattended Mid-Print Runout**: If a spool runs out while you are away, the printer pauses.
-2. **Bed Cooling Failure**: On prolonged pauses, heated beds often cool down. Once the bed temperature drops, print adhesion fails and the model detaches from the plate — ruining hours of print time.
-3. **Complex Math**: Keeping track of remaining filament across 4 independent toolheads (T0–T3) plus purge tower volumes is tedious to calculate manually.
+Material mismatch checking is deferred until a reliable per-tool material field is confirmed in Snapmaker Orca output. The tracker never guesses material from a spool name.
 
----
+## Install and use
 
-## ✨ The Solution
+The CI workflows produce an unsigned macOS `.app` and a Windows `.exe` as artifacts. They are not a release until the owner publishes them. On macOS, move the app to `/Applications`; macOS may require **Open** from the context menu on first launch. On Windows, put the exe in a stable folder such as `C:\Tools\SnapmakerSpoolTracker` and run it once to show the tray icon.
 
-**Snapmaker U1 Spool Tracker** acts as a background menu bar service and an OrcaSlicer post-processing hook:
+Open the tray menu's dashboard or visit `http://127.0.0.1:8765`. Add your real spools, set their weights, and assign the four slots. A fresh installation starts with no spools and no assignments.
 
-- 🔍 **Pre-Flight Runout Interception**: Analyzes sliced G-code before export. If any assigned spool lacks enough filament, it halts the export and triggers a native alert dialog.
-- 🎛 **4-Toolhead Slot Mapping**: Intuitive web UI to assign physical spools to Toolheads T0 through T3.
-- 📉 **Automatic Spool Deduction**: Automatically subtracts used grams from your inventory upon successful export.
-- 🌐 **Multi-Language Support**: English, Deutsch, Русский, Українська, Español.
-- 🍏 **Zero Terminal Needed**: Runs quietly in the macOS menu bar as a standalone `.app`.
+In Snapmaker Orca / OrcaSlicer, add the executable to **Print Settings → Others → Post-processing scripts**. Include the trailing semicolon required by the slicer:
 
----
+```text
+/Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+```
 
-## 🚀 Quick Start (for macOS Users)
+```text
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+```
 
-### 1. Download & Install
-1. Go to [Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases) and download `SnapmakerSpoolTracker-macOS.zip`.
-2. Extract the archive and drag **`SnapmakerSpoolTracker.app`** into your `/Applications` folder.
-3. Launch the app from `/Applications`. A color toolhead icon will appear in your top macOS menu bar.
+If the path contains spaces, quote the executable path. Save the process preset. Check this integration with a small real slice before relying on it.
 
-### 2. Configure OrcaSlicer
-1. Open **Snapmaker Orca** (or standard OrcaSlicer).
-2. Go to **Print Settings (Process)** → **Others** tab.
-3. Scroll down to **Post-processing scripts**.
-4. Add the following path:
-   ```text
-   /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+For source use on macOS, install `requirements.txt`, then run `python spool_tracker.py` for the tray and use `run_hook.sh;` as the post-processing command. The hook expects the G-code path as its first argument.
+
+See [English manual](MANUAL_EN.md) or [Russian manual](MANUAL_RU.md) for a step-by-step setup.
+
+## Data and recovery
+
+- macOS: `~/Library/Application Support/SnapmakerSpoolTracker/spools_u1.json`
+- Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker\spools_u1.json`
+- Linux source use: `${XDG_DATA_HOME:-~/.local/share}/SnapmakerSpoolTracker/spools_u1.json`
+
+The same directory contains `tracker.log` (rotated), a lock file, and `backups/` if corruption is detected. On first launch, a valid old `spools_u1.json` beside the previous executable or source script is copied into the new location. The old file stays in place. A corrupt new database is never silently reset: the original stays untouched, a timestamped backup is made, and the app reports an error. Restore a known good copy before continuing. Back up the data directory before removing a previous installation.
+
+## Build and test
+
+Python 3.11 is used in CI. Run `python -m pip install -r requirements-dev.txt` and `python -m pytest -q` locally. GitHub Actions runs tests on Linux and before both Windows and macOS builds. Build artifacts are uploaded; no tag or release is created automatically.
+
+No cloud, account, telemetry, printer firmware access, or network listener beyond `127.0.0.1` is used.

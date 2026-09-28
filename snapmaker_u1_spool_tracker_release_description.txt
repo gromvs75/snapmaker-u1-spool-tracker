@@ -1,0 +1,31 @@
+### What's New in v1.0.0:
+* 🎯 **Automatic Filament Runout Protection:** Pre-flight G-code verification on export in OrcaSlicer / Snapmaker Orca.
+* 🛑 **Bed Cooling Prevention:** Alerts before export to avoid paused prints cooling down and detaching from the build plate.
+* 🌐 **Multi-Language Web UI:** English, Deutsch, Русский, Українська, Español.
+* 💻 **Cross-Platform:** Native stand-alone builds for both **macOS** and **Windows** (zero Python or terminal setup required).
+
+---
+
+### Installation & Quick Start
+
+#### 🍏 For macOS:
+1. Download **`SnapmakerSpoolTracker-macOS.zip`** below and extract it.
+2. Drag **`SnapmakerSpoolTracker.app`** into your `/Applications` folder and launch it.
+3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add:
+   ```text
+   /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+   ```
+
+#### 🪟 For Windows:
+1. Download **`SnapmakerSpoolTracker-Windows.zip`** below and extract it to any convenient folder (e.g. `C:\Tools\SnapmakerSpoolTracker`).
+2. Run **`SnapmakerSpoolTracker.exe`** (a tray icon will appear near the system clock).
+3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add the path to the exe (with trailing `;`):
+   ```text
+   C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+   ```
+   *(Replace with your actual folder path where you placed the file)*.
+
+---
+
+### 📖 Full Beginner's Manual
+For step-by-step instructions on setting up spools and slots, see [MANUAL_EN.md](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/main/MANUAL_EN.md).

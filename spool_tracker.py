@@ -136,7 +136,7 @@ def parse_u1_gcode(filepath):
 
     for line in reversed(lines):
         clean = line.strip().lower()
-        if "filament used [g]" in clean and "=" in line:
+        if "filament used [g]" in clean and "total" not in clean and "=" in line:
             raw_val = line.split("=", 1)[1].strip()
             try:
                 weights = [float(x.strip()) for x in raw_val.split(",") if x.strip()]

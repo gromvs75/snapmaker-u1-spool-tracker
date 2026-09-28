@@ -5,15 +5,16 @@ import json
 import logging
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
 import time
 import uuid
-from contextlib import contextmanager
 from pathlib import Path
+from filelock import FileLock, Timeout
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APP_NAME = "SnapmakerSpoolTracker"
 LOGGER = logging.getLogger("snapmaker_tracker")
 
@@ -39,7 +40,64 @@ def data_directory(platform=None, home=None, environ=None):
 
 def empty_db():
     return {"schema_version": SCHEMA_VERSION, "language": "en", "safety_margin_g": 0.0,
-            "slots": {str(i): "" for i in range(1, 5)}, "spools": {}, "last_preflight": None}
+            "slots": {str(i): "" for i in range(1, 5)}, "spools": {}, "last_preflight": None,
+            "printer": {"host": "U1.local", "port": 7125, "enabled": False},
+            "monitor": {"connected": False, "state": "disabled", "filename": "", "error": "", "checked_at": 0.0},
+            "plans": {}, "runs": {}}
+
+
+def printer_config(value):
+    if not isinstance(value, dict):
+        raise ValidationError("Printer configuration must be an object")
+    host = value.get("host")
+    port = value.get("port")
+    enabled = value.get("enabled")
+    if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.\-]{0,252}", host):
+        raise ValidationError("Enter a hostname or IPv4 address without a URL scheme")
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise ValidationError("Port must be between 1 and 65535")
+    if not isinstance(enabled, bool):
+        raise ValidationError("Enabled must be true or false")
+    return {"host": host, "port": port, "enabled": enabled}
+
+
+def _validated_jobs(data, result):
+    plans, runs = data.get("plans", {}), data.get("runs", {})
+    if not isinstance(plans, dict) or not isinstance(runs, dict):
+        raise StorageError("Invalid job ledger")
+    for plan_id, plan in plans.items():
+        if not isinstance(plan_id, str) or not isinstance(plan, dict):
+            raise StorageError("Invalid planned job")
+        filename = plan.get("filename")
+        sha = plan.get("sha256")
+        size = plan.get("size")
+        weights = plan.get("weights")
+        spool_ids = plan.get("spool_ids")
+        if (not isinstance(filename, str) or not filename or len(filename) > 1024
+                or not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha)
+                or isinstance(size, bool) or not isinstance(size, int) or size < 0
+                or not isinstance(weights, list) or len(weights) != 4
+                or not isinstance(spool_ids, list) or len(spool_ids) != 4
+                or any(not isinstance(value, str) for value in spool_ids)
+                or plan.get("status") not in ("planned", "active", "committed", "cancelled", "error", "review")):
+            raise StorageError("Invalid planned job")
+        result["plans"][plan_id] = {
+            "filename": filename, "sha256": sha, "size": size,
+            "weights": [weight(value) for value in weights], "spool_ids": spool_ids,
+            "created_at": weight(plan.get("created_at")), "status": plan["status"],
+            "printer": printer_config(plan.get("printer")),
+        }
+    for run_id, run in runs.items():
+        if (not isinstance(run_id, str) or not isinstance(run, dict)
+                or not isinstance(run.get("job_id"), str)
+                or run.get("plan_id") not in result["plans"]
+                or run.get("status") not in ("active", "committed", "cancelled", "error", "review")):
+            raise StorageError("Invalid job run")
+        result["runs"][run_id] = {
+            "job_id": run["job_id"], "plan_id": run["plan_id"],
+            "start_time": weight(run.get("start_time")), "status": run["status"],
+            "filename": str(run.get("filename", ""))[:1024],
+        }
 
 
 def weight(value):
@@ -66,13 +124,25 @@ def validate_db(data):
     if not isinstance(data, dict):
         raise StorageError("Database root must be an object")
     version = data.get("schema_version", 0)
-    if version not in (0, SCHEMA_VERSION):
+    if version not in (0, 1, SCHEMA_VERSION):
         raise StorageError(f"Unsupported database schema version: {version}")
     result = empty_db()
     language = data.get("language", "en")
     if language not in ("en", "ru", "de", "uk", "es"):
         raise StorageError("Invalid database language")
     result["language"] = language
+    try:
+        result["printer"] = printer_config(data.get("printer", result["printer"]))
+    except ValidationError as exc:
+        raise StorageError(f"Invalid printer configuration: {exc}") from exc
+    monitor = data.get("monitor", result["monitor"])
+    if (not isinstance(monitor, dict) or not isinstance(monitor.get("connected"), bool)
+            or not isinstance(monitor.get("state"), str) or not isinstance(monitor.get("filename"), str)
+            or not isinstance(monitor.get("error"), str)):
+        raise StorageError("Invalid monitor status")
+    result["monitor"] = {"connected": monitor["connected"], "state": monitor["state"][:100],
+                         "filename": monitor["filename"][:1024], "error": monitor["error"][:500],
+                         "checked_at": weight(monitor.get("checked_at", 0))}
     last = data.get("last_preflight")
     if last is not None:
         if not isinstance(last, dict) or not isinstance(last.get("summary"), str) or len(last["summary"]) > 500 or not isinstance(last.get("rows"), list) or len(last["rows"]) not in (0, 4):
@@ -97,39 +167,10 @@ def validate_db(data):
             if assigned not in result["spools"] and assigned != "":
                 raise StorageError(f"Slot {slot} refers to a missing spool")
             result["slots"][slot] = assigned
+        _validated_jobs(data, result)
     except (KeyError, ValidationError, TypeError) as exc:
         raise StorageError(f"Invalid database: {exc}") from exc
     return result
-
-
-@contextmanager
-def _lock(path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a+b") as handle:
-        if os.name == "nt":
-            import msvcrt
-            handle.seek(0)
-            if handle.read(1) == b"":
-                handle.write(b"0")
-                handle.flush()
-            while True:
-                try:
-                    handle.seek(0)
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-                    break
-                except OSError:
-                    time.sleep(0.05)
-        else:
-            import fcntl
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            if os.name == "nt":
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 class Store:
@@ -137,6 +178,7 @@ class Store:
         self.directory = Path(directory) if directory is not None else data_directory()
         self.path = self.directory / "spools_u1.json"
         self.lock_path = self.directory / "spools_u1.lock"
+        self.lock = FileLock(str(self.lock_path), timeout=30)
         self.legacy_paths = [Path(p) for p in legacy_paths]
 
     def _atomic_write(self, data):
@@ -193,16 +235,24 @@ class Store:
         return data
 
     def read(self):
-        with _lock(self.lock_path):
-            return copy.deepcopy(self._read_locked())
+        self.directory.mkdir(parents=True, exist_ok=True)
+        try:
+            with self.lock:
+                return copy.deepcopy(self._read_locked())
+        except Timeout as exc:
+            raise StorageError("Timed out waiting for the database lock") from exc
 
     def update(self, change):
-        with _lock(self.lock_path):
-            data = self._read_locked()
-            result = change(data)
-            validated = validate_db(data)
-            self._atomic_write(validated)
-            return result
+        self.directory.mkdir(parents=True, exist_ok=True)
+        try:
+            with self.lock:
+                data = self._read_locked()
+                result = change(data)
+                validated = validate_db(data)
+                self._atomic_write(validated)
+                return result
+        except Timeout as exc:
+            raise StorageError("Timed out waiting for the database lock") from exc
 
 
 def legacy_paths():

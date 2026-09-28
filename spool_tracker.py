@@ -3,6 +3,7 @@
 import json
 import logging
 from logging.handlers import RotatingFileHandler
+import os
 import subprocess
 import sys
 import threading
@@ -12,8 +13,10 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from gcode import GCodeError, parse_u1_gcode
+from accounting import create_plan
+from moonraker import MoonrakerClient, MoonrakerError, PrinterMonitor
 from preflight import check, has_problem
-from storage import Store, StorageError, ValidationError, label, legacy_paths, weight
+from storage import Store, StorageError, ValidationError, label, legacy_paths, printer_config, weight
 
 APP_VERSION = "1.0.1"
 WEB_PORT = 8765
@@ -236,20 +239,27 @@ def handle_slicer_hook(gcode_path):
         show_dialog(f"Inventory database error: {exc}", lang)
         return 1
     LOGGER.info("Preflight %s: %s", summary, ", ".join(f'{r["tool"]}={r["status"]}' for r in rows))
-    if not problem:
-        return 0
-    tr = I18N.get(lang, I18N["en"])
-    unassigned_text, shortage_text, _ = ALERT_I18N.get(lang, ALERT_I18N["en"])
-    lines = []
-    for row in rows:
-        if row["status"] == "unassigned":
-            lines.append(unassigned_text.format(idx=row["tool"][1:], req=row["required_g"]))
-        elif row["status"] == "insufficient":
-            lines.append(shortage_text.format(idx=row["tool"][1:], name=row["spool_name"],
-                                             req=row["required_g"], margin=db["safety_margin_g"],
-                                             rem=row["remaining_g"]))
-    message = f'{tr["dialog_warn"]}\n{tr["dialog_desc"]}\n' + "\n".join(lines)
-    return 0 if show_dialog(message, lang, allow_proceed=True) else 1
+    if problem:
+        tr = I18N.get(lang, I18N["en"])
+        unassigned_text, shortage_text, _ = ALERT_I18N.get(lang, ALERT_I18N["en"])
+        lines = []
+        for row in rows:
+            if row["status"] == "unassigned":
+                lines.append(unassigned_text.format(idx=row["tool"][1:], req=row["required_g"]))
+            elif row["status"] == "insufficient":
+                lines.append(shortage_text.format(idx=row["tool"][1:], name=row["spool_name"],
+                                                 req=row["required_g"], margin=db["safety_margin_g"],
+                                                 rem=row["remaining_g"]))
+        message = f'{tr["dialog_warn"]}\n{tr["dialog_desc"]}\n' + "\n".join(lines)
+        if not show_dialog(message, lang, allow_proceed=True):
+            return 1
+    try:
+        create_plan(STORE, gcode_path, os.environ.get("SLIC3R_PP_OUTPUT_NAME"), weights, db)
+    except (OSError, StorageError, ValueError) as exc:
+        LOGGER.error("Cannot save planned job: %s", exc)
+        show_dialog(f"Cannot save planned job: {exc}", lang)
+        return 1
+    return 0
 
 
 
@@ -333,6 +343,24 @@ HTML_PAGE = """<!DOCTYPE html>
     </form>
   </div>
   <div class="card">
+    <h2 id="printer-title">U1 printer monitor</h2>
+    <p id="printer-help" class="subtitle">Successful matching prints update inventory automatically. Export and upload never deduct filament.</p>
+    <form id="printer-form">
+      <div class="form-inline">
+        <input id="printer-host" type="text" placeholder="U1.local" aria-label="Printer hostname or IP" required>
+        <input id="printer-port" type="number" min="1" max="65535" style="max-width: 100px;" aria-label="Moonraker port" required>
+      </div>
+      <div class="form-inline" style="align-items: center;">
+        <label><input id="printer-enabled" type="checkbox" style="margin-right: 8px;"> <span id="printer-enable-label">Enable automatic accounting</span></label>
+      </div>
+      <div class="form-inline">
+        <button id="printer-save" type="submit">Save printer settings</button>
+        <button id="printer-test" type="button">Test Connection</button>
+      </div>
+    </form>
+    <p id="printer-status" class="subtitle" aria-live="polite">Disconnected</p>
+  </div>
+  <div class="card">
     <h2 id="reserve-label">Safety reserve (g)</h2>
     <p id="reserve-help" class="subtitle">Added to each used toolhead for preflight only. It is not consumed.</p>
     <form id="reserve-form" class="form-inline">
@@ -343,6 +371,7 @@ HTML_PAGE = """<!DOCTYPE html>
   <div class="card">
     <h2 id="preflight-title">Last preflight</h2>
     <div id="preflight-content"></div>
+    <p id="accounting-status" class="subtitle"></p>
   </div>
 </div>
 
@@ -447,11 +476,11 @@ const dict = {
 
 let currentLang = 'en';
 const extra = {
- en: {reserve:'Safety reserve (g)', reserveHelp:'Added to each used toolhead for preflight only. It is not consumed.', save:'Save reserve', latest:'Last preflight', none:'No G-code has been checked yet.', delete:'Delete spool'},
- ru: {reserve:'Страховой запас (г)', reserveHelp:'Добавляется к требованию каждой используемой головки только для проверки. Не списывается.', save:'Сохранить запас', latest:'Последняя проверка', none:'G-код ещё не проверялся.', delete:'Удалить катушку'},
- de: {reserve:'Sicherheitsreserve (g)', reserveHelp:'Nur für die Prüfung pro aktivem Druckkopf; wird nicht abgezogen.', save:'Reserve speichern', latest:'Letzte Prüfung', none:'Noch kein G-Code geprüft.', delete:'Spule löschen'},
- uk: {reserve:'Запас безпеки (г)', reserveHelp:'Додається до кожної активної голівки лише для перевірки. Не списується.', save:'Зберегти запас', latest:'Остання перевірка', none:'G-код ще не перевірено.', delete:'Видалити котушку'},
- es: {reserve:'Reserva de seguridad (g)', reserveHelp:'Se añade por cabezal activo solo para comprobar; no se descuenta.', save:'Guardar reserva', latest:'Última comprobación', none:'Todavía no se ha comprobado G-code.', delete:'Eliminar bobina'}
+ en: {reserve:'Safety reserve (g)', reserveHelp:'Added to each used toolhead for preflight only. It is not consumed.', save:'Save reserve', latest:'Last preflight', none:'No G-code has been checked yet.', delete:'Delete spool', printer:'U1 printer monitor', printerHelp:'Matching successful prints update inventory automatically. Export and upload never deduct filament.', enable:'Enable automatic accounting', savePrinter:'Save printer settings', test:'Test Connection', connected:'Connected', disconnected:'Disconnected'},
+ ru: {reserve:'Страховой запас (г)', reserveHelp:'Добавляется к требованию каждой используемой головки только для проверки. Не списывается.', save:'Сохранить запас', latest:'Последняя проверка', none:'G-код ещё не проверялся.', delete:'Удалить катушку', printer:'Монитор принтера U1', printerHelp:'Успешная печать совпадающего файла обновляет остаток. Экспорт и загрузка не списывают пластик.', enable:'Включить автоматический учёт', savePrinter:'Сохранить настройки принтера', test:'Проверить соединение', connected:'Подключён', disconnected:'Нет соединения'},
+ de: {reserve:'Sicherheitsreserve (g)', reserveHelp:'Nur für die Prüfung pro aktivem Druckkopf; wird nicht abgezogen.', save:'Reserve speichern', latest:'Letzte Prüfung', none:'Noch kein G-Code geprüft.', delete:'Spule löschen', printer:'U1-Druckermonitor', printerHelp:'Erfolgreiche passende Drucke aktualisieren den Bestand automatisch. Export und Upload ziehen nichts ab.', enable:'Automatische Erfassung aktivieren', savePrinter:'Druckereinstellungen speichern', test:'Verbindung testen', connected:'Verbunden', disconnected:'Getrennt'},
+ uk: {reserve:'Запас безпеки (г)', reserveHelp:'Додається до кожної активної голівки лише для перевірки. Не списується.', save:'Зберегти запас', latest:'Остання перевірка', none:'G-код ще не перевірено.', delete:'Видалити котушку', printer:'Монітор принтера U1', printerHelp:'Успішний друк відповідного файлу оновлює залишок. Експорт і завантаження не списують пластик.', enable:'Увімкнути автоматичний облік', savePrinter:'Зберегти налаштування принтера', test:'Перевірити з’єднання', connected:'Підключено', disconnected:'Немає з’єднання'},
+ es: {reserve:'Reserva de seguridad (g)', reserveHelp:'Se añade por cabezal activo solo para comprobar; no se descuenta.', save:'Guardar reserva', latest:'Última comprobación', none:'Todavía no se ha comprobado G-code.', delete:'Eliminar bobina', printer:'Monitor de impresora U1', printerHelp:'Las impresiones completadas del archivo coincidente actualizan el inventario. Exportar o subir no descuenta.', enable:'Activar contabilidad automática', savePrinter:'Guardar impresora', test:'Probar conexión', connected:'Conectada', disconnected:'Desconectada'}
 };
 const el = id => document.getElementById(id);
 const node = (tag, value, className) => {
@@ -489,6 +518,17 @@ function applyTexts(lang) {
   el('reserve-help').textContent = x.reserveHelp;
   el('reserve-save').textContent = x.save;
   el('preflight-title').textContent = x.latest;
+  el('printer-title').textContent = x.printer;
+  el('printer-help').textContent = x.printerHelp;
+  el('printer-enable-label').textContent = x.enable;
+  el('printer-save').textContent = x.savePrinter;
+  el('printer-test').textContent = x.test;
+}
+function updateMonitor(data) {
+  const x = extra[currentLang] || extra.en;
+  const status = data.monitor;
+  el('printer-status').textContent = `${status.connected ? x.connected : x.disconnected} · ${status.state}` +
+    (status.filename ? ` · ${status.filename}` : '') + (status.error ? ` · ${status.error}` : '');
 }
 async function changeLang(lang) {
   await act(async () => { await api('/api/lang', {language:lang}); await loadData(); });
@@ -499,6 +539,10 @@ async function loadData() {
   el('lang-picker').value = currentLang;
   applyTexts(currentLang);
   el('reserve-input').value = data.safety_margin_g;
+  el('printer-host').value = data.printer.host;
+  el('printer-port').value = data.printer.port;
+  el('printer-enabled').checked = data.printer.enabled;
+  updateMonitor(data);
   const t = dict[currentLang] || dict.en;
   const x = extra[currentLang] || extra.en;
   const slots = el('slots-container');
@@ -539,6 +583,12 @@ async function loadData() {
   }
   const preflight = el('preflight-content');
   preflight.replaceChildren();
+  const plans = Object.entries(data.plans || {}).sort((a,b) => b[1].created_at - a[1].created_at);
+  const recentPlan = plans.length ? plans[0] : null;
+  const recentRuns = Object.values(data.runs || {}).filter(run => recentPlan && run.plan_id === recentPlan[0]);
+  el('accounting-status').textContent = recentPlan ?
+    `Planned file: ${recentPlan[1].filename} · ${recentPlan[1].status}` +
+    (recentRuns.length ? ` · Printer job: ${recentRuns.sort((a,b) => b.start_time - a.start_time)[0].status}` : '') : '';
   if (!data.last_preflight) { preflight.textContent = x.none; return; }
   const last = data.last_preflight;
   preflight.append(node('p', `${last.time || ''} — ${last.summary}`));
@@ -568,6 +618,18 @@ el('add-spool-form').addEventListener('submit', event => act(async () => {
 el('reserve-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData();
 }));
+function printerFields() {
+  return {host:el('printer-host').value.trim(), port:Number(el('printer-port').value), enabled:el('printer-enabled').checked};
+}
+el('printer-form').addEventListener('submit', event => act(async () => {
+  event.preventDefault(); await api('/api/printer/config', printerFields()); await loadData();
+}));
+el('printer-test').addEventListener('click', () => act(async () => {
+  const result = await api('/api/printer/test', printerFields());
+  const x = extra[currentLang] || extra.en;
+  el('printer-status').textContent = `${x.connected} · ${result.result.state}`;
+}));
+setInterval(() => act(async () => updateMonitor(await api('/api/data'))), 5000);
 act(loadData);
 </script>
 </body>
@@ -628,6 +690,13 @@ class WebHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValidationError("JSON body must be an object")
+            if self.path == "/api/printer/test":
+                config = printer_config({"host": body.get("host"), "port": body.get("port"), "enabled": True})
+                try:
+                    status = MoonrakerClient(config["host"], config["port"]).status()
+                except MoonrakerError as exc:
+                    return self._response(502, {"error": f"Printer unavailable: {exc}"})
+                return self._response(200, {"status": "ok", "result": status})
             result = self.store.update(lambda db: self._change(db, body))
             return self._response(200, {"status": "ok", "result": result})
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
@@ -647,6 +716,8 @@ class WebHandler(BaseHTTPRequestHandler):
             db["language"] = lang
         elif self.path == "/api/settings":
             db["safety_margin_g"] = weight(body.get("safety_margin_g"))
+        elif self.path == "/api/printer/config":
+            db["printer"] = printer_config(body)
         elif self.path == "/api/slots":
             if set(body) != set(db["slots"]):
                 raise ValidationError("Exactly four slots are required")
@@ -692,6 +763,7 @@ class TrayApp:
         self.icon = None
         self.server = None
         self.stop_event = threading.Event()
+        self.monitor = PrinterMonitor(STORE)
 
     def build_menu(self):
         import pystray
@@ -743,12 +815,14 @@ class TrayApp:
         import pystray
         try:
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
+            self.monitor.start()
             self.icon = pystray.Icon("SnapmakerU1Tracker", create_tray_icon(), "Snapmaker U1 Tracker", menu=self.build_menu())
             threading.Thread(target=self._refresh, daemon=True).start()
             self.icon.run()
             return 0
         finally:
             self.stop_event.set()
+            self.monitor.stop()
             self.server.shutdown()
             self.server.server_close()
 

@@ -8,7 +8,7 @@ import pytest
 
 from gcode import GCodeError, parse_u1_gcode
 from preflight import check, has_problem
-from storage import Store, StorageError, ValidationError, data_directory, empty_db, weight
+from storage import SCHEMA_VERSION, Store, StorageError, ValidationError, data_directory, empty_db, weight
 import spool_tracker
 
 
@@ -68,13 +68,13 @@ def test_fresh_migration_and_unique_ids(tmp_path):
     store = Store(tmp_path / "new")
     assert store.read()["spools"] == {}
     assert set(store.read()["slots"].values()) == {""}
-    assert store.read()["schema_version"] == 1
+    assert store.read()["schema_version"] == SCHEMA_VERSION
     legacy = tmp_path / "legacy.json"
     legacy.write_text(json.dumps({"language": "ru", "slots": {"1": "old", "2": "", "3": "", "4": ""}, "spools": {"old": {"name": "Old", "material": "PLA", "remaining_g": 10}}}))
     migrated = Store(tmp_path / "migrated", [legacy])
     assert migrated.read()["spools"]["old"]["remaining_g"] == 10
     assert migrated.read()["slots"]["1"] == "old"
-    assert migrated.read()["schema_version"] == 1
+    assert migrated.read()["schema_version"] == SCHEMA_VERSION
     assert legacy.exists()
     migrated.update(lambda db: db["spools"].update({"new": {"name": "New", "material": "PETG", "remaining_g": 1}}))
     assert "new" in migrated.read()["spools"]
@@ -103,7 +103,7 @@ def test_atomic_write_and_concurrent_updates(tmp_path):
     for thread in threads: thread.join()
     assert len(store.read()["spools"]) == 20
     assert not list(tmp_path.glob(".spools-*.tmp"))
-    assert json.loads(store.path.read_text())["schema_version"] == 1
+    assert json.loads(store.path.read_text())["schema_version"] == SCHEMA_VERSION
 
 
 def test_cross_process_updates(tmp_path):
@@ -135,6 +135,8 @@ def test_repeated_export_does_not_consume(tmp_path, monkeypatch):
     for _ in range(5):
         assert spool_tracker.handle_slicer_hook(path) == 0
     assert store.read()["spools"]["one"]["remaining_g"] == 1000
+    assert len(store.read()["plans"]) == 5
+    assert {plan["status"] for plan in store.read()["plans"].values()} == {"planned"}
     assert store.read()["last_preflight"]["rows"][0]["status"] == "ok"
 
 
@@ -145,8 +147,10 @@ def test_failure_and_override(tmp_path, monkeypatch):
     path = gcode(tmp_path, "; filament used [g] = 200")
     monkeypatch.setattr(spool_tracker, "show_dialog", lambda *a, **kw: False)
     assert spool_tracker.handle_slicer_hook(path) == 1
+    assert store.read()["plans"] == {}
     monkeypatch.setattr(spool_tracker, "show_dialog", lambda *a, **kw: True)
     assert spool_tracker.handle_slicer_hook(path) == 0
+    assert len(store.read()["plans"]) == 1
     assert store.read()["last_preflight"]["rows"][0]["status"] == "unassigned"
     assert spool_tracker.handle_slicer_hook(gcode(tmp_path, "G1 X1")) == 1
     assert "parse failure" in store.read()["last_preflight"]["summary"]
@@ -162,7 +166,7 @@ def test_native_dialog_decisions(monkeypatch):
     assert not spool_tracker.show_dialog("shortage", "ru", allow_proceed=True)
 
 
-def test_api_validation_and_slot_cleanup(tmp_path):
+def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
     from http.server import ThreadingHTTPServer
     from urllib.error import HTTPError
     from urllib.request import Request, urlopen
@@ -204,6 +208,18 @@ def test_api_validation_and_slot_cleanup(tmp_path):
         assert code == 403 and store.read()["language"] == "en"
         code, _ = post("/api/settings", {"safety_margin_g": 2}, {"Content-Type": "text/plain"})
         assert code == 415
+        code, _ = post("/api/printer/config", {"host": "http://bad", "port": 7125, "enabled": True})
+        assert code == 400
+        code, _ = post("/api/printer/config", {"host": "U1.local", "port": 7125, "enabled": True})
+        assert code == 200 and store.read()["printer"]["enabled"]
+        class FakeMoonraker:
+            def __init__(self, host, port):
+                assert host == "U1.local" and port == 7125
+            def status(self):
+                return {"connected": True, "state": "standby", "filename": "", "klippy_state": "ready"}
+        monkeypatch.setattr(spool_tracker, "MoonrakerClient", FakeMoonraker)
+        code, result = post("/api/printer/test", {"host": "U1.local", "port": 7125})
+        assert code == 200 and result["result"]["state"] == "standby"
     finally:
         server.shutdown()
         server.server_close()

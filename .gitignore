@@ -1,0 +1,8 @@
+venv/
+dist/
+build/
+*.spec
+spools_u1.json
+tracker.log
+__pycache__/
+.DS_Store

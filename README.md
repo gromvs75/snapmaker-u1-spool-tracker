@@ -1,3 +1,4 @@
+<img width="1200" height="630" alt="preview_banner" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
 # 🎯 Snapmaker U1 Spool Tracker
 
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases)

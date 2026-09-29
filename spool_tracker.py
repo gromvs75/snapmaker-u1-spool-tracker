@@ -289,6 +289,10 @@ HTML_PAGE = """<!DOCTYPE html>
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
   th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
   th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+  .table-scroll { overflow-x: auto; }
+  .spool-inventory { min-width: 700px; table-layout: fixed; }
+  .spool-inventory td:first-child code { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spool-inventory td:nth-child(4), .spool-inventory td:nth-child(5) { white-space: nowrap; }
   .form-inline { display: flex; gap: 10px; margin-top: 14px; }
   .form-inline input { flex: 1; }
 </style>
@@ -321,18 +325,21 @@ HTML_PAGE = """<!DOCTYPE html>
 
   <div class="card">
     <h2 id="t-spools-hdr">Spool Inventory</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th id="t-th-name">Spool Name</th>
-          <th id="t-th-mat">Material</th>
-          <th id="t-th-rem">Remaining</th>
-          <th id="t-th-act">Action</th>
-        </tr>
-      </thead>
-      <tbody id="spools-table"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="spool-inventory">
+        <colgroup><col style="width:36%"><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:18%"></colgroup>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th id="t-th-name">Spool Name</th>
+            <th id="t-th-mat">Material</th>
+            <th id="t-th-rem">Remaining</th>
+            <th id="t-th-act">Action</th>
+          </tr>
+        </thead>
+        <tbody id="spools-table"></tbody>
+      </table>
+    </div>
 
     <h2 id="t-add-hdr" style="margin-top: 26px;">Add New Spool</h2>
     <form id="add-spool-form" class="form-inline">
@@ -568,7 +575,7 @@ async function loadData() {
   table.replaceChildren();
   for (const [id, spool] of Object.entries(data.spools)) {
     const row = node('tr');
-    const idCell = node('td'); idCell.append(node('code', id)); row.append(idCell);
+    const idCell = node('td'); const idText = node('code', id); idText.title = id; idCell.append(idText); row.append(idCell);
     const nameCell = node('td'); nameCell.append(node('strong', spool.name)); row.append(nameCell);
     row.append(node('td', spool.material));
     const weightCell = node('td');

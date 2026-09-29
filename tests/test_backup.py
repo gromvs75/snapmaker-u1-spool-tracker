@@ -3,7 +3,7 @@ import json
 import pytest
 
 from backup import BACKUP_FORMAT, BACKUP_VERSION, create_backup, import_backup, parse_backup, write_backup
-from spool_tracker import APP_VERSION, BackupBridge, HTML_PAGE
+from spool_tracker import APP_VERSION, BackupBridge, HTML_PAGE, normalize_dialog_path
 from storage import Store, StorageError
 
 
@@ -99,25 +99,55 @@ def test_atomic_import_failure_keeps_old_database_and_safety_copy(tmp_path, monk
     assert json.loads(backups[0].read_text(encoding="utf-8")) == json.loads(before)
 
 
-def test_native_bridge_uses_save_and_open_dialogs(tmp_path):
+@pytest.mark.parametrize("wrap", [lambda path: path, lambda path: [path], lambda path: (path,), lambda path: ["", path]])
+def test_native_bridge_uses_whole_save_and_open_paths(tmp_path, wrap):
     store = Store(tmp_path / "live")
     populated(store)
-    paths = [tmp_path / "portable.json", tmp_path / "portable.json"]
+    path = tmp_path / "portable.json"
+    results = [wrap(str(path)), wrap(str(path))]
     calls = []
     class Window:
         def create_file_dialog(self, *args, **kwargs):
             calls.append((args, kwargs))
-            return [str(paths.pop(0))]
+            return results.pop(0)
     class FileDialog:
         SAVE = 20
         OPEN = 10
     bridge = BackupBridge(store, type("Webview", (), {"FileDialog": FileDialog}))
     bridge.window = Window()
-    assert bridge.export_backup()["status"] == "ok"
+    exported = bridge.export_backup()
+    assert exported == {"status": "ok", "path": str(path)}
+    assert path.is_file()  # A string path must never be reduced to its first character, '/'.
     assert bridge.import_backup()["status"] == "ok"
     assert [call[0][0] for call in calls] == [20, 10]
     assert "pywebviewready" in HTML_PAGE
     assert "backupUnavailable" in HTML_PAGE
+
+
+@pytest.mark.parametrize("result", [None, "", [], (), [""], ("",), [None, ""]])
+def test_native_bridge_cancelled_dialogs(tmp_path, result):
+    store = Store(tmp_path / "live")
+    store.read()
+    class Window:
+        def create_file_dialog(self, *args, **kwargs):
+            return result
+    class FileDialog:
+        SAVE = 20
+        OPEN = 10
+    bridge = BackupBridge(store, type("Webview", (), {"FileDialog": FileDialog}))
+    bridge.window = Window()
+    assert bridge.export_backup() == {"status": "cancelled"}
+    assert bridge.import_backup() == {"status": "cancelled"}
+    assert not (store.directory / "backups").exists()
+
+
+def test_normalize_dialog_path_accepts_pathlike_and_rejects_other_values(tmp_path):
+    path = tmp_path / "Desktop" / "file.json"
+    assert normalize_dialog_path(path) == str(path)
+    assert normalize_dialog_path(str(path)) == str(path)
+    assert normalize_dialog_path([None, "", path]) == str(path)
+    assert normalize_dialog_path(42) is None
+    assert normalize_dialog_path([42, b"/tmp/bytes", ""]) is None
 
 
 def test_export_requires_portable_location(tmp_path):
@@ -125,3 +155,5 @@ def test_export_requires_portable_location(tmp_path):
     store.read()
     with pytest.raises(StorageError, match="outside"):
         write_backup(store, store.directory / "my-backup.json", APP_VERSION)
+    with pytest.raises(StorageError, match="filesystem root"):
+        write_backup(store, tmp_path.anchor, APP_VERSION)

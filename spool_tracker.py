@@ -867,6 +867,19 @@ def create_tray_icon():
     return image
 
 
+def normalize_dialog_path(result):
+    """pywebview returns a path on macOS and may return a sequence elsewhere."""
+    if isinstance(result, (str, os.PathLike)):
+        path = os.fspath(result)
+        return path if isinstance(path, str) and path else None
+    if isinstance(result, (list, tuple)):
+        for item in result:
+            path = normalize_dialog_path(item) if not isinstance(item, (list, tuple)) else None
+            if path:
+                return path
+    return None
+
+
 class BackupBridge:
     """Native dialogs are available only to pywebview's injected JS API."""
 
@@ -877,21 +890,21 @@ class BackupBridge:
 
     def export_backup(self):
         filename = f"SnapmakerSpoolTracker-backup-{time.strftime('%Y-%m-%d')}.json"
-        selected = self.window.create_file_dialog(
+        selected = normalize_dialog_path(self.window.create_file_dialog(
             self.webview.FileDialog.SAVE, directory=str(Path.home() / "Documents"),
-            save_filename=filename, file_types=("JSON backup (*.json)",))
+            save_filename=filename, file_types=("JSON backup (*.json)",)))
         if not selected:
             return {"status": "cancelled"}
-        path = write_backup(self.store, selected[0], APP_VERSION)
+        path = write_backup(self.store, selected, APP_VERSION)
         return {"status": "ok", "path": str(path)}
 
     def import_backup(self):
-        selected = self.window.create_file_dialog(
+        selected = normalize_dialog_path(self.window.create_file_dialog(
             self.webview.FileDialog.OPEN, directory=str(Path.home() / "Documents"),
-            file_types=("JSON backup (*.json)",))
+            file_types=("JSON backup (*.json)",)))
         if not selected:
             return {"status": "cancelled"}
-        destination = import_backup(self.store, selected[0])
+        destination = import_backup(self.store, selected)
         return {"status": "ok", "safety_backup": str(destination)}
 
 

@@ -31,6 +31,8 @@ def create_backup(store, app_version):
 
 def write_backup(store, path, app_version):
     target = Path(path).expanduser().resolve()
+    if target == Path(target.anchor):
+        raise StorageError("Choose a backup file, not the filesystem root")
     if target == store.directory.resolve() or store.directory.resolve() in target.parents:
         raise StorageError("Choose a backup location outside the application data directory")
     document = create_backup(store, app_version)

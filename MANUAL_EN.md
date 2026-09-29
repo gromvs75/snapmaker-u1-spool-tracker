@@ -2,11 +2,11 @@
 
 ## 1. Install
 
-Download a published macOS or Windows build from the project's Releases page when v1.0.1 is available. On Mac, move `SnapmakerSpoolTracker.app` to `/Applications` and open it. If macOS blocks the unsigned app, use the standard context-menu **Open** action. On Windows, extract `SnapmakerSpoolTracker.exe` into a stable folder and run it. The app appears in the menu bar or system tray. Starting it a second time opens the existing dashboard.
+Download a published macOS or Windows build from the project's Releases page when v1.0.1 is available. On Mac, move `SnapmakerSpoolTracker.app` to `/Applications` and open it. If macOS blocks the unsigned app, use the standard context-menu **Open** action. On Windows, extract `SnapmakerSpoolTracker.exe` into a stable folder and run it; the native dashboard requires Microsoft Edge WebView2 Runtime. The app appears in the menu bar or system tray. Starting it a second time opens the existing dashboard.
 
 ## 2. Set up inventory
 
-Open **Configure Spools & Slots** from the tray, or visit `http://127.0.0.1:8765`. The first launch contains no spools or slot assignments. Add each physical spool with a name, material and actual remaining grams. Assign Slot 1 to T0, Slot 2 to T1, Slot 3 to T2 and Slot 4 to T3. Save the assignments. Deleting a spool clears its assignment. Enter the initial weight once; correct it when you weigh a spool or need to account for a print that could not be matched.
+Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The dashboard opens in an application window, updates automatically, and can be closed without stopping the tray app. Reopen it from the same menu. The first launch contains no spools or slot assignments. Add each physical spool with a name, material and actual remaining grams. Assign Slot 1 to T0, Slot 2 to T1, Slot 3 to T2 and Slot 4 to T3. Save the assignments. Deleting a spool clears its assignment. Enter the initial weight once; correct it when you weigh a spool or need to account for a print that could not be matched. The local `http://127.0.0.1:8765` backend is a troubleshooting fallback only.
 
 The **Safety reserve** is added to each used toolhead's requirement for the preflight comparison. It is not deducted from inventory. It starts at 0 g.
 

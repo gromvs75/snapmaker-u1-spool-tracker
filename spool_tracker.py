@@ -9,8 +9,8 @@ import sys
 import threading
 import time
 import uuid
-import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.request import ProxyHandler, Request, build_opener
 
 from gcode import GCodeError, parse_u1_gcode
 from accounting import create_plan
@@ -534,83 +534,138 @@ function applyTexts(lang) {
 function updateMonitor(data) {
   const x = extra[currentLang] || extra.en;
   const status = data.monitor;
-  el('printer-status').textContent = `${status.connected ? x.connected : x.disconnected} · ${status.state}` +
+  const text = `${status.connected ? x.connected : x.disconnected} · ${status.state}` +
     (status.filename ? ` · ${status.filename}` : '') + (status.error ? ` · ${status.error}` : '');
+  if (el('printer-status').textContent !== text) el('printer-status').textContent = text;
+}
+let preflightSignature = null;
+let liveRequest = null;
+let fullLoadInFlight = false;
+
+function renderPreflight(data, force = false) {
+  const signature = JSON.stringify(data.last_preflight);
+  if (!force && signature === preflightSignature) return;
+  preflightSignature = signature;
+  const preflight = el('preflight-content');
+  preflight.replaceChildren();
+  if (!data.last_preflight) {
+    preflight.textContent = (extra[currentLang] || extra.en).none;
+    return;
+  }
+  const last = data.last_preflight;
+  preflight.append(node('p', `${last.time || ''} — ${last.summary}`));
+  if (!last.rows.length) return;
+  const report = node('table');
+  const head = node('tr');
+  for (const heading of ['Tool', 'Spool', 'Required', 'Remaining', 'Status']) head.append(node('th', heading));
+  report.append(head);
+  for (const item of last.rows) {
+    const tr = node('tr');
+    for (const value of [item.tool, item.spool_name || '—', `${item.required_g} g`, item.remaining_g === null ? '—' : `${item.remaining_g} g`, item.status]) tr.append(node('td', value));
+    report.append(tr);
+  }
+  preflight.append(report);
+}
+
+function renderAccounting(data) {
+  const plans = Object.entries(data.plans || {}).sort((a,b) => b[1].created_at - a[1].created_at);
+  const recentPlan = plans.length ? plans[0] : null;
+  const recentRuns = Object.values(data.runs || {}).filter(run => recentPlan && run.plan_id === recentPlan[0]);
+  const text = recentPlan ?
+    `Planned file: ${recentPlan[1].filename} · ${recentPlan[1].status}` +
+    (recentRuns.length ? ` · Printer job: ${recentRuns.sort((a,b) => b.start_time - a.start_time)[0].status}` : '') : '';
+  if (el('accounting-status').textContent !== text) el('accounting-status').textContent = text;
+}
+
+function updateLiveState(data) {
+  updateMonitor(data);
+  renderPreflight(data);
+  renderAccounting(data);
+  const spools = data.spools || {};
+  for (const row of el('spools-table').rows) {
+    const spool = spools[row.dataset.spoolId];
+    const input = row.querySelector('input');
+    if (spool && input && document.activeElement !== input && input.dataset.dirty !== '1') {
+      const value = String(spool.remaining_g);
+      if (input.value !== value) input.value = value;
+    }
+  }
+  for (const select of el('slots-container').querySelectorAll('select')) {
+    for (const option of select.options) {
+      const spool = spools[option.value];
+      if (!spool) continue;
+      const text = `${spool.name} (${spool.remaining_g}g, ${spool.material})`;
+      if (option.textContent !== text) option.textContent = text;
+    }
+  }
+}
+
+async function pollLive() {
+  if (liveRequest || fullLoadInFlight) return;
+  liveRequest = api('/api/data');
+  try { updateLiveState(await liveRequest); }
+  catch (error) { console.warn('Dashboard live update failed:', error); }
+  finally { liveRequest = null; }
 }
 async function changeLang(lang) {
   await act(async () => { await api('/api/lang', {language:lang}); await loadData(); });
 }
 async function loadData() {
-  const data = await api('/api/data');
-  currentLang = data.language || 'en';
-  el('lang-picker').value = currentLang;
-  applyTexts(currentLang);
-  el('reserve-input').value = data.safety_margin_g;
-  el('printer-host').value = data.printer.host;
-  el('printer-port').value = data.printer.port;
-  el('printer-enabled').checked = data.printer.enabled;
-  updateMonitor(data);
-  const t = dict[currentLang] || dict.en;
-  const x = extra[currentLang] || extra.en;
-  const slots = el('slots-container');
-  slots.replaceChildren();
-  for (let i = 1; i <= 4; i++) {
-    const row = node('div', undefined, 'slot-row');
-    row.append(node('span', `${t.slotLabel} ${i} (${t.toolheadPrefix}${i-1}):`, 'slot-badge'));
-    const select = node('select');
-    select.name = `slot_${i}`;
-    const empty = node('option', t.emptySlot);
-    empty.value = '';
-    select.append(empty);
+  fullLoadInFlight = true;
+  try {
+    if (liveRequest) { try { await liveRequest; } catch (_) {} }
+    const data = await api('/api/data');
+    currentLang = data.language || 'en';
+    el('lang-picker').value = currentLang;
+    applyTexts(currentLang);
+    el('reserve-input').value = data.safety_margin_g;
+    el('printer-host').value = data.printer.host;
+    el('printer-port').value = data.printer.port;
+    el('printer-enabled').checked = data.printer.enabled;
+    updateMonitor(data);
+    const t = dict[currentLang] || dict.en;
+    const x = extra[currentLang] || extra.en;
+    const slots = el('slots-container');
+    slots.replaceChildren();
+    for (let i = 1; i <= 4; i++) {
+      const row = node('div', undefined, 'slot-row');
+      row.append(node('span', `${t.slotLabel} ${i} (${t.toolheadPrefix}${i-1}):`, 'slot-badge'));
+      const select = node('select');
+      select.name = `slot_${i}`;
+      const empty = node('option', t.emptySlot);
+      empty.value = '';
+      select.append(empty);
+      for (const [id, spool] of Object.entries(data.spools)) {
+        const option = node('option', `${spool.name} (${spool.remaining_g}g, ${spool.material})`);
+        option.value = id;
+        select.append(option);
+      }
+      select.value = data.slots[i] || '';
+      row.append(select);
+      slots.append(row);
+    }
+    const table = el('spools-table');
+    table.replaceChildren();
     for (const [id, spool] of Object.entries(data.spools)) {
-      const option = node('option', `${spool.name} (${spool.remaining_g}g, ${spool.material})`);
-      option.value = id;
-      select.append(option);
+      const row = node('tr');
+      row.dataset.spoolId = id;
+      const idCell = node('td'); const idText = node('code', id); idText.title = id; idCell.append(idText); row.append(idCell);
+      const nameCell = node('td'); nameCell.append(node('strong', spool.name)); row.append(nameCell);
+      row.append(node('td', spool.material));
+      const weightCell = node('td');
+      const input = node('input'); input.type='number'; input.min='0'; input.step='any'; input.value=spool.remaining_g;
+      input.style.width='80px';
+      input.addEventListener('input', () => { input.dataset.dirty = '1'; });
+      input.addEventListener('change', () => act(async () => { await api('/api/spools/update', {id, remaining_g:input.value}); await loadData(); }));
+      weightCell.append(input, document.createTextNode(' g')); row.append(weightCell);
+      const actionCell = node('td'); const button = node('button', t.deleteBtn);
+      button.style.background='var(--danger)'; button.style.padding='5px 10px';
+      button.addEventListener('click', () => act(async () => { if (confirm(`${x.delete}: ${spool.name}?`)) { await api('/api/spools/delete', {id}); await loadData(); } }));
+      actionCell.append(button); row.append(actionCell); table.append(row);
     }
-    select.value = data.slots[i] || '';
-    row.append(select);
-    slots.append(row);
-  }
-  const table = el('spools-table');
-  table.replaceChildren();
-  for (const [id, spool] of Object.entries(data.spools)) {
-    const row = node('tr');
-    const idCell = node('td'); const idText = node('code', id); idText.title = id; idCell.append(idText); row.append(idCell);
-    const nameCell = node('td'); nameCell.append(node('strong', spool.name)); row.append(nameCell);
-    row.append(node('td', spool.material));
-    const weightCell = node('td');
-    const input = node('input'); input.type='number'; input.min='0'; input.step='any'; input.value=spool.remaining_g;
-    input.style.width='80px';
-    input.addEventListener('change', () => act(async () => { await api('/api/spools/update', {id, remaining_g:input.value}); await loadData(); }));
-    weightCell.append(input, document.createTextNode(' g')); row.append(weightCell);
-    const actionCell = node('td'); const button = node('button', t.deleteBtn);
-    button.style.background='var(--danger)'; button.style.padding='5px 10px';
-    button.addEventListener('click', () => act(async () => { if (confirm(`${x.delete}: ${spool.name}?`)) { await api('/api/spools/delete', {id}); await loadData(); } }));
-    actionCell.append(button); row.append(actionCell); table.append(row);
-  }
-  const preflight = el('preflight-content');
-  preflight.replaceChildren();
-  const plans = Object.entries(data.plans || {}).sort((a,b) => b[1].created_at - a[1].created_at);
-  const recentPlan = plans.length ? plans[0] : null;
-  const recentRuns = Object.values(data.runs || {}).filter(run => recentPlan && run.plan_id === recentPlan[0]);
-  el('accounting-status').textContent = recentPlan ?
-    `Planned file: ${recentPlan[1].filename} · ${recentPlan[1].status}` +
-    (recentRuns.length ? ` · Printer job: ${recentRuns.sort((a,b) => b.start_time - a.start_time)[0].status}` : '') : '';
-  if (!data.last_preflight) { preflight.textContent = x.none; return; }
-  const last = data.last_preflight;
-  preflight.append(node('p', `${last.time || ''} — ${last.summary}`));
-  if (last.rows.length) {
-    const report = node('table');
-    const head = node('tr');
-    for (const heading of ['Tool', 'Spool', 'Required', 'Remaining', 'Status']) head.append(node('th', heading));
-    report.append(head);
-    for (const item of last.rows) {
-      const tr = node('tr');
-      for (const value of [item.tool, item.spool_name || '—', `${item.required_g} g`, item.remaining_g === null ? '—' : `${item.remaining_g} g`, item.status]) tr.append(node('td', value));
-      report.append(tr);
-    }
-    preflight.append(report);
-  }
+    renderPreflight(data, true);
+    renderAccounting(data);
+  } finally { fullLoadInFlight = false; }
 }
 el('slots-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); const form = new FormData(event.target); const slots = {};
@@ -636,7 +691,7 @@ el('printer-test').addEventListener('click', () => act(async () => {
   const x = extra[currentLang] || extra.en;
   el('printer-status').textContent = `${x.connected} · ${result.result.state}`;
 }));
-setInterval(() => act(async () => updateMonitor(await api('/api/data'))), 5000);
+setInterval(pollLive, 2500);
 act(loadData);
 </script>
 </body>
@@ -646,6 +701,7 @@ act(loadData);
 
 class WebHandler(BaseHTTPRequestHandler):
     store = STORE
+    window_controller = None
 
     def log_message(self, fmt, *args):
         LOGGER.info("HTTP %s", fmt % args)
@@ -704,6 +760,11 @@ class WebHandler(BaseHTTPRequestHandler):
                 except MoonrakerError as exc:
                     return self._response(502, {"error": f"Printer unavailable: {exc}"})
                 return self._response(200, {"status": "ok", "result": status})
+            if self.path == "/api/window/show":
+                if self.window_controller is None:
+                    return self._response(503, {"error": "Dashboard window is unavailable"})
+                self.window_controller.show()
+                return self._response(200, {"status": "ok"})
             result = self.store.update(lambda db: self._change(db, body))
             return self._response(200, {"status": "ok", "result": result})
         except (ValueError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
@@ -765,10 +826,64 @@ def create_tray_icon():
     return image
 
 
+class DashboardWindow:
+    """One pywebview window driven by the process's main GUI loop."""
+
+    def __init__(self, webview_module=None):
+        if webview_module is None:
+            import webview
+            webview_module = webview
+        self.webview = webview_module
+        self.window = webview_module.create_window(
+            "Snapmaker U1 Spool Tracker", f"http://127.0.0.1:{WEB_PORT}",
+            width=900, height=750, min_size=(760, 560), hidden=True)
+        self.window.events.shown += self._on_shown
+        self.window.events.closing += self._on_closing
+        self.ready = False
+        self.pending_show = False
+        self.quitting = False
+
+    def _on_shown(self):
+        self.ready = True
+        if self.quitting:
+            self.window.destroy()
+        elif self.pending_show:
+            self.show()
+
+    def _on_closing(self):
+        if self.quitting:
+            return True
+        # The close event blocks the GUI thread. Hiding from a worker lets
+        # pywebview dispatch to Cocoa/WinForms after the close is cancelled.
+        threading.Thread(target=self.window.hide, daemon=True).start()
+        return False
+
+    def show(self):
+        if self.quitting:
+            return
+        if not self.ready:
+            self.pending_show = True
+            return
+        self.pending_show = False
+        self.window.show()
+        self.window.restore()
+
+    def quit(self):
+        if self.quitting:
+            return
+        self.quitting = True
+        if self.ready:
+            self.window.destroy()
+
+    def run(self):
+        self.webview.start()
+
+
 class TrayApp:
     def __init__(self):
         self.icon = None
         self.server = None
+        self.window_controller = None
         self.stop_event = threading.Event()
         self.monitor = PrinterMonitor(STORE)
 
@@ -776,16 +891,52 @@ class TrayApp:
         import pystray
         db = STORE.read()
         tr = I18N.get(db["language"], I18N["en"])
-        items = [pystray.MenuItem(tr["tray_title"], lambda: None, enabled=False), pystray.Menu.SEPARATOR]
+        items = [pystray.MenuItem(tr["tray_title"], self._open_dashboard), pystray.Menu.SEPARATOR]
         for i in range(1, 5):
             spool = db["spools"].get(db["slots"][str(i)])
             title = (tr["tray_slot"].format(slot=i, idx=i-1, name=spool["name"], rem=spool["remaining_g"])
                      if spool else tr["tray_empty"].format(slot=i, idx=i-1))
-            items.append(pystray.MenuItem(title, lambda: None, enabled=False))
+            items.append(pystray.MenuItem(title, self._open_dashboard))
         items.extend([pystray.Menu.SEPARATOR,
-            pystray.MenuItem(tr["tray_open"], lambda: webbrowser.open(f"http://127.0.0.1:{WEB_PORT}")),
-            pystray.MenuItem(tr["tray_quit"], lambda icon, item: icon.stop())])
+            pystray.MenuItem(tr["tray_open"], self._open_dashboard),
+            pystray.MenuItem(tr["tray_quit"], self._quit)])
         return pystray.Menu(*items)
+
+    def _open_dashboard(self, icon=None, item=None):
+        if self.window_controller is not None:
+            self.window_controller.show()
+
+    def _quit(self, icon=None, item=None):
+        if self.window_controller is not None:
+            self.window_controller.quit()
+
+    @staticmethod
+    def _show_tray_icon(icon):
+        if sys.platform == "darwin":
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(setattr, icon, "visible", True)
+        else:
+            icon.visible = True
+
+    @staticmethod
+    def _activate_existing():
+        opener = build_opener(ProxyHandler({}))
+        url = f"http://127.0.0.1:{WEB_PORT}"
+        try:
+            with opener.open(url + "/api/data", timeout=2) as response:
+                if response.headers.get("X-Snapmaker-Tracker") != "1":
+                    return False
+        except Exception as exc:
+            LOGGER.info("Existing tracker could not be identified: %s", exc)
+            return False
+        try:
+            request = Request(url + "/api/window/show", data=b"{}",
+                              headers={"Content-Type": "application/json"}, method="POST")
+            with opener.open(request, timeout=2):
+                pass
+        except Exception as exc:
+            LOGGER.info("Existing tracker dashboard could not be activated: %s", exc)
+        return True
 
     def _refresh(self):
         last = None
@@ -818,35 +969,44 @@ class TrayApp:
     def run(self):
         try:
             STORE.read()
-            self.server = ThreadingHTTPServer(("127.0.0.1", WEB_PORT), WebHandler)
+            class DashboardHandler(WebHandler):
+                pass
+            self.server = ThreadingHTTPServer(("127.0.0.1", WEB_PORT), DashboardHandler)
         except OSError as exc:
             if exc.errno in (48, 98, 10048):
-                try:
-                    import urllib.request
-                    with urllib.request.urlopen(f"http://127.0.0.1:{WEB_PORT}/api/data", timeout=2) as response:
-                        if response.headers.get("X-Snapmaker-Tracker") == "1":
-                            webbrowser.open(f"http://127.0.0.1:{WEB_PORT}")
-                            return 0
-                except Exception:
-                    pass
+                if self._activate_existing():
+                    return 0
             LOGGER.error("Cannot start local server: %s", exc)
             return 1
         except StorageError as exc:
             LOGGER.error("Database error: %s", exc)
             show_dialog(f"Inventory database error: {exc}")
             return 1
-        import pystray
+        server_started = False
         try:
+            import pystray
+            self.window_controller = DashboardWindow()
+            DashboardHandler.window_controller = self.window_controller
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
+            server_started = True
             self.monitor.start()
-            self.icon = pystray.Icon("SnapmakerU1Tracker", create_tray_icon(), "Snapmaker U1 Tracker", menu=self.build_menu())
+            options = {}
+            if sys.platform == "darwin":
+                import AppKit
+                options["darwin_nsapplication"] = AppKit.NSApplication.sharedApplication()
+            self.icon = pystray.Icon("SnapmakerU1Tracker", create_tray_icon(),
+                                    "Snapmaker U1 Tracker", menu=self.build_menu(), **options)
             threading.Thread(target=self._refresh, daemon=True).start()
-            self.icon.run()
+            self.icon.run_detached(setup=self._show_tray_icon)
+            self.window_controller.run()
             return 0
         finally:
             self.stop_event.set()
             self.monitor.stop()
-            self.server.shutdown()
+            if self.icon is not None:
+                self.icon.stop()
+            if server_started:
+                self.server.shutdown()
             self.server.server_close()
 
 

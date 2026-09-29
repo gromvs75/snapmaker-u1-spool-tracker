@@ -244,6 +244,10 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
         monkeypatch.setattr(spool_tracker, "MoonrakerClient", FakeMoonraker)
         code, result = post("/api/printer/test", {"host": "U1.local", "port": 7125})
         assert code == 200 and result["result"]["state"] == "standby"
+        calls = []
+        Handler.window_controller = type("Window", (), {"show": lambda self: calls.append("show")})()
+        code, result = post("/api/window/show", {})
+        assert code == 200 and result["status"] == "ok" and calls == ["show"]
     finally:
         server.shutdown()
         server.server_close()

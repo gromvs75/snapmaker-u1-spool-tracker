@@ -51,4 +51,6 @@ The same directory contains `tracker.log` (rotated), a lock file, and `backups/`
 
 Python 3.11 is used in CI. Run `python -m pip install -r requirements-dev.txt` and `python -m pytest -q` locally. GitHub Actions runs tests on Linux and before both Windows and macOS builds. Build artifacts are uploaded; no tag or release is created automatically.
 
+For testing automatic accounting without a physical printer, see the [local U1/Moonraker simulator](dev/README_MOCK_U1.md). It is a development tool and is not included in the packaged app.
+
 No cloud, account, telemetry, firmware modification, or network listener beyond `127.0.0.1` is used. When enabled, the monitor makes read-only requests to the printer's stock local Moonraker API.

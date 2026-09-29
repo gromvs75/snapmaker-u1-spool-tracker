@@ -1,0 +1,30 @@
+name: macOS build
+on:
+  push:
+    branches: [main, fix/stable-release-hardening]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Test
+        run: python -m pytest -q
+      - name: Package app
+        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name SnapmakerSpoolTracker --icon AppIcon.icns --osx-bundle-identifier com.community.snapmaker-u1-tracker spool_tracker.py
+      - name: Zip app bundle
+        working-directory: dist
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker.app SnapmakerSpoolTracker-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SnapmakerSpoolTracker-macOS
+          path: dist/SnapmakerSpoolTracker-macOS.zip
+          if-no-files-found: error

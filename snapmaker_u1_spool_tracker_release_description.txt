@@ -1,31 +1,11 @@
-### What's New in v1.0.0:
-* 🎯 **Automatic Filament Runout Protection:** Pre-flight G-code verification on export in OrcaSlicer / Snapmaker Orca.
-* 🛑 **Bed Cooling Prevention:** Alerts before export to avoid paused prints cooling down and detaching from the build plate.
-* 🌐 **Multi-Language Web UI:** English, Deutsch, Русский, Українська, Español.
-* 💻 **Cross-Platform:** Native stand-alone builds for both **macOS** and **Windows** (zero Python or terminal setup required).
+Snapmaker U1 Spool Tracker v1.0.1
 
----
+Snapmaker U1 Spool Tracker keeps a persistent, per-user inventory for four independent U1 toolheads (T0–T3). Its native macOS/Windows desktop dashboard updates live and stays available from the menu bar/system tray. Snapmaker Orca / OrcaSlicer post-processing checks each used toolhead against its assigned spool before export. Missing or invalid filament metadata fails closed; shortage warnings offer Cancel Export or Proceed Anyway. A configurable safety reserve affects only the check, not consumption.
 
-### Installation & Quick Start
+Export and upload never deduct filament. An allowed export records a planned job. The optional local U1/Moonraker monitor matches actual print filename, G-code SHA-256 and byte size, marks an actual start active, and deducts estimates from the spool IDs captured at preflight once after successful completion. Cancelled/error jobs do not consume the full plan. Persistent run identity prevents a duplicate debit after reconnect or restart. Ambiguous/unverifiable jobs remain for review.
 
-#### 🍏 For macOS:
-1. Download **`SnapmakerSpoolTracker-macOS.zip`** below and extract it.
-2. Drag **`SnapmakerSpoolTracker.app`** into your `/Applications` folder and launch it.
-3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add:
-   ```text
-   /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
-   ```
+Backup & Restore exports a portable JSON file through a native Save dialog and validates/atomically imports it through a native Open dialog, preserving inventory, settings, and accounting history. Before updating on macOS, quit the app, export a backup outside Application Support, then drag the new app into `/Applications` and choose Replace. AppCleaner/CleanMyMac and similar tools may remove the entire app data folder, including internal backups. The product is local-first, with no cloud, account, or telemetry.
 
-#### 🪟 For Windows:
-1. Download **`SnapmakerSpoolTracker-Windows.zip`** below and extract it to any convenient folder (e.g. `C:\Tools\SnapmakerSpoolTracker`).
-2. Run **`SnapmakerSpoolTracker.exe`** (a tray icon will appear near the system clock).
-3. In **Snapmaker Orca** (or OrcaSlicer) -> **Print Settings** -> **Others** -> **Post-processing scripts**, add the path to the exe (with trailing `;`):
-   ```text
-   C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
-   ```
-   *(Replace with your actual folder path where you placed the file)*.
+Install: on macOS, download `SnapmakerSpoolTracker-macOS.zip`, unpack it, and place `SnapmakerSpoolTracker.app` in `/Applications`. This unsigned app may require **Open** from the context menu. On Windows, download `SnapmakerSpoolTracker-Windows.exe` and keep it in a stable folder. The Windows native dashboard requires Microsoft Edge WebView2 Runtime. Follow README.md and MANUAL_EN.md / MANUAL_RU.md for Orca setup and backup instructions.
 
----
-
-### 📖 Full Beginner's Manual
-For step-by-step instructions on setting up spools and slots, see [MANUAL_EN.md](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/main/MANUAL_EN.md).
+Validation to date: extensive automated tests; packaged macOS app and real Snapmaker Orca post-processing manually tested; Fake U1/Moonraker end-to-end simulator tested; Windows artifact built and tested in GitHub Actions. The Windows GUI and physical Snapmaker U1 hardware have not been manually validated in this cycle.

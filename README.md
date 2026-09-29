@@ -1,47 +1,58 @@
-<img width="1200" height="630" alt="preview_banner" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
-# 🎯 Snapmaker U1 Spool Tracker
+<img width="1200" height="630" alt="Snapmaker U1 Spool Tracker" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
 
-[![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Snapmaker](https://img.shields.io/badge/printer-Snapmaker%20U1-orange.svg)](https://snapmaker.com)
+# Snapmaker U1 Spool Tracker
 
-**Intelligent 4-toolhead filament inventory management and automatic runout protection for Snapmaker U1 & OrcaSlicer / Snapmaker Orca.**
+A small, local-first preflight utility for Snapmaker U1 and Snapmaker Orca / OrcaSlicer. It compares the per-tool filament requirement in G-code with four physical spool assignments: Slot 1 → T0 through Slot 4 → T3.
 
----
+## What it does
 
-## 🛑 The Problem
+- Keeps a local inventory of physical spools and remaining grams.
+- Checks `; filament used [g] = ...` before G-code export. An unassigned spool or insufficient material opens a native Cancel Export / Proceed Anyway dialog.
+- Cancelling returns a nonzero exit code. Proceed Anyway and a successful check return zero. The G-code is not modified.
+- A missing or invalid per-tool usage line is an error and cancels export. The latest result, with one row per toolhead, is shown on the dashboard.
+- Export creates a planned job but never deducts filament. With the optional local U1 monitor enabled, a matching successful printer job automatically deducts its T0–T3 estimate once. Re-exporting or uploading a file cannot consume inventory. Cancelled/error jobs do not deduct the full plan.
+- A configurable reserve in grams is added to each **used** toolhead's requirement for the check only. The default is 0 g.
 
-When running large multi-color or multi-material prints on the Snapmaker U1:
-1. **Unattended Mid-Print Runout**: If a spool runs out while you are away, the printer pauses.
-2. **Bed Cooling Failure**: On prolonged pauses, heated beds often cool down. Once the bed temperature drops, print adhesion fails and the model detaches from the plate — ruining hours of print time.
-3. **Complex Math**: Keeping track of remaining filament across 4 independent toolheads (T0–T3) plus purge tower volumes is tedious to calculate manually.
+Material mismatch checking is deferred until a reliable per-tool material field is confirmed in Snapmaker Orca output. The tracker never guesses material from a spool name.
 
----
+## Install and use
 
-## ✨ The Solution
+Download v1.0.1 from [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.0.1). On macOS, unpack `SnapmakerSpoolTracker-macOS.zip`, move `SnapmakerSpoolTracker.app` to `/Applications`, and open it; the unsigned app may require **Open** from the context menu. On Windows, put `SnapmakerSpoolTracker-Windows.exe` in a stable folder such as `C:\Tools\SnapmakerSpoolTracker` and run it to show the tray icon. The native Windows dashboard requires Microsoft Edge WebView2 Runtime.
 
-**Snapmaker U1 Spool Tracker** acts as a background menu bar service and an OrcaSlicer post-processing hook:
+Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The native pywebview window updates print state, preflight results, and balances live. Closing it leaves the tray app running; reopen it from the menu. A second launch does not create another tray instance, but the tray command is the reliable way to reopen a window closed with X. Add real spools, set their initial weights, and assign the four slots. A fresh installation starts empty. The local `http://127.0.0.1:8765` page is for troubleshooting only.
 
-- 🔍 **Pre-Flight Runout Interception**: Analyzes sliced G-code before export. If any assigned spool lacks enough filament, it halts the export and triggers a native alert dialog.
-- 🎛 **4-Toolhead Slot Mapping**: Intuitive web UI to assign physical spools to Toolheads T0 through T3.
-- 📉 **Automatic Spool Deduction**: Automatically subtracts used grams from your inventory upon successful export.
-- 🌐 **Multi-Language Support**: English, Deutsch, Русский, Українська, Español.
-- 🍏 **Zero Terminal Needed**: Runs quietly in the macOS menu bar as a standalone `.app`.
+For automatic accounting, enter the U1 hostname/IP (default `U1.local`) and Moonraker port (`7125`) under **U1 printer monitor**, use **Test Connection**, enable the monitor, and save. Keep the tray app running. Preflight works offline; the monitor recovers from Moonraker history after reconnect/restart. It matches filename, SHA-256, byte size, printer, and preflight time, and debits the spool IDs captured at preflight. Persistent run identity prevents double debit. Deleted/changed remote files or ambiguous plans leave inventory untouched for review. Weigh and correct a spool when real use differs from the slicer estimate.
 
----
+In Snapmaker Orca / OrcaSlicer, add the executable to **Print Settings → Others → Post-processing scripts**. Include the trailing semicolon required by the slicer:
 
-## 🚀 Quick Start (for macOS Users)
+```text
+/Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+```
 
-### 1. Download & Install
-1. Go to [Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases) and download `SnapmakerSpoolTracker-macOS.zip`.
-2. Extract the archive and drag **`SnapmakerSpoolTracker.app`** into your `/Applications` folder.
-3. Launch the app from `/Applications`. A color toolhead icon will appear in your top macOS menu bar.
+```text
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-Windows.exe;
+```
 
-### 2. Configure OrcaSlicer
-1. Open **Snapmaker Orca** (or standard OrcaSlicer).
-2. Go to **Print Settings (Process)** → **Others** tab.
-3. Scroll down to **Post-processing scripts**.
-4. Add the following path:
-   ```text
-   /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+If the path contains spaces, quote the executable path. Save the process preset. Check this integration with a small real slice before relying on it.
+
+For source use on macOS, install `requirements.txt`, then run `python spool_tracker.py` for the tray and use `run_hook.sh;` as the post-processing command. The hook expects the G-code path as its first argument.
+
+See the [English manual](MANUAL_EN.md) or [Russian manual](MANUAL_RU.md) for setup, job states, backup, restore, and safe upgrades.
+
+## Data and recovery
+
+- macOS: `~/Library/Application Support/SnapmakerSpoolTracker/spools_u1.json`
+- Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker\spools_u1.json`
+- Linux source use: `${XDG_DATA_HOME:-~/.local/share}/SnapmakerSpoolTracker/spools_u1.json`
+
+Use **Backup & Restore → Export Backup** in the native window to save a portable JSON file outside this directory; **Import Backup** validates it, saves a local pre-import copy, and atomically replaces inventory, settings, and accounting history without restart. The exported file excludes transient printer connection state. The data directory also contains `tracker.log`, a lock file, and internal `backups/`. A valid old database beside a previous executable/script can migrate on first launch. Corrupt data is preserved and reported, never silently reset.
+
+For a macOS update, Quit, export a portable backup, unpack the new `.app`, drag it to `/Applications`, and choose **Replace**. Do not uninstall with AppCleaner/CleanMyMac first if retaining data: they may remove the entire Application Support directory, including internal backups. A portable file saved elsewhere survives. Export before a Windows uninstall or move too. For complete removal, delete the data directory only when you intend to erase inventory/history.
+
+## Build and test
+
+Python 3.11 is used in CI. Run `python -m pip install -r requirements-dev.txt` and `python -m pytest -q` locally. GitHub Actions runs tests on Linux and before both Windows and macOS builds. Build artifacts are uploaded; no tag or release is created automatically.
+
+For testing automatic accounting without a physical printer, see the [local U1/Moonraker simulator](dev/README_MOCK_U1.md). It is a development tool and is not included in the packaged app.
+
+No cloud, account, telemetry, firmware modification, or network listener beyond `127.0.0.1` is used. When enabled, the monitor makes read-only requests to the printer's stock local Moonraker API.

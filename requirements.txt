@@ -1,2 +1,4 @@
-pystray>=0.19.5
-Pillow>=10.0.0
+pystray==0.19.5
+Pillow==11.3.0
+filelock==3.16.1
+pywebview==6.2.1

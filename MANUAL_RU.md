@@ -2,7 +2,7 @@
 
 ## Установка и первый запуск
 
-После публикации v1.0.1 распакуйте ZIP для macOS, переместите `SnapmakerSpoolTracker.app` в `/Applications` и откройте. Для неподписанной сборки может потребоваться команда **Открыть** через контекстное меню. В Windows храните `SnapmakerSpoolTracker.exe` в постоянной папке; для нативного окна нужен Microsoft Edge WebView2 Runtime. Облако и учётная запись не нужны.
+Скачайте v1.0.1 на странице [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.0.1). На macOS распакуйте `SnapmakerSpoolTracker-macOS.zip`, переместите `SnapmakerSpoolTracker.app` в `/Applications` и откройте. Для неподписанной сборки может потребоваться команда **Открыть** через контекстное меню. В Windows храните `SnapmakerSpoolTracker-Windows.exe` в постоянной папке; для нативного окна нужен Microsoft Edge WebView2 Runtime. Облако и учётная запись не нужны.
 
 Нажмите значок в строке меню/трее → **Настроить катушки и слоты**, чтобы открыть нативное окно. Оно обновляется само. X скрывает только окно, приложение остаётся в трее; через меню окно можно открыть снова. Повторный запуск не создаёт второй значок и может восстановить свёрнутое окно, но для окна, скрытого через X, используйте пункт меню.
 
@@ -23,7 +23,7 @@
 ```
 
 ```text
-C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-Windows.exe;
 ```
 
 Замените путь Windows на фактический, путь с пробелами заключите в кавычки. Для запуска исходников на Mac установите зависимости и укажите абсолютный путь к `run_hook.sh;`.

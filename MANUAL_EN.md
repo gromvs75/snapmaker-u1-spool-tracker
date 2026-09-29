@@ -2,7 +2,7 @@
 
 ## Installation and first launch
 
-After v1.0.1 is published, unpack the macOS ZIP, drag `SnapmakerSpoolTracker.app` to `/Applications`, and open it. An unsigned build may require **Open** from the context menu. On Windows, keep `SnapmakerSpoolTracker.exe` in a stable folder; the native dashboard requires Microsoft Edge WebView2 Runtime. No account or cloud service is needed.
+Download v1.0.1 from [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.0.1). On macOS, unpack `SnapmakerSpoolTracker-macOS.zip`, drag `SnapmakerSpoolTracker.app` to `/Applications`, and open it. An unsigned build may require **Open** from the context menu. On Windows, keep `SnapmakerSpoolTracker-Windows.exe` in a stable folder; the native dashboard requires Microsoft Edge WebView2 Runtime. No account or cloud service is needed.
 
 Click the menu-bar/tray icon → **Configure Spools & Slots** to open the native window. It updates itself. X hides the window but leaves the tray app running; use the tray command to reopen it. Another launch does not create a second tray instance and can restore a minimized window, but is not the reliable way to reopen a window hidden with X.
 
@@ -23,7 +23,7 @@ In **Print Settings → Others → Post-processing scripts**, add the executable
 ```
 
 ```text
-C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-Windows.exe;
 ```
 
 Use your actual Windows path and quote paths containing spaces. For macOS source use, install dependencies and provide the absolute path to `run_hook.sh;`.

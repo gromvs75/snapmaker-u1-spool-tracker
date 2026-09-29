@@ -17,7 +17,7 @@ Material mismatch checking is deferred until a reliable per-tool material field 
 
 ## Install and use
 
-The CI workflows produce an unsigned macOS `.app` and a Windows `.exe` as artifacts. They are not a release until the owner publishes them. On macOS, move the app to `/Applications`; macOS may require **Open** from the context menu on first launch. On Windows, put the exe in a stable folder such as `C:\Tools\SnapmakerSpoolTracker` and run it once to show the tray icon. The native Windows dashboard requires the Microsoft Edge WebView2 Runtime.
+Download v1.0.1 from [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.0.1). On macOS, unpack `SnapmakerSpoolTracker-macOS.zip`, move `SnapmakerSpoolTracker.app` to `/Applications`, and open it; the unsigned app may require **Open** from the context menu. On Windows, put `SnapmakerSpoolTracker-Windows.exe` in a stable folder such as `C:\Tools\SnapmakerSpoolTracker` and run it to show the tray icon. The native Windows dashboard requires Microsoft Edge WebView2 Runtime.
 
 Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The native pywebview window updates print state, preflight results, and balances live. Closing it leaves the tray app running; reopen it from the menu. A second launch does not create another tray instance, but the tray command is the reliable way to reopen a window closed with X. Add real spools, set their initial weights, and assign the four slots. A fresh installation starts empty. The local `http://127.0.0.1:8765` page is for troubleshooting only.
 
@@ -30,7 +30,7 @@ In Snapmaker Orca / OrcaSlicer, add the executable to **Print Settings → Other
 ```
 
 ```text
-C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-Windows.exe;
 ```
 
 If the path contains spaces, quote the executable path. Save the process preset. Check this integration with a small real slice before relying on it.

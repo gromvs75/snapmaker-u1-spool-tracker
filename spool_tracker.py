@@ -11,12 +11,14 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import ProxyHandler, Request, build_opener
+from pathlib import Path
 
 from gcode import GCodeError, parse_u1_gcode
 from accounting import create_plan
 from moonraker import MoonrakerClient, MoonrakerError, PrinterMonitor
 from preflight import check, has_problem
 from storage import Store, StorageError, ValidationError, label, legacy_paths, printer_config, weight
+from backup import import_backup, write_backup
 
 APP_VERSION = "1.0.1"
 WEB_PORT = 8765
@@ -380,6 +382,15 @@ HTML_PAGE = """<!DOCTYPE html>
     <div id="preflight-content"></div>
     <p id="accounting-status" class="subtitle"></p>
   </div>
+  <div class="card">
+    <h2 id="backup-title">Backup &amp; Restore</h2>
+    <p id="backup-help" class="subtitle"></p>
+    <div class="form-inline">
+      <button id="backup-export" type="button">Export Backup</button>
+      <button id="backup-import" type="button">Import Backup</button>
+    </div>
+    <p id="backup-availability" class="subtitle" aria-live="polite"></p>
+  </div>
 </div>
 
 <script>
@@ -483,11 +494,11 @@ const dict = {
 
 let currentLang = 'en';
 const extra = {
- en: {reserve:'Safety reserve (g)', reserveHelp:'Added to each used toolhead for preflight only. It is not consumed.', save:'Save reserve', latest:'Last preflight', none:'No G-code has been checked yet.', delete:'Delete spool', printer:'U1 printer monitor', printerHelp:'Matching successful prints update inventory automatically. Export and upload never deduct filament.', enable:'Enable automatic accounting', savePrinter:'Save printer settings', test:'Test Connection', connected:'Connected', disconnected:'Disconnected'},
- ru: {reserve:'Страховой запас (г)', reserveHelp:'Добавляется к требованию каждой используемой головки только для проверки. Не списывается.', save:'Сохранить запас', latest:'Последняя проверка', none:'G-код ещё не проверялся.', delete:'Удалить катушку', printer:'Монитор принтера U1', printerHelp:'Успешная печать совпадающего файла обновляет остаток. Экспорт и загрузка не списывают пластик.', enable:'Включить автоматический учёт', savePrinter:'Сохранить настройки принтера', test:'Проверить соединение', connected:'Подключён', disconnected:'Нет соединения'},
- de: {reserve:'Sicherheitsreserve (g)', reserveHelp:'Nur für die Prüfung pro aktivem Druckkopf; wird nicht abgezogen.', save:'Reserve speichern', latest:'Letzte Prüfung', none:'Noch kein G-Code geprüft.', delete:'Spule löschen', printer:'U1-Druckermonitor', printerHelp:'Erfolgreiche passende Drucke aktualisieren den Bestand automatisch. Export und Upload ziehen nichts ab.', enable:'Automatische Erfassung aktivieren', savePrinter:'Druckereinstellungen speichern', test:'Verbindung testen', connected:'Verbunden', disconnected:'Getrennt'},
- uk: {reserve:'Запас безпеки (г)', reserveHelp:'Додається до кожної активної голівки лише для перевірки. Не списується.', save:'Зберегти запас', latest:'Остання перевірка', none:'G-код ще не перевірено.', delete:'Видалити котушку', printer:'Монітор принтера U1', printerHelp:'Успішний друк відповідного файлу оновлює залишок. Експорт і завантаження не списують пластик.', enable:'Увімкнути автоматичний облік', savePrinter:'Зберегти налаштування принтера', test:'Перевірити з’єднання', connected:'Підключено', disconnected:'Немає з’єднання'},
- es: {reserve:'Reserva de seguridad (g)', reserveHelp:'Se añade por cabezal activo solo para comprobar; no se descuenta.', save:'Guardar reserva', latest:'Última comprobación', none:'Todavía no se ha comprobado G-code.', delete:'Eliminar bobina', printer:'Monitor de impresora U1', printerHelp:'Las impresiones completadas del archivo coincidente actualizan el inventario. Exportar o subir no descuenta.', enable:'Activar contabilidad automática', savePrinter:'Guardar impresora', test:'Probar conexión', connected:'Conectada', disconnected:'Desconectada'}
+ en: {reserve:'Safety reserve (g)', reserveHelp:'Added to each used toolhead for preflight only. It is not consumed.', save:'Save reserve', latest:'Last preflight', none:'No G-code has been checked yet.', delete:'Delete spool', printer:'U1 printer monitor', printerHelp:'Matching successful prints update inventory automatically. Export and upload never deduct filament.', enable:'Enable automatic accounting', savePrinter:'Save printer settings', test:'Test Connection', connected:'Connected', disconnected:'Disconnected', backupTitle:'Backup & Restore', backupHelp:'Save a portable copy outside the app data folder before upgrading or uninstalling.', exportBackup:'Export Backup', importBackup:'Import Backup', backupUnavailable:'Backup and Restore are available in the desktop application window.', exportDone:'Backup saved.', importDone:'Backup restored. The dashboard is up to date.', importConfirm:'Importing a backup replaces your current inventory, settings, and accounting history. A local safety copy will be created. Continue?'},
+ ru: {reserve:'Страховой запас (г)', reserveHelp:'Добавляется к требованию каждой используемой головки только для проверки. Не списывается.', save:'Сохранить запас', latest:'Последняя проверка', none:'G-код ещё не проверялся.', delete:'Удалить катушку', printer:'Монитор принтера U1', printerHelp:'Успешная печать совпадающего файла обновляет остаток. Экспорт и загрузка не списывают пластик.', enable:'Включить автоматический учёт', savePrinter:'Сохранить настройки принтера', test:'Проверить соединение', connected:'Подключён', disconnected:'Нет соединения', backupTitle:'Резервная копия и восстановление', backupHelp:'Сохраните переносимую копию вне папки данных приложения перед обновлением или удалением.', exportBackup:'Экспорт копии', importBackup:'Импорт копии', backupUnavailable:'Резервное копирование доступно в окне приложения.', exportDone:'Резервная копия сохранена.', importDone:'Данные восстановлены. Панель обновлена.', importConfirm:'Импорт заменит текущие катушки, настройки и историю учёта. Перед заменой будет создана локальная копия. Продолжить?'},
+ de: {reserve:'Sicherheitsreserve (g)', reserveHelp:'Nur für die Prüfung pro aktivem Druckkopf; wird nicht abgezogen.', save:'Reserve speichern', latest:'Letzte Prüfung', none:'Noch kein G-Code geprüft.', delete:'Spule löschen', printer:'U1-Druckermonitor', printerHelp:'Erfolgreiche passende Drucke aktualisieren den Bestand automatisch. Export und Upload ziehen nichts ab.', enable:'Automatische Erfassung aktivieren', savePrinter:'Druckereinstellungen speichern', test:'Verbindung testen', connected:'Verbunden', disconnected:'Getrennt', backupTitle:'Sichern & Wiederherstellen', backupHelp:'Vor Update oder Deinstallation eine portable Kopie außerhalb des App-Datenordners speichern.', exportBackup:'Backup exportieren', importBackup:'Backup importieren', backupUnavailable:'Backup und Wiederherstellung sind im App-Fenster verfügbar.', exportDone:'Backup gespeichert.', importDone:'Backup wiederhergestellt. Die Ansicht ist aktualisiert.', importConfirm:'Der Import ersetzt Spulen, Einstellungen und Abrechnungsverlauf. Zuvor wird eine lokale Sicherung erstellt. Fortfahren?'},
+ uk: {reserve:'Запас безпеки (г)', reserveHelp:'Додається до кожної активної голівки лише для перевірки. Не списується.', save:'Зберегти запас', latest:'Остання перевірка', none:'G-код ще не перевірено.', delete:'Видалити котушку', printer:'Монітор принтера U1', printerHelp:'Успішний друк відповідного файлу оновлює залишок. Експорт і завантаження не списують пластик.', enable:'Увімкнути автоматичний облік', savePrinter:'Зберегти налаштування принтера', test:'Перевірити з’єднання', connected:'Підключено', disconnected:'Немає з’єднання', backupTitle:'Резервна копія та відновлення', backupHelp:'Збережіть переносиму копію поза текою даних застосунку перед оновленням чи видаленням.', exportBackup:'Експорт копії', importBackup:'Імпорт копії', backupUnavailable:'Резервне копіювання доступне у вікні застосунку.', exportDone:'Резервну копію збережено.', importDone:'Дані відновлено. Панель оновлена.', importConfirm:'Імпорт замінить котушки, налаштування та історію обліку. Спершу буде створено локальну копію. Продовжити?'},
+ es: {reserve:'Reserva de seguridad (g)', reserveHelp:'Se añade por cabezal activo solo para comprobar; no se descuenta.', save:'Guardar reserva', latest:'Última comprobación', none:'Todavía no se ha comprobado G-code.', delete:'Eliminar bobina', printer:'Monitor de impresora U1', printerHelp:'Las impresiones completadas del archivo coincidente actualizan el inventario. Exportar o subir no descuenta.', enable:'Activar contabilidad automática', savePrinter:'Guardar impresora', test:'Probar conexión', connected:'Conectada', disconnected:'Desconectada', backupTitle:'Copia de seguridad y restauración', backupHelp:'Guarde una copia portátil fuera de la carpeta de datos antes de actualizar o desinstalar.', exportBackup:'Exportar copia', importBackup:'Importar copia', backupUnavailable:'La copia y restauración están disponibles en la ventana de la aplicación.', exportDone:'Copia guardada.', importDone:'Copia restaurada. El panel está actualizado.', importConfirm:'La importación reemplazará bobinas, ajustes e historial. Antes se creará una copia local. ¿Continuar?'}
 };
 const el = id => document.getElementById(id);
 const node = (tag, value, className) => {
@@ -530,7 +541,19 @@ function applyTexts(lang) {
   el('printer-enable-label').textContent = x.enable;
   el('printer-save').textContent = x.savePrinter;
   el('printer-test').textContent = x.test;
+  el('backup-title').textContent = x.backupTitle;
+  el('backup-help').textContent = x.backupHelp;
+  el('backup-export').textContent = x.exportBackup;
+  el('backup-import').textContent = x.importBackup;
+  updateBackupAvailability();
 }
+function updateBackupAvailability() {
+  const ready = Boolean(window.pywebview && window.pywebview.api);
+  el('backup-export').disabled = !ready || backupBusy;
+  el('backup-import').disabled = !ready || backupBusy;
+  el('backup-availability').textContent = ready ? '' : (extra[currentLang] || extra.en).backupUnavailable;
+}
+window.addEventListener('pywebviewready', updateBackupAvailability);
 function updateMonitor(data) {
   const x = extra[currentLang] || extra.en;
   const status = data.monitor;
@@ -691,6 +714,24 @@ el('printer-test').addEventListener('click', () => act(async () => {
   const x = extra[currentLang] || extra.en;
   el('printer-status').textContent = `${x.connected} · ${result.result.state}`;
 }));
+let backupBusy = false;
+async function withBackupDialog(action) {
+  if (backupBusy) return;
+  backupBusy = true;
+  el('backup-export').disabled = true;
+  el('backup-import').disabled = true;
+  try { await action(); }
+  finally { backupBusy = false; updateBackupAvailability(); }
+}
+el('backup-export').addEventListener('click', () => act(() => withBackupDialog(async () => {
+  const result = await window.pywebview.api.export_backup();
+  if (result.status === 'ok') alert((extra[currentLang] || extra.en).exportDone + '\\n' + result.path);
+})));
+el('backup-import').addEventListener('click', () => act(() => withBackupDialog(async () => {
+  if (!confirm((extra[currentLang] || extra.en).importConfirm)) return;
+  const result = await window.pywebview.api.import_backup();
+  if (result.status === 'ok') { await loadData(); alert((extra[currentLang] || extra.en).importDone); }
+})));
 setInterval(pollLive, 2500);
 act(loadData);
 </script>
@@ -826,6 +867,34 @@ def create_tray_icon():
     return image
 
 
+class BackupBridge:
+    """Native dialogs are available only to pywebview's injected JS API."""
+
+    def __init__(self, store, webview_module):
+        self.store = store
+        self.webview = webview_module
+        self.window = None
+
+    def export_backup(self):
+        filename = f"SnapmakerSpoolTracker-backup-{time.strftime('%Y-%m-%d')}.json"
+        selected = self.window.create_file_dialog(
+            self.webview.FileDialog.SAVE, directory=str(Path.home() / "Documents"),
+            save_filename=filename, file_types=("JSON backup (*.json)",))
+        if not selected:
+            return {"status": "cancelled"}
+        path = write_backup(self.store, selected[0], APP_VERSION)
+        return {"status": "ok", "path": str(path)}
+
+    def import_backup(self):
+        selected = self.window.create_file_dialog(
+            self.webview.FileDialog.OPEN, directory=str(Path.home() / "Documents"),
+            file_types=("JSON backup (*.json)",))
+        if not selected:
+            return {"status": "cancelled"}
+        destination = import_backup(self.store, selected[0])
+        return {"status": "ok", "safety_backup": str(destination)}
+
+
 class DashboardWindow:
     """One pywebview window driven by the process's main GUI loop."""
 
@@ -834,9 +903,11 @@ class DashboardWindow:
             import webview
             webview_module = webview
         self.webview = webview_module
+        self.backup_bridge = BackupBridge(STORE, webview_module)
         self.window = webview_module.create_window(
             "Snapmaker U1 Spool Tracker", f"http://127.0.0.1:{WEB_PORT}",
-            width=900, height=750, min_size=(760, 560), hidden=True)
+            js_api=self.backup_bridge, width=900, height=750, min_size=(760, 560), hidden=True)
+        self.backup_bridge.window = self.window
         self.window.events.shown += self._on_shown
         self.window.events.closing += self._on_closing
         self.ready = False

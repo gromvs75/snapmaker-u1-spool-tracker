@@ -10,7 +10,7 @@ A small, local-first preflight utility for Snapmaker U1 and Snapmaker Orca / Orc
 - Checks `; filament used [g] = ...` before G-code export. An unassigned spool or insufficient material opens a native Cancel Export / Proceed Anyway dialog.
 - Cancelling returns a nonzero exit code. Proceed Anyway and a successful check return zero. The G-code is not modified.
 - A missing or invalid per-tool usage line is an error and cancels export. The latest result, with one row per toolhead, is shown on the dashboard.
-- Export creates a planned job but never deducts filament. With the optional local U1 monitor enabled, a matching successful printer job automatically deducts its T0–T3 estimate once. Re-exporting or uploading a file cannot consume inventory.
+- Export creates a planned job but never deducts filament. With the optional local U1 monitor enabled, a matching successful printer job automatically deducts its T0–T3 estimate once. Re-exporting or uploading a file cannot consume inventory. Cancelled/error jobs do not deduct the full plan.
 - A configurable reserve in grams is added to each **used** toolhead's requirement for the check only. The default is 0 g.
 
 Material mismatch checking is deferred until a reliable per-tool material field is confirmed in Snapmaker Orca output. The tracker never guesses material from a spool name.
@@ -19,9 +19,9 @@ Material mismatch checking is deferred until a reliable per-tool material field 
 
 The CI workflows produce an unsigned macOS `.app` and a Windows `.exe` as artifacts. They are not a release until the owner publishes them. On macOS, move the app to `/Applications`; macOS may require **Open** from the context menu on first launch. On Windows, put the exe in a stable folder such as `C:\Tools\SnapmakerSpoolTracker` and run it once to show the tray icon. The native Windows dashboard requires the Microsoft Edge WebView2 Runtime.
 
-Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The dashboard opens in an application window; closing that window leaves the tray app running. Reopen it from the same menu. The window updates print state, preflight results, and spool balances automatically. Add your real spools, set their weights, and assign the four slots. A fresh installation starts with no spools and no assignments. The local `http://127.0.0.1:8765` backend remains available for troubleshooting, but normal use does not open a browser.
+Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The native pywebview window updates print state, preflight results, and balances live. Closing it leaves the tray app running; reopen it from the menu. A second launch does not create another tray instance, but the tray command is the reliable way to reopen a window closed with X. Add real spools, set their initial weights, and assign the four slots. A fresh installation starts empty. The local `http://127.0.0.1:8765` page is for troubleshooting only.
 
-For automatic accounting, enter your U1 hostname or IP in **U1 printer monitor** (default `U1.local`), keep Moonraker port `7125` unless you changed it, use **Test Connection**, then enable the monitor and save. Keep the tray app running. Preflight works even if the printer is offline; the monitor resumes from Moonraker history on reconnect or app restart. The planned job must match the printer's filename and G-code SHA-256. A cancelled or errored job is not charged its full estimate. If a printed file was deleted or changed before the monitor could verify it, or multiple plans with different spool assignments match, the tracker leaves inventory unchanged for that job and manual review is needed. Weigh and correct a spool when actual consumption differs from the slicer estimate.
+For automatic accounting, enter the U1 hostname/IP (default `U1.local`) and Moonraker port (`7125`) under **U1 printer monitor**, use **Test Connection**, enable the monitor, and save. Keep the tray app running. Preflight works offline; the monitor recovers from Moonraker history after reconnect/restart. It matches filename, SHA-256, byte size, printer, and preflight time, and debits the spool IDs captured at preflight. Persistent run identity prevents double debit. Deleted/changed remote files or ambiguous plans leave inventory untouched for review. Weigh and correct a spool when real use differs from the slicer estimate.
 
 In Snapmaker Orca / OrcaSlicer, add the executable to **Print Settings → Others → Post-processing scripts**. Include the trailing semicolon required by the slicer:
 
@@ -37,7 +37,7 @@ If the path contains spaces, quote the executable path. Save the process preset.
 
 For source use on macOS, install `requirements.txt`, then run `python spool_tracker.py` for the tray and use `run_hook.sh;` as the post-processing command. The hook expects the G-code path as its first argument.
 
-See [English manual](MANUAL_EN.md) or [Russian manual](MANUAL_RU.md) for a step-by-step setup.
+See the [English manual](MANUAL_EN.md) or [Russian manual](MANUAL_RU.md) for setup, job states, backup, restore, and safe upgrades.
 
 ## Data and recovery
 
@@ -45,7 +45,9 @@ See [English manual](MANUAL_EN.md) or [Russian manual](MANUAL_RU.md) for a step-
 - Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker\spools_u1.json`
 - Linux source use: `${XDG_DATA_HOME:-~/.local/share}/SnapmakerSpoolTracker/spools_u1.json`
 
-The same directory contains `tracker.log` (rotated), a lock file, and `backups/` if corruption is detected. On first launch, a valid old `spools_u1.json` beside the previous executable or source script is copied into the new location. The old file stays in place. A corrupt new database is never silently reset: the original stays untouched, a timestamped backup is made, and the app reports an error. Restore a known good copy before continuing. Back up the data directory before removing a previous installation.
+Use **Backup & Restore → Export Backup** in the native window to save a portable JSON file outside this directory; **Import Backup** validates it, saves a local pre-import copy, and atomically replaces inventory, settings, and accounting history without restart. The exported file excludes transient printer connection state. The data directory also contains `tracker.log`, a lock file, and internal `backups/`. A valid old database beside a previous executable/script can migrate on first launch. Corrupt data is preserved and reported, never silently reset.
+
+For a macOS update, Quit, export a portable backup, unpack the new `.app`, drag it to `/Applications`, and choose **Replace**. Do not uninstall with AppCleaner/CleanMyMac first if retaining data: they may remove the entire Application Support directory, including internal backups. A portable file saved elsewhere survives. Export before a Windows uninstall or move too. For complete removal, delete the data directory only when you intend to erase inventory/history.
 
 ## Build and test
 

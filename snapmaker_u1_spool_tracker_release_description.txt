@@ -1,9 +1,11 @@
-Draft release notes — v1.0.1 (do not publish before manual validation)
+DRAFT — v1.0.1 candidate. Do not publish until the owner approves.
 
-Snapmaker U1 Spool Tracker checks per-tool G-code filament requirements against four assigned physical spools. This patch release moves inventory to per-user application storage, migrates valid legacy data, protects writes, and reports corrupted data instead of silently resetting it. A missing or invalid usage line now stops export. Warnings on macOS and Windows offer Cancel Export and Proceed Anyway.
+Snapmaker U1 Spool Tracker keeps a persistent, per-user inventory for four independent U1 toolheads (T0–T3). Its native macOS/Windows desktop dashboard updates live and stays available from the menu bar/system tray. Snapmaker Orca / OrcaSlicer post-processing checks each used toolhead against its assigned spool before export. Missing or invalid filament metadata fails closed; shortage warnings offer Cancel Export or Proceed Anyway. A configurable safety reserve affects only the check, not consumption.
 
-Export does not deduct filament. Adjust remaining grams after a real print. A configurable per-tool safety reserve is used for preflight only. The dashboard shows the last result for T0–T3.
+Export and upload never deduct filament. An allowed export records a planned job. The optional local U1/Moonraker monitor matches actual print filename and G-code SHA-256/size, marks an actual start active, and deducts captured spool estimates once after successful completion. Cancelled/error jobs do not consume the full plan. Persistent run identity prevents a duplicate debit after reconnect or restart. Ambiguous/unverifiable jobs remain for review.
 
-macOS: move the unsigned app to /Applications. Windows: keep the exe in a stable folder. Set the app executable as a Snapmaker Orca / OrcaSlicer post-processing script with a trailing semicolon. See README.md, MANUAL_EN.md, and MANUAL_RU.md for exact paths, migration details, and first-run instructions.
+Backup & Restore exports a portable JSON file through a native Save dialog and validates/atomically imports it through a native Open dialog, preserving inventory, settings, and accounting history. Save portable backups outside the app data folder: AppCleaner and similar uninstall tools may remove that entire folder. The product is local-first, with no cloud, account, or telemetry.
 
-Before release: test a real slice, a shortage with Cancel and Proceed, a missing metadata file, existing inventory migration, and the Windows artifact from GitHub Actions. No release is created by CI.
+Unsigned macOS .app ZIP and Windows .exe builds are available from CI. The Windows native dashboard requires Microsoft Edge WebView2 Runtime. Follow README.md and MANUAL_EN.md / MANUAL_RU.md for install, Orca setup, backup, and safe upgrade instructions.
+
+Validation to date: extensive automated tests; packaged macOS app and real Snapmaker Orca post-processing manually tested; Fake U1/Moonraker end-to-end simulator tested; Windows artifact built and tested in GitHub Actions. The Windows GUI and physical Snapmaker U1 hardware have not been manually validated in this cycle.

@@ -254,6 +254,41 @@ class Store:
         except Timeout as exc:
             raise StorageError("Timed out waiting for the database lock") from exc
 
+    def export_snapshot(self):
+        """Read a validated durable snapshot without rewriting the database."""
+        self.directory.mkdir(parents=True, exist_ok=True)
+        try:
+            with self.lock:
+                if not self.path.exists():
+                    return empty_db()
+                with open(self.path, encoding="utf-8") as handle:
+                    return validate_db(json.load(handle))
+        except Timeout as exc:
+            raise StorageError("Timed out waiting for the database lock") from exc
+        except (OSError, ValueError) as exc:
+            raise StorageError(f"Database cannot be exported: {exc}") from exc
+
+    def replace_snapshot(self, snapshot):
+        """Save the old database, then atomically replace it under one lock."""
+        validated = validate_db(snapshot)
+        self.directory.mkdir(parents=True, exist_ok=True)
+        try:
+            with self.lock:
+                old = self._read_locked()
+                backup_dir = self.directory / "backups"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                name = f"pre-import-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}.json"
+                destination = backup_dir / name
+                with open(destination, "x", encoding="utf-8") as handle:
+                    json.dump(old, handle, indent=2, ensure_ascii=False, allow_nan=False)
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                self._atomic_write(validated)
+                return destination
+        except Timeout as exc:
+            raise StorageError("Timed out waiting for the database lock") from exc
+
 
 def legacy_paths():
     paths = [Path(__file__).resolve().parent / "spools_u1.json",

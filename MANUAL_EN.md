@@ -1,18 +1,22 @@
 # Snapmaker U1 Spool Tracker — user manual
 
-## 1. Install
+## Installation and first launch
 
-Download a published macOS or Windows build from the project's Releases page when v1.0.1 is available. On Mac, move `SnapmakerSpoolTracker.app` to `/Applications` and open it. If macOS blocks the unsigned app, use the standard context-menu **Open** action. On Windows, extract `SnapmakerSpoolTracker.exe` into a stable folder and run it; the native dashboard requires Microsoft Edge WebView2 Runtime. The app appears in the menu bar or system tray. Starting it a second time opens the existing dashboard.
+After v1.0.1 is published, unpack the macOS ZIP, drag `SnapmakerSpoolTracker.app` to `/Applications`, and open it. An unsigned build may require **Open** from the context menu. On Windows, keep `SnapmakerSpoolTracker.exe` in a stable folder; the native dashboard requires Microsoft Edge WebView2 Runtime. No account or cloud service is needed.
 
-## 2. Set up inventory
+Click the menu-bar/tray icon → **Configure Spools & Slots** to open the native window. It updates itself. X hides the window but leaves the tray app running; use the tray command to reopen it. Another launch does not create a second tray instance and can restore a minimized window, but is not the reliable way to reopen a window hidden with X.
 
-Click the menu-bar/tray icon and choose **Configure Spools & Slots**. The dashboard opens in an application window, updates automatically, and can be closed without stopping the tray app. Reopen it from the same menu. The first launch contains no spools or slot assignments. Add each physical spool with a name, material and actual remaining grams. Assign Slot 1 to T0, Slot 2 to T1, Slot 3 to T2 and Slot 4 to T3. Save the assignments. Deleting a spool clears its assignment. Enter the initial weight once; correct it when you weigh a spool or need to account for a print that could not be matched. The local `http://127.0.0.1:8765` backend is a troubleshooting fallback only.
+## Spools, slots, and reserve
 
-The **Safety reserve** is added to each used toolhead's requirement for the preflight comparison. It is not deducted from inventory. It starts at 0 g.
+On first launch, add each physical spool with a name, material, and measured remaining grams. Assign Slot 1 → T0, Slot 2 → T1, Slot 3 → T2, Slot 4 → T3 and save. Deleting a spool clears its slot. Enter initial weight once; correct it after weighing or when a job needs manual review. **Safety reserve** starts at 0 g and is added to each used toolhead's preflight requirement only. It is never deducted.
 
-## 3. Connect Snapmaker Orca / OrcaSlicer
+## U1 / Moonraker connection
 
-In **Print Settings → Others → Post-processing scripts**, enter the executable path followed by a semicolon and save the process preset:
+Under **U1 printer monitor**, enter host/IP (default `U1.local`) and port (default `7125`), click **Test Connection**, enable automatic accounting, and save. The dashboard shows connection, printer state, and filename. Keep the tray app running. The monitor uses stock local Moonraker, needs no firmware change, and resumes from history after a disconnect or app restart. Preflight works while offline. Deleted/changed remote files or ambiguous matching plans require manual review and leave inventory unchanged.
+
+## Snapmaker Orca / OrcaSlicer setup
+
+In **Print Settings → Others → Post-processing scripts**, add the executable path with a trailing semicolon; save the process preset:
 
 ```text
 /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
@@ -22,27 +26,30 @@ In **Print Settings → Others → Post-processing scripts**, enter the executab
 C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker.exe;
 ```
 
-Replace the Windows path with the actual location. Quote paths containing spaces. If running from source on Mac, use the absolute path to `run_hook.sh;` after installing dependencies in `venv`.
+Use your actual Windows path and quote paths containing spaces. For macOS source use, install dependencies and provide the absolute path to `run_hook.sh;`.
 
-## 4. Connect the U1 for automatic accounting
+## Export, print, and accounting
 
-In **U1 printer monitor**, enter the printer hostname or IP (default `U1.local`) and Moonraker port (default `7125`). Click **Test Connection**, enable automatic accounting, and save. The dashboard shows connected/disconnected and the current printer state. Keep the tray app running while using the tracker. It uses only the stock local Moonraker API; no firmware changes or account are needed.
+On export, the hook reads T0–T3 filament usage and checks assigned spools. Enough filament allows export. For a shortage or unassigned used toolhead, choose **Cancel Export** (Orca exit code 1) or **Proceed Anyway**. Unreadable G-code or invalid/missing usage metadata fails closed. G-code is not changed.
 
-The monitor can recover completed jobs from Moonraker history after a short outage or app restart. Preflight still works while the printer is unavailable. When a remote G-code was deleted or changed before verification, or matching plans disagree on spool assignments or grams, no automatic debit occurs; review and correct the inventory manually.
+An allowed export creates **planned**: filename, SHA-256, byte size, T0–T3 grams, and spool IDs captured at preflight. Exports and uploads never deduct. A matching actual print becomes **active**; a successful **completed/committed** job deducts the estimate from captured spools once. **Cancelled** and **error** jobs do not deduct the full planned amount. **Review** means no automatic debit pending inspection. Matching uses filename, hash, size, printer identity, and preflight time; a persistent run identity prevents duplicate debits after reconnect. Status and balances update without manual refresh. Weigh and correct a spool if actual use differs from the slicer estimate. Material mismatch and physical feed failures are not detected.
 
-## 5. Export and review
+## Export and import a portable backup
 
-When Orca calls the script, it checks the G-code's per-tool filament usage against the assigned spools. If all used toolheads have enough material, export continues without a popup. The dashboard shows the latest result for T0–T3, including spool, required grams, remaining grams, and status.
+In the native window, use **Backup & Restore → Export Backup**. The native Save dialog suggests `SnapmakerSpoolTracker-backup-YYYY-MM-DD.json`. Save outside the app data directory, for example in Documents, Desktop, or an external drive. The UTF-8 JSON contains language, reserve, spools, slots, printer settings, last preflight, planned jobs, and accounting runs. It excludes the live connection state, logs, lock files, binaries, and internal corruption backups. Export does not change the database.
 
-If a used toolhead has no spool or insufficient material, choose **Cancel Export** to stop or **Proceed Anyway** to continue knowingly. If the G-code is unreadable or lacks valid per-tool usage metadata, export fails closed and shows an error. The app never edits or removes the G-code.
+To restore, click **Import Backup**, confirm replacement of current inventory, settings, and accounting history, and select an exported backup in the native Open dialog. The whole file is validated before replacement. A copy of the old database is saved to `backups/pre-import-*.json`; the new database is written atomically. Dashboard and tray update without restart. The monitor starts disconnected if enabled, or disabled otherwise, until the next poll. Invalid, partial, oversized, or unsupported backups are rejected. Raw legacy `spools_u1.json` is not accepted by Import Backup. Backup buttons are unavailable in the troubleshooting browser page.
 
-**Export and upload do not consume filament.** Each allowed preflight saves a planned filename, file hash, T0–T3 grams and assigned spool IDs. The printer must actually run a matching file. Its successful completed job then deducts the planned grams from those captured spools exactly once. Re-exporting five times still leaves the inventory unchanged until a matching print completes. Cancelled and errored jobs do not deduct the full estimate. The tracker uses slicer estimates, so weigh and correct a spool when actual use differs.
+## Safe upgrade and uninstall
 
-## 6. Data and troubleshooting
+On macOS: (1) Quit the tracker from its menu. (2) Export a portable backup outside Application Support. (3) Download/unpack the new `.app`. (4) Drag it into `/Applications` and choose **Replace**. Do not remove the old app with AppCleaner or CleanMyMac first if preserving data: such tools may delete `~/Library/Application Support/SnapmakerSpoolTracker/` and its internal `backups/`. A portable backup saved elsewhere survives. On Windows, export before uninstalling or moving installations.
 
-macOS data: `~/Library/Application Support/SnapmakerSpoolTracker/`
-Windows data: `%LOCALAPPDATA%\SnapmakerSpoolTracker\`
+For a full uninstall, quit and remove the app/executable. Delete the data folder only if you intentionally want to erase inventory and accounting history.
 
-An existing valid `spools_u1.json` beside the old app or script is copied into the new data directory on first launch. The old file remains. If the database is corrupt, the app keeps it, makes a timestamped copy in `backups/`, and reports the error. `tracker.log` in the same directory helps diagnosis. Restore a good backup or contact the maintainer; the app will not silently replace the inventory.
+## Data locations and troubleshooting
 
-Test with a small actual slice and deliberate shortage before relying on the hook for a long print. The tracker checks inventory estimates; it cannot detect physical tangles, failed feeding, or material mismatch.
+- macOS: `~/Library/Application Support/SnapmakerSpoolTracker/`
+- Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker\`
+- Linux source use: `${XDG_DATA_HOME:-~/.local/share}/SnapmakerSpoolTracker/`
+
+The folder holds `spools_u1.json`, the lock file, `tracker.log`, and internal `backups/`. A valid old database beside a previous executable or script can migrate on first launch; the original remains. A corrupt active database is preserved and copied, not reset. `http://127.0.0.1:8765` is only a troubleshooting fallback. Check host/port and `tracker.log` if the monitor stays disconnected. Test the hook with a small real slice and deliberate shortage before relying on it. Physical U1 hardware has not yet been validated in this test cycle.

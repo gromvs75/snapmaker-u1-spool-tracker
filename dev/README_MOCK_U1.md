@@ -3,7 +3,7 @@
 This development tool serves only the four stock Moonraker endpoints used by
 SnapmakerSpoolTracker. It binds to `127.0.0.1` and uses port `7126`, leaving the
 real U1's default `7125` alone. It requires only Python's standard library.
-The app builds package `spool_tracker.py`; `dev/` is not included.
+The app builds package `spool_tracker.py`; this simulator and `dev/` fixtures are not included in packaged builds. Simulator success does not prove compatibility with physical U1 firmware.
 
 Start it from the repository root:
 
@@ -11,7 +11,7 @@ Start it from the repository root:
 python dev/mock_u1.py
 ```
 
-Open <http://127.0.0.1:7126>. In SnapmakerSpoolTracker's printer settings, use
+Open the simulator control page at <http://127.0.0.1:7126>. Open the tracker's native dashboard through its menu-bar/tray **Configure Spools & Slots** command. In its printer settings, use
 host `127.0.0.1`, port `7126`, enable automatic accounting, save, and click
 **Test Connection**. The simulator saves its selected file, print state, and
 history in `dev/.mock_u1_state.json`; the file is ignored by Git. Stop the
@@ -37,14 +37,14 @@ app uses. The bundled sample files are metadata fixtures, not printable models.
    ```
 
    Keep the exported G-code file available for the simulator.
-5. Confirm the export created a **planned** job and did not change inventory.
+5. Confirm the native dashboard updates to **planned** without manual reload and the export did not change inventory.
    Repeating the export must still cause no debit.
 6. In the simulator, enter the **full local path** to those exact G-code bytes.
    If Orca's planned output name differs from that path's basename, fill in
    **Printer filename** with the planned filename shown in the tracker. Select
    the file. The simulator serves its real bytes for hash verification.
 7. Click **Start Print**. After the next monitor poll (up to 10 seconds), the
-   plan should be **active** and inventory unchanged.
+   native dashboard should show **active** without reload and inventory unchanged.
 8. Click **Complete Print**. After the next poll, check that each used spool
    lost only its planned grams. Click Complete again and restart both the app
    and simulator; the same job must not debit again.
@@ -57,6 +57,10 @@ app uses. The bundled sample files are metadata fixtures, not printable models.
     preflight. Completion must still debit the four spool IDs saved in the plan.
 12. While the simulator is stopped, verify the tracker shows disconnected and
     leaves inventory untouched. Restart the simulator and confirm reconnect.
+13. Export a portable backup from the native dashboard to a location outside
+    the tracker data directory. Import it after changing test inventory and
+    verify the restored data and `backups/pre-import-*.json`. Native dialogs
+    are unavailable in the troubleshooting browser page.
 
 The simulator accepts a path to a local `.gcode` or Orca `.gcode.pp` file.
 For `.gcode.pp`, the default printer filename drops `.pp`, matching the

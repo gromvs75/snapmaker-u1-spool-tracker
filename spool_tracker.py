@@ -786,11 +786,27 @@ class TrayApp:
             try:
                 stamp = STORE.path.stat().st_mtime_ns
                 if stamp != last:
-                    self.icon.menu = self.build_menu()
-                    self.icon.update_menu()
+                    self._schedule_menu_refresh()
                     last = stamp
             except (OSError, StorageError):
                 LOGGER.exception("Tray refresh failed")
+
+    def _schedule_menu_refresh(self):
+        if sys.platform == "darwin":
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(self._refresh_menu)
+        else:
+            self._refresh_menu()
+
+    def _refresh_menu(self):
+        if self.stop_event.is_set() or self.icon is None:
+            return
+        try:
+            # Setting pystray's menu invokes NSStatusItem.setMenu_ on macOS.
+            # AppKit requires this to run on the main application thread.
+            self.icon.menu = self.build_menu()
+        except (OSError, StorageError):
+            LOGGER.exception("Tray refresh failed")
 
     def run(self):
         try:

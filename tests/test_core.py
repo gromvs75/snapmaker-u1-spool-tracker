@@ -1,8 +1,10 @@
 import json
 import multiprocessing
 import os
+import sys
 import threading
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -164,6 +166,28 @@ def test_native_dialog_decisions(monkeypatch):
     assert spool_tracker.show_dialog("shortage", "ru", allow_proceed=True)
     monkeypatch.setattr(spool_tracker, "_windows_dialog", lambda *args: (_ for _ in ()).throw(RuntimeError("dialog failed")))
     assert not spool_tracker.show_dialog("shortage", "ru", allow_proceed=True)
+
+
+def test_macos_tray_refresh_runs_on_main_thread(monkeypatch):
+    queued = []
+    pyobjc = ModuleType("PyObjCTools")
+    pyobjc.AppHelper = ModuleType("AppHelper")
+    pyobjc.AppHelper.callAfter = lambda callback: queued.append(callback)
+    monkeypatch.setitem(sys.modules, "PyObjCTools", pyobjc)
+    monkeypatch.setattr(spool_tracker.sys, "platform", "darwin")
+    app = spool_tracker.TrayApp()
+    class Icon:
+        menu = None
+    app.icon = Icon()
+    monkeypatch.setattr(app, "build_menu", lambda: "updated menu")
+    worker = threading.Thread(target=app._schedule_menu_refresh)
+    worker.start()
+    worker.join(timeout=2)
+    assert not worker.is_alive()
+    assert app.icon.menu is None
+    assert len(queued) == 1
+    queued[0]()
+    assert app.icon.menu == "updated menu"
 
 
 def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):

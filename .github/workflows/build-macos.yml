@@ -20,8 +20,11 @@ jobs:
         run: python -m pytest -q
       - name: Package app
         run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name SnapmakerSpoolTracker --icon AppIcon.icns --osx-bundle-identifier com.community.snapmaker-u1-tracker spool_tracker.py
+      - name: Zip app bundle
+        working-directory: dist
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker.app SnapmakerSpoolTracker-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
           name: SnapmakerSpoolTracker-macOS
-          path: dist/SnapmakerSpoolTracker.app
+          path: dist/SnapmakerSpoolTracker-macOS.zip
           if-no-files-found: error

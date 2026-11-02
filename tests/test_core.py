@@ -137,6 +137,8 @@ def test_repeated_export_does_not_consume(tmp_path, monkeypatch):
     for _ in range(5):
         assert spool_tracker.handle_slicer_hook(path) == 0
     assert store.read()["spools"]["one"]["remaining_g"] == 1000
+    assert store.read()["last_preflight"]["summary"] == "Export check: mapping unverified"
+    assert "final tool mapping" in store.read()["last_preflight"]["reason"]
     assert len(store.read()["plans"]) == 5
     assert {plan["status"] for plan in store.read()["plans"].values()} == {"planned"}
     assert store.read()["last_preflight"]["rows"][0]["status"] == "ok"
@@ -168,13 +170,14 @@ def test_native_dialog_decisions(monkeypatch):
     assert not spool_tracker.show_dialog("shortage", "ru", allow_proceed=True)
 
 
-def test_macos_tray_refresh_runs_on_main_thread(monkeypatch):
+def test_macos_tray_refresh_runs_on_main_thread(monkeypatch, tmp_path):
     queued = []
     pyobjc = ModuleType("PyObjCTools")
     pyobjc.AppHelper = ModuleType("AppHelper")
     pyobjc.AppHelper.callAfter = lambda callback: queued.append(callback)
     monkeypatch.setitem(sys.modules, "PyObjCTools", pyobjc)
     monkeypatch.setattr(spool_tracker.sys, "platform", "darwin")
+    monkeypatch.setattr(spool_tracker, "STORE", Store(tmp_path))
     app = spool_tracker.TrayApp()
     class Icon:
         menu = None
@@ -228,6 +231,22 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
         assert not store.read()["spools"]
         code, result = post("/api/spools/add", {"name": "New", "material": "PLA", "remaining_g": 10})
         assert code == 200 and result["result"] != spool_id
+        new_id = result["result"]
+        assert "color" not in store.read()["spools"][new_id]
+        assert post("/api/spools/color", {"id": new_id, "color": "#FF0022"})[0] == 200
+        assert store.read()["spools"][new_id]["color"] == "#ff0022"
+        assert post("/api/spools/color", {"id": new_id, "color": "red"})[0] == 400
+        assert store.read()["spools"][new_id]["color"] == "#ff0022"
+        assert post("/api/spools/color", {"id": new_id, "color": ""})[0] == 200
+        assert "color" not in store.read()["spools"][new_id]
+        colored_id = post("/api/spools/add", {"name": "Red", "material": "PLA", "remaining_g": 10, "color": "#ff0022"})[1]["result"]
+        assert store.read()["spools"][colored_id]["color"] == "#ff0022"
+        assert post("/api/spools/delete", {"id": colored_id})[0] == 200
+        config_value = {"uid": "01:02:03:04", "diameter_mm": "1.75", "density_g_cm3": "1.24"}
+        assert post("/api/spools/calibration", {"id": new_id, "calibration": config_value})[0] == 200
+        assert store.read()["spools"][new_id]["calibration"]["uid"] == '01020304'
+        other_id = post("/api/spools/add", {"name": "Other", "material": "PLA", "remaining_g": 10})[1]["result"]
+        assert post("/api/spools/calibration", {"id": other_id, "calibration": config_value})[0] == 400
         code, _ = post("/api/lang", {"language": "ru"}, {"Origin": "http://evil.example"})
         assert code == 403 and store.read()["language"] == "en"
         code, _ = post("/api/settings", {"safety_margin_g": 2}, {"Content-Type": "text/plain"})
@@ -236,14 +255,45 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
         assert code == 400
         code, _ = post("/api/printer/config", {"host": "U1.local", "port": 7125, "enabled": True})
         assert code == 200 and store.read()["printer"]["enabled"]
+        from accounting import apply_history_job, run_key
+        current_spool = new_id
+        active = {"job_id": "review-job", "filename": "part.gcode", "status": "in_progress", "start_time": 1000.0}
+        config = store.read()["printer"]
+        store.update(lambda db: db["slots"].update({"1": current_spool}))
+        assert apply_history_job(store, config, active, ("a" * 64, 1),
+                                 {"mapping": [0, 1, 2, 3], "auto_replenish": True}, [2, 0, 0, 0]) == "review"
+        key = run_key(config, active)
+        payload = {"job_key": key, "consumption": {current_spool: 2}}
+        assert post("/api/accounting/reconcile", payload)[0] == 400
+        active["status"] = "completed"
+        assert apply_history_job(store, config, active) == "review"
+        assert post("/api/accounting/reconcile", payload) == (200, {"status": "ok", "applied": True})
+        assert store.read()["spools"][current_spool]["remaining_g"] == 8
+        assert post("/api/accounting/reconcile", payload) == (200, {"status": "ok", "applied": False})
+        assert store.read()["spools"][current_spool]["remaining_g"] == 8
+        with urlopen(Request(base + "/api/statistics", headers={"Host": "127.0.0.1:8765"})) as response:
+            statistics = json.load(response)
+        assert statistics["counts"]["committed"] == 1
+        assert statistics["manual_spool_g"][current_spool] == 2
+        assert statistics["head_estimated_g"] == [0, 0, 0, 0]
         class FakeMoonraker:
             def __init__(self, host, port):
                 assert host == "U1.local" and port == 7125
             def status(self):
                 return {"connected": True, "state": "standby", "filename": "", "klippy_state": "ready"}
+            def tag_snapshot(self):
+                return ['01020304', None, None, None]
+            def head_maintenance(self):
+                return [{'head': 0, 'switches_since_maintenance': 3}]
         monkeypatch.setattr(spool_tracker, "MoonrakerClient", FakeMoonraker)
         code, result = post("/api/printer/test", {"host": "U1.local", "port": 7125})
         assert code == 200 and result["result"]["state"] == "standby"
+        with urlopen(Request(base + '/api/printer/tags', headers={'Host': '127.0.0.1:8765'})) as response:
+            assert json.load(response)['tags'] == ['01020304', None, None, None]
+        with urlopen(Request(base + '/api/printer/head-counters', headers={'Host': '127.0.0.1:8765'})) as response:
+            assert json.load(response)['heads'][0]['switches_since_maintenance'] == 3
+        code, result = post("/api/guard/decision", {"action": "resume"})
+        assert code == 409 and "No Tracker-paused" in result["error"]
         calls = []
         Handler.window_controller = type("Window", (), {"show": lambda self: calls.append("show")})()
         code, result = post("/api/window/show", {})

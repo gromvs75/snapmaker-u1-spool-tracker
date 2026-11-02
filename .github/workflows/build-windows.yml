@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main, fix/stable-release-hardening]
+    branches: [main, fix/stable-release-hardening, codex/v1.1-beta-prep]
   pull_request:
   workflow_dispatch:
 
@@ -19,9 +19,14 @@ jobs:
       - name: Test
         run: python -m pytest -q
       - name: Package executable
-        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name SnapmakerSpoolTracker spool_tracker.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name SnapmakerSpoolTracker-1.1.0-beta.1-Windows spool_tracker.py
+      - name: Smoke-test packaged application
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-1.1.0-beta.1-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw "Packaged self-test failed: $($app.ExitCode)" }
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-Windows
-          path: dist/SnapmakerSpoolTracker.exe
+          name: SnapmakerSpoolTracker-1.1.0-beta.1-Windows
+          path: dist/SnapmakerSpoolTracker-1.1.0-beta.1-Windows.exe
           if-no-files-found: error

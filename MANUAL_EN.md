@@ -1,5 +1,7 @@
 # Snapmaker U1 Spool Tracker — user manual
 
+> This manual describes v1.0.1. For the 1.1 public beta, use [the beta quick start](MANUAL_1.1_BETA_EN.md) and [release notes](RELEASE_NOTES_1.1.0-beta.1.md).
+
 ## Installation and first launch
 
 Download v1.0.1 from [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.0.1). On macOS, unpack `SnapmakerSpoolTracker-macOS.zip`, drag `SnapmakerSpoolTracker.app` to `/Applications`, and open it. An unsigned build may require **Open** from the context menu. On Windows, keep `SnapmakerSpoolTracker-Windows.exe` in a stable folder; the native dashboard requires Microsoft Edge WebView2 Runtime. No account or cloud service is needed.
@@ -13,6 +15,10 @@ On first launch, add each physical spool with a name, material, and measured rem
 ## U1 / Moonraker connection
 
 Under **U1 printer monitor**, enter host/IP (default `U1.local`) and port (default `7125`), click **Test Connection**, enable automatic accounting, and save. The dashboard shows connection, printer state, and filename. Keep the tray app running. The monitor uses stock local Moonraker, needs no firmware change, and resumes from history after a disconnect or app restart. Preflight works while offline. Deleted/changed remote files or ambiguous matching plans require manual review and leave inventory unchanged.
+
+**Unreleased 1.1 beta:** When the monitor observes a print start, it checks the remote G-code even without an Orca export plan. The default **Warn only** mode displays a warning without controlling the printer. **Off** skips start inspection. Experimental **Strict** may pause a risky or unverifiable print after it has begun; the dashboard offers Cancel Print and Resume Anyway only for the exact job paused by Tracker. Strict control is simulator-tested but not yet validated on a physical U1. An unreadable file or missing per-tool usage is **unverified**. A job without a matching export plan is not automatically debited. See [beta test instructions](dev/PRINT_START_GUARD_BETA_TEST.md).
+
+Beta2 reads the active U1 tool mapping and combines logical usage on each physical head. Unknown or changing mapping is unverified. Automatic debit of a matching export plan requires a stable observed print, confirmed disabled auto-replenishment, unchanged spool assignments and uninterrupted monitoring; otherwise it requires review. The Mac beta maintains a separate copy of inventory and settings, with no automatic sync to the regular Tracker.
 
 ## Snapmaker Orca / OrcaSlicer setup
 

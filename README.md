@@ -2,7 +2,7 @@
 
 # Snapmaker U1 Spool Tracker
 
-> **1.1 public beta in preparation:** see the [beta release notes](RELEASE_NOTES_1.1.0-beta.1.md), [English beta quick start](MANUAL_1.1_BETA_EN.md), and [Russian beta guide](MANUAL_1.1_RU_DRAFT.md). The beta uses a separate inventory, is experimental, and is not yet a published release. The installation instructions below describe **v1.0.1**.
+> **1.1 public beta:** see the [beta release notes](RELEASE_NOTES_1.1.0-beta.1.md), [English beta quick start](MANUAL_1.1_BETA_EN.md), and [Russian beta guide](MANUAL_1.1_RU_DRAFT.md). The beta uses a separate inventory, is experimental, and is available as a pre-release. The installation instructions below describe **v1.0.1**.
 
 A small, local-first preflight utility for Snapmaker U1 and Snapmaker Orca / OrcaSlicer. It compares the per-tool filament requirement in G-code with four physical spool assignments: Slot 1 → T0 through Slot 4 → T3.
 

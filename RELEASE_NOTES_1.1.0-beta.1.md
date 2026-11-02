@@ -1,6 +1,6 @@
 # Snapmaker U1 Spool Tracker 1.1.0-beta.1 — public beta
 
-**Pre-release for feedback.** This beta introduces print-start checks and broader automatic accounting for Snapmaker U1, but has not been validated across all printer, firmware, network, material and auto-replenishment scenarios. It does not guarantee prevention of runout or accurate physical weight. Keep v1.0.1 available and export a backup before trying the beta.
+**Pre-release for feedback.** This beta introduces print-start checks and broader automatic accounting for Snapmaker U1, but has not been validated across all printer, firmware, network, material and auto-replenishment scenarios. It does not guarantee prevention of runout or accurate physical weight. Export a v1.0.1 backup before trying the beta.
 
 ## What changed since v1.0.1
 
@@ -14,11 +14,13 @@
 
 ## Installation and data
 
-Back up v1.0.1 using its Export Backup command, wait for the current print to finish, and quit it before starting the beta. The beta seeds a separate `SnapmakerSpoolTracker-PublicBeta11` data directory from the normal v1.0.1 directory on first run when available. Spools and settings are copied; job history, plans and transient state are not. Afterwards the two inventories are independent. If the normal directory is missing, start empty or import an existing portable backup. Internal developer beta data is not automatically copied. Do not run both versions at once. Importing a backup replaces the target beta data and resets the guard to warning mode. Backward import from beta into v1.0.1 is not verified.
+Finish printing, export a backup from v1.0.1 and quit it. Install the beta and use **Settings → Backup & Restore → Import Backup** to import that file. Verify your spools, balances, tool assignments and printer connection; you may then remove the old application while keeping the backup. Import replaces beta data and resets the guard to warning mode.
+
+The beta uses its own `SnapmakerSpoolTracker-PublicBeta11` data directory and may initially copy spools and settings from v1.0.1, but explicit export and import is the recommended migration. The two inventories do not synchronize. Backward import from beta into v1.0.1 is not verified.
 
 The macOS package is currently built locally for Apple silicon and is not notarized; Intel macOS support is unverified. The Windows package was built on a GitHub Actions Windows runner, where automated tests and the packaged command-line self-test passed. Edge WebView2 Runtime is needed. The interactive Windows dashboard and a connection to a physical U1 have not yet been tested on Windows.
 
-Step-by-step installation and migration: [English guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/v1.1.0-beta.1/MANUAL_1.1_BETA_EN.md) · [Russian guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/v1.1.0-beta.1/MANUAL_1.1_RU_DRAFT.md). Keep v1.0.1 installed and do not replace it with the beta.
+Step-by-step installation and migration: [English guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/codex/v1.1-beta-prep/MANUAL_1.1_BETA_EN.md) · [Russian guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/codex/v1.1-beta-prep/MANUAL_1.1_RU_DRAFT.md).
 
 ## Test and report
 

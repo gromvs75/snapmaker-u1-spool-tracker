@@ -1,13 +1,15 @@
 # Snapmaker U1 Spool Tracker 1.1 beta — quick start
 
-This is a public testing release. Filament amounts are estimates, not measurements. Actual U1 automatic replenishment and some interruption scenarios have not been validated. See [release notes](RELEASE_NOTES_1.1.0-beta.1.md) for limitations.
+This is a public testing release. Filament amounts are estimates, not measurements. Actual U1 automatic replenishment and some interruption scenarios have not been validated. See [release notes](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.1.0-beta.1) for limitations.
 
 ## Install safely
 
-1. Finish any active print. In v1.0.1, open **Backup & Restore → Export Backup** and save the portable backup to a separate folder, then fully quit the old tracker from its menu-bar/tray menu.
-2. Download the beta asset for your OS from the beta release. Keep the v1.0.1 application installed and do not replace it. On macOS, unpack and move `SnapmakerSpoolTracker-1.1.0-beta.1.app` to Applications; it is not notarized and may require the system's context-menu Open action. On Windows, run `SnapmakerSpoolTracker-1.1.0-beta.1-Windows.exe` from a stable folder; the dashboard requires Edge WebView2 Runtime. The Windows automated tests and packaged self-test passed on GitHub Actions; the interactive dashboard and connection to a physical U1 have not yet been tested on Windows.
-3. The beta maintains its own `SnapmakerSpoolTracker-PublicBeta11` folder. On its first run it copies spools and settings from the standard v1.0.1 data folder when present, without modifying the original. Plans and history are not copied. If the normal data folder is absent, start empty or import your exported backup. Previous developer beta data is not copied automatically.
-4. The two versions then have independent inventories. Do not run both at once. Importing a backup replaces beta data and resets printer guard to warning mode. Importing beta data back into v1.0.1 has not been verified.
+1. Finish any active print. In v1.0.1, open **Backup & Restore → Export Backup**, save the backup outside the app folder, and fully quit the old tracker from the menu-bar/tray menu.
+2. Download and start the beta for your OS. Keep the old app until you have checked the migration. On macOS, unpack and move `SnapmakerSpoolTracker-1.1.0-beta.1.app` to Applications; it is not notarized and may require the system's context-menu Open action. On Windows, run `SnapmakerSpoolTracker-1.1.0-beta.1-Windows.exe` from a stable folder; the dashboard requires Edge WebView2 Runtime. Windows automated tests and the packaged self-test passed on GitHub Actions, but the interactive dashboard and connection to a physical U1 have not yet been tested on Windows.
+3. In the beta, open **Settings → Backup & Restore → Import Backup** and select the exported file. Import replaces existing beta data and resets the guard to warning mode; do not import an old backup over beta data you wish to keep.
+4. Check spools, balances, T0–T3 assignments and the printer connection. Once verified, you may remove the v1.0.1 app and keep the backup somewhere safe. Remove only the app; cleaning utilities may also remove its data. Update any Orca post-processing path to point to the beta (see below). Include `1.1.0-beta.1` when reporting feedback.
+
+The beta maintains a separate `SnapmakerSpoolTracker-PublicBeta11` data folder. It may copy v1.0.1 spools and settings automatically on first launch, but the explicit backup import above is the recommended migration. Plans and history are not copied by the automatic first-run process. The two inventories do not sync, and importing beta data back into v1.0.1 has not been verified. Previous developer beta data is not copied automatically.
 
 ## Configure
 

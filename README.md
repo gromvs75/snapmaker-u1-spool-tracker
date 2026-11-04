@@ -1,4 +1,5 @@
-<img width="1200" height="630" alt="Snapmaker U1 Spool Tracker" src="https://github.com/user-attachments/assets/510afc4c-a9d1-4c28-b101-35c3f924309c" />
+<img width="1672" height="941" alt="Изображение ChatGPT 29 сент  2026 г , 17_15_54-1" src="https://github.com/user-attachments/assets/0381af22-11cb-4714-8355-3721fa33dbac" />
+
 
 # Snapmaker U1 Spool Tracker
 

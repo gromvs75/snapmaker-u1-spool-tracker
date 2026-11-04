@@ -14,7 +14,7 @@ def default_directory():
     if getattr(sys, 'frozen', False):
         bundle = Path(sys.executable).resolve().parents[2]
         return bundle.with_suffix('.data')
-    return Path(__file__).resolve().parent / 'output' / 'sender-lab' / 'TrackerSenderLab-1.2-alpha.data'
+    return Path(__file__).resolve().parents[2] / 'output' / 'sender-lab' / 'TrackerSenderLab-1.2-alpha.data'
 
 
 class LabSession:

@@ -106,7 +106,7 @@ def test_browser_timeout_is_persistent_and_no_retry(browser,tmp_path):
             select_check(page,demo); upload(page); start(page)
             expect(page.locator('#sender-status')).to_have_text('Исход запуска неизвестен')
             assert len(demo.mock.accepted_starts)==1
-            from sender_dashboard import SenderDashboard
+            from dev.labs.sender_dashboard import SenderDashboard
             recovered = SenderDashboard(demo.controller.directory, demo.store.path, demo.mock.http_url, demo.mock.ws_url, .2)
             demo.server.RequestHandlerClass.sender_controller = recovered
             page.reload();page.get_by_role('button', name='Отправка', exact=True).click()
@@ -159,7 +159,7 @@ def test_invalid_file_shows_persistent_error(browser,tmp_path):
 
 
 def test_checker_error_ui_blocks_actions(browser,tmp_path,monkeypatch):
-    import sender_dashboard
+    from dev.labs import sender_dashboard
     def fail(*args,**kwargs):
         raise TimeoutError('Checker timeout')
     monkeypatch.setattr(sender_dashboard,'strict_check',fail)

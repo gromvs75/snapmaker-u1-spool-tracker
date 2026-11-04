@@ -6,7 +6,7 @@ import pytest
 import slice_observer as module
 from slice_observer import SliceObserver, ForecastAttention
 from dev.observer_fixture import payload
-from observer_lab_app import forecast_text
+from dev.labs.observer_lab_app import forecast_text
 
 
 @pytest.fixture

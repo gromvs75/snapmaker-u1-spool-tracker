@@ -22,11 +22,13 @@ jobs:
           python-version: '3.11'
           cache: pip
       - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt -r requirements-sender.txt
+        run: |
+          python -m pip install -r requirements/dev.txt -r requirements/sender.txt
+          python -m pip install -e . --no-deps
       - name: Test
         run: python -m pytest -q
       - name: Package app
-        run: python -m PyInstaller --noconfirm --clean SnapmakerSpoolTracker.spec
+        run: python -m PyInstaller --noconfirm --clean packaging/SnapmakerSpoolTracker.spec
       - name: Smoke-test and verify package
         run: |
           dist/SnapmakerSpoolTracker-1.2-beta.app/Contents/MacOS/SnapmakerSpoolTracker --self-test

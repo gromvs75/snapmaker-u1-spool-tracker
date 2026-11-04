@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-pytest.importorskip('websockets', reason='Install requirements-sender.txt for network sender tests')
+pytest.importorskip('websockets', reason='Install requirements/sender.txt for network sender tests')
 
 from test_presend import request_data
 from dev.mock_sender_u1 import MockSenderU1
@@ -138,7 +138,7 @@ def test_cli_in_separate_process(request_data, tmp_path):
     path = tmp_path / 'request.json'
     path.write_text(json.dumps(request_data))
     with MockSenderU1() as server:
-        command = [sys.executable, str(Path(__file__).resolve().parents[1] / 'sender.py'),
+        command = [sys.executable, str(Path(__file__).resolve().parents[1] / 'src' / 'sender.py'),
                    '--request', str(path), '--ledger', str(tmp_path / 'cli.sqlite'),
                    '--http', server.http_url, '--ws', server.ws_url]
         first = subprocess.run(command, capture_output=True, timeout=5)
@@ -154,7 +154,7 @@ def test_killed_sender_does_not_repeat_accepted_start(request_data, tmp_path):
     path.write_text(json.dumps(request_data))
     ledger_path = tmp_path / 'crash.sqlite'
     with MockSenderU1('start_timeout') as server:
-        command = [sys.executable, str(Path(__file__).resolve().parents[1] / 'sender.py'),
+        command = [sys.executable, str(Path(__file__).resolve().parents[1] / 'src' / 'sender.py'),
                    '--request', str(path), '--ledger', str(ledger_path),
                    '--http', server.http_url, '--ws', server.ws_url]
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

@@ -1,4 +1,4 @@
-from forecast_lab_app import ForecastState, STOCK
+from dev.labs.forecast_lab_app import ForecastState, STOCK
 
 
 def entry(plate, grams, digest='first'):
@@ -44,7 +44,7 @@ def test_no_completed_result_does_not_replace_last_completed_forecast():
 
 
 def test_lab_stock_survives_new_state_without_debit(tmp_path):
-    from forecast_lab_app import load_lab_stock
+    from dev.labs.forecast_lab_app import load_lab_stock
     (tmp_path / 'forecast-stock.json').write_text('{"stock_g": [5, 50, 25, 110]}')
     for _ in range(2):
         state = ForecastState(load_lab_stock(tmp_path))
@@ -57,7 +57,7 @@ def test_lab_stock_survives_new_state_without_debit(tmp_path):
 
 def test_invalid_lab_stock_rejected(tmp_path):
     import pytest
-    from forecast_lab_app import load_lab_stock
+    from dev.labs.forecast_lab_app import load_lab_stock
     for invalid in ('[5]', '[true, 50, 25, 110]', '[-1, 50, 25, 110]', '[NaN, 50, 25, 110]'):
         (tmp_path / 'forecast-stock.json').write_text('{"stock_g": ' + invalid + '}')
         with pytest.raises(ValueError):
@@ -94,7 +94,7 @@ def test_live_store_edits_recalculate_without_slice_or_debit(tmp_path):
 
 
 def test_shared_spool_uses_combined_consumption():
-    from forecast_lab_app import forecast_entry
+    from dev.labs.forecast_lab_app import forecast_entry
     event = entry(0, 6)
     event['weights'] = [6, 6, 0, 0]
     inventory = {'slots': {'1': 'a', '2': 'a'},

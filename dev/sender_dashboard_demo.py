@@ -6,7 +6,7 @@ import threading
 from http.server import ThreadingHTTPServer
 
 from dev.mock_sender_u1 import MockSenderU1
-from sender_dashboard import SenderDashboard
+from dev.labs.sender_dashboard import SenderDashboard
 from storage import Store
 import spool_tracker
 

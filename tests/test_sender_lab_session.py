@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from filelock import Timeout
-from sender_lab_session import LabSession, default_directory
+from dev.labs.sender_lab_session import LabSession, default_directory
 
 
 def saved(root, scenario='start_timeout'):
@@ -18,7 +18,7 @@ def saved(root, scenario='start_timeout'):
 
 
 def test_default_directory_beside_bundle_not_user_preferences(monkeypatch):
-    import sender_lab_session as module
+    from dev.labs import sender_lab_session as module
     monkeypatch.setattr(module.sys,'frozen',True,raising=False)
     monkeypatch.setattr(module.sys,'executable','/tmp/test-build/TrackerSenderLab.app/Contents/MacOS/TrackerSenderLab')
     assert default_directory() == Path('/tmp/test-build/TrackerSenderLab.data').resolve()
@@ -60,8 +60,8 @@ def test_scenario_change_does_not_reset_job(tmp_path):
 
 
 def test_main_no_arguments_reopens_same_blocked_job(tmp_path,monkeypatch):
-    import sender_lab_session
-    import sender_test_app
+    from dev.labs import sender_lab_session
+    from dev.labs import sender_test_app
     import webview
     monkeypatch.setattr(sender_lab_session,'default_directory',lambda:tmp_path)
     captured = []

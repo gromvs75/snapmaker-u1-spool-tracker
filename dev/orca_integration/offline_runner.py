@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from dev.presend_test_adapter import TestAdapter
 from presend import decode_json, digest
 

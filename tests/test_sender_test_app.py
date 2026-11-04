@@ -24,7 +24,7 @@ def test_frozen_checker_dispatch(monkeypatch, request_data):
 
 def test_worker_does_not_launch_gui(request_data, capsys):
     from pathlib import Path
-    from sender_test_app import main
+    from dev.labs.sender_test_app import main
     path = Path(request_data['gcode_path']).parent / 'worker-request.json'
     path.write_text(json.dumps(request_data))
     assert main(['--presend-worker', '--request', str(path)]) == 0

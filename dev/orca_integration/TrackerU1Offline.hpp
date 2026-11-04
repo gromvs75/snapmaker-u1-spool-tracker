@@ -1,0 +1,94 @@
+#pragma once
+// Experimental OFFLINE adapter. Never enables the stock gateway on success.
+#include <chrono>
+#include <cstdlib>
+#include <string>
+#include <thread>
+#if defined(__APPLE__) || defined(__linux__)
+#include <cerrno>
+#include <csignal>
+#include <fcntl.h>
+#include <spawn.h>
+#include <sys/wait.h>
+#include <unistd.h>
+extern char **environ;
+#endif
+
+namespace TrackerU1Offline {
+inline bool run(const std::string& source, const std::string& display,
+                const std::string& action, int timeout_ms = 5000)
+{
+#if defined(__APPLE__) || defined(__linux__)
+    const char* python = std::getenv("TRACKER_U1_TEST_PYTHON");
+    const char* runner = std::getenv("TRACKER_U1_TEST_RUNNER");
+    const char* context = std::getenv("TRACKER_U1_TEST_CONTEXT");
+    const char* report = std::getenv("TRACKER_U1_TEST_REPORT");
+    if (!python || !runner || !context || !report || python[0] != '/' || runner[0] != '/'
+        || context[0] != '/' || report[0] != '/' || timeout_ms <= 0
+        || (action != "send" && action != "print")) return false;
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return false;
+    for (int fd : pipefd) fcntl(fd, F_SETFD, FD_CLOEXEC);
+    posix_spawn_file_actions_t files;
+    posix_spawnattr_t attr;
+    if (posix_spawn_file_actions_init(&files) != 0) {
+        close(pipefd[0]); close(pipefd[1]); return false;
+    }
+    if (posix_spawnattr_init(&attr) != 0) {
+        posix_spawn_file_actions_destroy(&files);
+        close(pipefd[0]); close(pipefd[1]); return false;
+    }
+    int error = 0;
+    error |= posix_spawn_file_actions_adddup2(&files, pipefd[1], STDOUT_FILENO);
+    error |= posix_spawn_file_actions_addclose(&files, pipefd[0]);
+    error |= posix_spawn_file_actions_addclose(&files, pipefd[1]);
+    error |= posix_spawn_file_actions_addopen(&files, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    error |= posix_spawn_file_actions_addopen(&files, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    error |= posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+    error |= posix_spawnattr_setpgroup(&attr, 0);
+    const char* arguments[] = {python, runner, "--source", source.c_str(), "--display", display.c_str(),
+                              "--action", action.c_str(), "--context", context, "--report", report, nullptr};
+    pid_t child = -1;
+    if (!error) error = posix_spawn(&child, python, &files, &attr,
+                                    const_cast<char* const*>(arguments), environ);
+    posix_spawn_file_actions_destroy(&files);
+    posix_spawnattr_destroy(&attr);
+    close(pipefd[1]);
+    if (error) { close(pipefd[0]); return false; }
+    fcntl(pipefd[0], F_SETFL, O_NONBLOCK);
+    std::string output;
+    int status = 0;
+    bool reaped = false, invalid = false;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        char buffer[256];
+        ssize_t count;
+        while ((count = read(pipefd[0], buffer, sizeof buffer)) > 0) {
+            output.append(buffer, static_cast<size_t>(count));
+            if (output.size() > 1024) { invalid = true; break; }
+        }
+        if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) invalid = true;
+        if (invalid) break;
+        const pid_t done = waitpid(child, &status, WNOHANG);
+        if (done == child) {
+            reaped = true;
+            while ((count = read(pipefd[0], buffer, sizeof buffer)) > 0) {
+                output.append(buffer, static_cast<size_t>(count));
+                if (output.size() > 1024) { invalid = true; break; }
+            }
+            break;
+        }
+        if (done < 0 && errno != EINTR) { invalid = true; break; }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    // A checker may have children. Terminate the dedicated process group as well.
+    kill(-child, SIGKILL);
+    if (!reaped) { while (waitpid(child, &status, 0) < 0 && errno == EINTR) {} }
+    close(pipefd[0]);
+    return reaped && !invalid && WIFEXITED(status) && WEXITSTATUS(status) == 0
+           && output == "TRACKER_U1_OFFLINE_ALLOWED_V1\n";
+#else
+    return false;
+#endif
+}
+} // namespace TrackerU1Offline

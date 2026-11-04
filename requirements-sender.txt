@@ -1,0 +1,2 @@
+# Optional isolated sender alpha; does not change desktop app dependencies.
+websockets==15.0.1

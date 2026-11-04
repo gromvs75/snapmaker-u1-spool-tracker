@@ -1,9 +1,16 @@
 name: macOS build
 on:
   push:
-    branches: [main, fix/stable-release-hardening]
+    branches: [main, fix/stable-release-hardening, codex/v1.1-beta-prep, v1.2-beta-integration-build]
   pull_request:
   workflow_dispatch:
+
+env:
+  PYTHONUTF8: "1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-macos:
@@ -15,16 +22,23 @@ jobs:
           python-version: '3.11'
           cache: pip
       - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt
+        run: python -m pip install -r requirements-dev.txt -r requirements-sender.txt
       - name: Test
         run: python -m pytest -q
       - name: Package app
-        run: python -m PyInstaller --noconfirm --clean --windowed --onedir --name SnapmakerSpoolTracker --icon AppIcon.icns --osx-bundle-identifier com.community.snapmaker-u1-tracker spool_tracker.py
+        run: python -m PyInstaller --noconfirm --clean SnapmakerSpoolTracker.spec
+      - name: Smoke-test and verify package
+        run: |
+          dist/SnapmakerSpoolTracker-1.2-beta.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
+          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-1.2-beta.app
       - name: Zip app bundle
         working-directory: dist
-        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker.app SnapmakerSpoolTracker-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-1.2-beta.app SnapmakerSpoolTracker-1.2-beta-macOS.zip
+      - name: Checksum
+        working-directory: dist
+        run: shasum -a 256 SnapmakerSpoolTracker-1.2-beta-macOS.zip > SnapmakerSpoolTracker-1.2-beta-macOS.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-macOS
-          path: dist/SnapmakerSpoolTracker-macOS.zip
+          name: SnapmakerSpoolTracker-1.2-beta-macOS
+          path: dist/SnapmakerSpoolTracker-1.2-beta-macOS.zip*
           if-no-files-found: error

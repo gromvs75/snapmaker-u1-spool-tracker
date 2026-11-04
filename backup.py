@@ -11,7 +11,7 @@ from storage import StorageError, empty_db, validate_db
 BACKUP_FORMAT = "SnapmakerSpoolTracker"
 BACKUP_VERSION = 1
 MAX_BACKUP_BYTES = 10 * 1024 * 1024
-DURABLE_KEYS = frozenset(empty_db()) - {"monitor"}
+DURABLE_KEYS = frozenset(empty_db()) - {"monitor", "last_guard"}
 
 
 def _reject_non_json_constant(value):
@@ -74,9 +74,11 @@ def parse_backup(path):
     data = document.get("data")
     if not isinstance(data, dict) or set(data) != DURABLE_KEYS:
         raise StorageError("Incomplete or unexpected backup data")
-    if data.get("schema_version") != empty_db()["schema_version"]:
+    if data.get("schema_version") not in (2, 3, empty_db()["schema_version"]):
         raise StorageError("Unsupported database schema in backup")
     restored = validate_db(data)
+    # A backup must not silently arm printer-control commands after import.
+    restored["printer"]["guard_mode"] = "warn"
     restored["monitor"]["state"] = "disconnected" if restored["printer"]["enabled"] else "disabled"
     return restored
 

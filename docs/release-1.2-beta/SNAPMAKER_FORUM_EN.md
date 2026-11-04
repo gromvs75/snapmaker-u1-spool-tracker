@@ -42,4 +42,4 @@ The short checklist is:
 
 Please include your Windows and Snorca versions and describe which step worked or failed. A real printer connection is not needed. This remains a candidate; a public 1.2 release has not been published.
 
-[Project](https://github.com/gromvs75/snapmaker-u1-spool-tracker) · [Candidate source branch](https://github.com/gromvs75/snapmaker-u1-spool-tracker/tree/codex/v1.2-beta-integration-build)
+[Project](https://github.com/gromvs75/snapmaker-u1-spool-tracker) · [Candidate source branch](https://github.com/gromvs75/snapmaker-u1-spool-tracker/tree/v1.2-beta-integration-build)

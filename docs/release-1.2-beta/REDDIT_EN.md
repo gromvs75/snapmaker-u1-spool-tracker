@@ -21,4 +21,4 @@ Real Snorca slicing was tested in the isolated Mac Lab; the integrated main appl
 
 I'd welcome a Windows tester who already has a disposable offline Windows environment. The useful checks are Slice → auto-show, reslicing → updated forecast, two plates → separate forecasts, and unchanged spool balances. No real U1 or personal printer profiles are needed.
 
-[Project](https://github.com/gromvs75/snapmaker-u1-spool-tracker) · [Candidate source branch](https://github.com/gromvs75/snapmaker-u1-spool-tracker/tree/codex/v1.2-beta-integration-build)
+[Project](https://github.com/gromvs75/snapmaker-u1-spool-tracker) · [Candidate source branch](https://github.com/gromvs75/snapmaker-u1-spool-tracker/tree/v1.2-beta-integration-build)

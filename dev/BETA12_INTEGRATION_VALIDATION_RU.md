@@ -33,7 +33,7 @@
 
 Локальный macOS-пакет: output/1.2-beta-candidate/SnapmakerSpoolTracker-1.2.0-beta.1-macOS-arm64-local.zip. Архитектура arm64, ad-hoc подпись, без нотариализации. Встроенный --self-test и codesign --verify --deep --strict прошли.
 
-CI-ветка codex/v1.2-beta-integration-build подготовлена в отдельном /tmp checkout; рабочая ветка пользователя не переключалась. В CI переданы только исходники, тесты и сборочные файлы, без тестовых баз и output. Main не изменён, GitHub Release не опубликован.
+CI-ветка v1.2-beta-integration-build подготовлена в отдельном /tmp checkout; рабочая ветка пользователя не переключалась. В CI переданы только исходники, тесты и сборочные файлы, без тестовых баз и output. Main не изменён, GitHub Release не опубликован.
 
 Windows GUI и настоящая нарезка Snorca на Windows ещё требуют отдельной проверки. Успех CI-сборки не равнозначен этой проверке.
 

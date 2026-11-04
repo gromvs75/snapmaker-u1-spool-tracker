@@ -8,6 +8,10 @@ on:
 env:
   PYTHONUTF8: "1"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -25,16 +29,16 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean SnapmakerSpoolTracker.spec
       - name: Smoke-test and verify package
         run: |
-          dist/SnapmakerSpoolTracker-1.2.0-beta.1.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
-          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-1.2.0-beta.1.app
+          dist/SnapmakerSpoolTracker-1.2-beta.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
+          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-1.2-beta.app
       - name: Zip app bundle
         working-directory: dist
-        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-1.2.0-beta.1.app SnapmakerSpoolTracker-1.2.0-beta.1-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-1.2-beta.app SnapmakerSpoolTracker-1.2-beta-macOS.zip
       - name: Checksum
         working-directory: dist
-        run: shasum -a 256 SnapmakerSpoolTracker-1.2.0-beta.1-macOS.zip > SnapmakerSpoolTracker-1.2.0-beta.1-macOS.zip.sha256
+        run: shasum -a 256 SnapmakerSpoolTracker-1.2-beta-macOS.zip > SnapmakerSpoolTracker-1.2-beta-macOS.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-1.2.0-beta.1-macOS
-          path: dist/SnapmakerSpoolTracker-1.2.0-beta.1-macOS.zip*
+          name: SnapmakerSpoolTracker-1.2-beta-macOS
+          path: dist/SnapmakerSpoolTracker-1.2-beta-macOS.zip*
           if-no-files-found: error

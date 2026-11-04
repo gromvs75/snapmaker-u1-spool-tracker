@@ -25,7 +25,7 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.0-beta.1"
+APP_VERSION = "1.2 beta"
 WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None

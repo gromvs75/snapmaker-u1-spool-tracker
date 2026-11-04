@@ -156,6 +156,7 @@ def test_size_limit(lab, monkeypatch):
     assert poll() == poll() == []
 
 
+@pytest.mark.skipif(not hasattr(os, 'mkfifo'), reason='POSIX FIFO is unavailable on Windows')
 def test_fifo_does_not_block(lab):
     folder, watcher, poll = lab
     os.mkfifo(folder / '.42.1.gcode')
@@ -189,3 +190,13 @@ def test_cli_layout_explicit_and_separate(tmp_path):
 def test_unknown_layout_rejected(tmp_path):
     with pytest.raises(ValueError):
         SliceObserver(tmp_path, layout='automatic')
+
+
+def test_special_file_rejected_before_open(monkeypatch):
+    import stat
+    from types import SimpleNamespace
+    from gcode import GCodeError
+    path = SimpleNamespace(lstat=lambda: SimpleNamespace(st_mode=stat.S_IFIFO))
+    monkeypatch.setattr(module.os, 'open', lambda *args: pytest.fail('Special file must never be opened'))
+    with pytest.raises(GCodeError, match='Unsupported file type'):
+        module.read_snapshot(path)

@@ -12,7 +12,7 @@ This is a test candidate, not a published release. macOS and Windows packages ar
 
 ## Data and operation
 
-Beta uses a separate `SnapmakerSpoolTracker-Beta12` data directory next to the usual app directory. It starts empty and does not automatically import the installed Tracker database. To migrate, explicitly export/import a backup. An imported normal backup may enable its printer monitor; use the isolated mode for offline tests.
+Beta uses a separate `SnapmakerSpoolTracker-Beta12` data directory next to the usual app directory. It uses loopback port 8766 (separate from 1.1 on 8765). It starts empty and does not automatically import the installed Tracker database. To migrate, explicitly export/import a backup. An imported normal backup may enable its printer monitor; use the isolated mode for offline tests.
 
 The observer reads `<OS temporary directory>/snapmaker_orca_model`. It waits if the directory does not exist yet. Use `--slice-root PATH` for a custom Snorca backup root. No Snorca settings are modified. File layout support is based on Snorca 2.4.1 non-BBL results; Windows GUI slicing is not yet validated.
 

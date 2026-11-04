@@ -207,7 +207,7 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
     base = f"http://127.0.0.1:{server.server_port}"
     def post(path, payload, headers=None):
         request = Request(base + path, data=json.dumps(payload).encode(),
-                          headers={"Host": "127.0.0.1:8765", "Content-Type": "application/json", **(headers or {})})
+                          headers={"Host": f"127.0.0.1:{spool_tracker.WEB_PORT}", "Content-Type": "application/json", **(headers or {})})
         try:
             with urlopen(request) as response:
                 return response.status, json.load(response)
@@ -271,7 +271,7 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
         assert store.read()["spools"][current_spool]["remaining_g"] == 8
         assert post("/api/accounting/reconcile", payload) == (200, {"status": "ok", "applied": False})
         assert store.read()["spools"][current_spool]["remaining_g"] == 8
-        with urlopen(Request(base + "/api/statistics", headers={"Host": "127.0.0.1:8765"})) as response:
+        with urlopen(Request(base + "/api/statistics", headers={"Host": f"127.0.0.1:{spool_tracker.WEB_PORT}"})) as response:
             statistics = json.load(response)
         assert statistics["counts"]["committed"] == 1
         assert statistics["manual_spool_g"][current_spool] == 2
@@ -288,9 +288,9 @@ def test_api_validation_and_slot_cleanup(tmp_path, monkeypatch):
         monkeypatch.setattr(spool_tracker, "MoonrakerClient", FakeMoonraker)
         code, result = post("/api/printer/test", {"host": "U1.local", "port": 7125})
         assert code == 200 and result["result"]["state"] == "standby"
-        with urlopen(Request(base + '/api/printer/tags', headers={'Host': '127.0.0.1:8765'})) as response:
+        with urlopen(Request(base + '/api/printer/tags', headers={'Host': f'127.0.0.1:{spool_tracker.WEB_PORT}'})) as response:
             assert json.load(response)['tags'] == ['01020304', None, None, None]
-        with urlopen(Request(base + '/api/printer/head-counters', headers={'Host': '127.0.0.1:8765'})) as response:
+        with urlopen(Request(base + '/api/printer/head-counters', headers={'Host': f'127.0.0.1:{spool_tracker.WEB_PORT}'})) as response:
             assert json.load(response)['heads'][0]['switches_since_maintenance'] == 3
         code, result = post("/api/guard/decision", {"action": "resume"})
         assert code == 409 and "No Tracker-paused" in result["error"]

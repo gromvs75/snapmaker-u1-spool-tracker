@@ -26,7 +26,7 @@ from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
 APP_VERSION = "1.2.0-beta.1"
-WEB_PORT = 8765
+WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()

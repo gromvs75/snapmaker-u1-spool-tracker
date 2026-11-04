@@ -1,9 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 
+from pathlib import Path
+
+ROOT = Path(SPECPATH).parent
+
 a = Analysis(
-    ['spool_tracker.py'],
-    pathex=[],
+    [str(ROOT / 'src' / 'spool_tracker.py')],
+    pathex=[str(ROOT / 'src'), str(ROOT)],
     binaries=[],
     datas=[],
     hiddenimports=[],
@@ -32,7 +36,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['AppIcon.icns'],
+    icon=[str(ROOT / 'packaging' / 'AppIcon.icns')],
 )
 coll = COLLECT(
     exe,
@@ -46,7 +50,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='SnapmakerSpoolTracker-1.2-beta.app',
-    icon='AppIcon.icns',
+    icon=str(ROOT / 'packaging' / 'AppIcon.icns'),
     bundle_identifier='local.snapmaker-spool-tracker.v12beta1',
     info_plist={
         'CFBundleName': 'Snapmaker Spool Tracker Beta',

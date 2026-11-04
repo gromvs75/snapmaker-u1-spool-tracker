@@ -5,7 +5,7 @@ import pytest
 from backup import create_backup
 from storage import Store, StorageError
 from forecast_backup import ForecastBackupBridge
-from forecast_lab_app import ForecastState
+from dev.labs.forecast_lab_app import ForecastState
 
 
 def test_restore_four_spools_and_forecast(tmp_path):

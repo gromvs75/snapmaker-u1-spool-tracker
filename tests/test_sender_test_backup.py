@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from backup import create_backup
 from dev.sender_dashboard_demo import Demo
-from sender_test_backup import LabBackupBridge
+from dev.labs.sender_test_backup import LabBackupBridge
 
 
 def bridge_for(demo, selected):

@@ -55,7 +55,7 @@ class TestAdapter:
                 request_path = root / 'request.json'
                 request_path.write_text(json.dumps(snapshot), encoding='utf-8')
                 command = checker_command if checker_command is not None else [
-                    sys.executable, str(Path(__file__).resolve().parents[1] / 'presend.py')]
+                    sys.executable, str(Path(__file__).resolve().parents[1] / 'src' / 'presend.py')]
                 if not isinstance(command, (list, tuple)) or not command:
                     raise ValueError('Checker must be an argument list')
                 completed = subprocess.run([*command, '--request', str(request_path)],

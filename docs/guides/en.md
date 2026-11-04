@@ -2,7 +2,7 @@
 
 **Status: integration candidate; no 1.2 beta GitHub Release has been published. Windows GUI and real Snorca slicing on Windows have not been validated.** Windows CI tests, packaging and the executable's built-in self-test passed. They do not demonstrate that window activation or slicing integration works on a user's Windows desktop.
 
-See the [release notes](RELEASE_NOTES_1.2-beta.md) for changes, package details and the validation record.
+See the [release notes](../releases/1.2-beta.md) for changes, package details and the validation record.
 
 ## The new workflow
 
@@ -25,7 +25,7 @@ A green ✓ means the estimated requirement plus reserve fits the recorded balan
 
 Current build runs are the [macOS CI run](https://github.com/gromvs75/snapmaker-u1-spool-tracker/actions/runs/41889187825) and [Windows CI run](https://github.com/gromvs75/snapmaker-u1-spool-tracker/actions/runs/41889187834); both passed at commit `83be812`. The current Mac CI package is `SnapmakerSpoolTracker-1.2-beta-macOS.zip`. Actions downloads may require GitHub sign-in and expire. These are not permanent release download links. An Intel Mac package is not provided by this candidate. macOS signing is ad-hoc, without notarization. Windows needs a functioning Microsoft Edge WebView2 runtime; this executable is not an installer for that runtime.
 
-Keep the candidate in a separate folder; do not replace the installed Tracker for an offline test. For the fully isolated path, use the [Windows test-kit instructions](dev/windows_slice_check/README_RU.md) or the CLI instructions below. Ordinary launch is not equivalent to offline isolation.
+Keep the candidate in a separate folder; do not replace the installed Tracker for an offline test. For the fully isolated path, use the [Windows test-kit instructions](../../dev/windows_slice_check/README_RU.md) or the CLI instructions below. Ordinary launch is not equivalent to offline isolation.
 
 ## Separate data and backup
 
@@ -57,7 +57,7 @@ SnapmakerSpoolTracker --isolated-root PATH
 
 On macOS, use the binary inside `Contents/MacOS/` of the candidate `.app`; on Windows, use the candidate `.exe`. This mode uses only the explicit test inventory and an ephemeral loopback port. Printer-monitor threads do not start; printer, sender and accounting-control routes are blocked. The default watched directory is `PATH/slices`; `--slice-root` may override it only with a path inside the test root. The native webview storage is also kept in that test root.
 
-For actual Snorca slicing, both applications must share the isolated temporary directory; the [Windows Sandbox kit](dev/windows_slice_check/README_RU.md) prepares this arrangement. No real U1 or host profiles are needed. That kit is prepared but has not been executed on Windows here.
+For actual Snorca slicing, both applications must share the isolated temporary directory; the [Windows Sandbox kit](../../dev/windows_slice_check/README_RU.md) prepares this arrangement. No real U1 or host profiles are needed. That kit is prepared but has not been executed on Windows here.
 
 ## Reporting a result
 

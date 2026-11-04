@@ -112,7 +112,7 @@ def test_missing_checker_never_sends(request_data, tmp_path):
 @pytest.mark.parametrize('target', ['gcode', 'inventory', 'response'])
 def test_changed_input_or_unrelated_permission_never_sends(request_data, tmp_path, target):
     # Real evaluator succeeds; modify original inputs or response before returning allow.
-    repo = str(Path(__file__).resolve().parents[1])
+    repo = str(Path(__file__).resolve().parents[1] / 'src')
     mutation = {
         'gcode': f"Path({request_data['gcode_path']!r}).write_text('changed')",
         'inventory': f"Path({request_data['inventory_path']!r}).write_text('{{}}')",
@@ -145,7 +145,7 @@ def test_strict_json(text):
 
 def test_cli_exit_contract(request_data, tmp_path):
     request = tmp_path / 'request.json'
-    cli = str(Path(__file__).resolve().parents[1] / 'presend.py')
+    cli = str(Path(__file__).resolve().parents[1] / 'src' / 'presend.py')
     for expected in (0, 23, 24):
         if expected == 23:
             rewrite_db(request_data, lambda db: db['spools']['s1'].update(remaining_g=0))
@@ -168,7 +168,7 @@ def test_timeout_is_observed_as_timeout(request_data, tmp_path):
 
 def test_allow_json_with_nonzero_exit_still_blocks(request_data, tmp_path):
     checker = tmp_path / 'nonzero_allow.py'
-    repo = str(Path(__file__).resolve().parents[1])
+    repo = str(Path(__file__).resolve().parents[1] / 'src')
     checker.write_text(f'import sys,json\nfrom pathlib import Path\nsys.path.insert(0,{repo!r})\n'
                        'from presend import evaluate\n'
                        'print(json.dumps(evaluate(json.loads(Path(sys.argv[2]).read_text()))))\n'

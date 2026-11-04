@@ -16,7 +16,7 @@ def main(argv=None):
         from presend import main as check_main
         return check_main(argv[1:])
     parser = argparse.ArgumentParser(description=__doc__)
-    from sender_lab_session import LabSession, SCENARIOS, default_directory
+    from dev.labs.sender_lab_session import LabSession, SCENARIOS, default_directory
     parser.add_argument('--scenario', choices=SCENARIOS, help='Scenario for a new lab only')
     parser.add_argument('--resume', type=Path, help='Resume a previous temporary lab; never resets its ledger')
     parser.add_argument('--test-fixture', action='store_true', help='Preselect the synthetic G-code for fault tests')
@@ -25,7 +25,7 @@ def main(argv=None):
     from dev.sender_dashboard_demo import Demo
     import webview
     from webview.menu import Menu, MenuAction
-    from sender_test_backup import LabBackupBridge
+    from dev.labs.sender_test_backup import LabBackupBridge
     from backup import create_backup
     if args.resume and args.temporary_lab:
         parser.error('--resume and --temporary-lab are mutually exclusive')

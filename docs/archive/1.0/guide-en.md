@@ -1,8 +1,8 @@
 # Snapmaker U1 Spool Tracker — user manual
 
-> For the **1.2 beta candidate**, use the [1.2 guide](MANUAL_1.2_BETA_EN.md). Windows GUI and real Snorca slicing on Windows remain unverified; the instructions below describe the older release.
+> For the **1.2 beta candidate**, use the [1.2 guide](../../guides/en.md). Windows GUI and real Snorca slicing on Windows remain unverified; the instructions below describe the older release.
 
-> This manual describes v1.0.1. For the 1.1 public beta, use [the beta quick start](MANUAL_1.1_BETA_EN.md) and [release notes](RELEASE_NOTES_1.1.0-beta.1.md).
+> This manual describes v1.0.1. For the 1.1 public beta, use [the beta quick start](../1.1/guide-en.md) and [release notes](../1.1/release-notes.md).
 
 ## Installation and first launch
 
@@ -18,7 +18,7 @@ On first launch, add each physical spool with a name, material, and measured rem
 
 Under **U1 printer monitor**, enter host/IP (default `U1.local`) and port (default `7125`), click **Test Connection**, enable automatic accounting, and save. The dashboard shows connection, printer state, and filename. Keep the tray app running. The monitor uses stock local Moonraker, needs no firmware change, and resumes from history after a disconnect or app restart. Preflight works while offline. Deleted/changed remote files or ambiguous matching plans require manual review and leave inventory unchanged.
 
-**Unreleased 1.1 beta:** When the monitor observes a print start, it checks the remote G-code even without an Orca export plan. The default **Warn only** mode displays a warning without controlling the printer. **Off** skips start inspection. Experimental **Strict** may pause a risky or unverifiable print after it has begun; the dashboard offers Cancel Print and Resume Anyway only for the exact job paused by Tracker. Strict control is simulator-tested but not yet validated on a physical U1. An unreadable file or missing per-tool usage is **unverified**. A job without a matching export plan is not automatically debited. See [beta test instructions](dev/PRINT_START_GUARD_BETA_TEST.md).
+**Unreleased 1.1 beta:** When the monitor observes a print start, it checks the remote G-code even without an Orca export plan. The default **Warn only** mode displays a warning without controlling the printer. **Off** skips start inspection. Experimental **Strict** may pause a risky or unverifiable print after it has begun; the dashboard offers Cancel Print and Resume Anyway only for the exact job paused by Tracker. Strict control is simulator-tested but not yet validated on a physical U1. An unreadable file or missing per-tool usage is **unverified**. A job without a matching export plan is not automatically debited. See [beta test instructions](../../../dev/PRINT_START_GUARD_BETA_TEST.md).
 
 Beta2 reads the active U1 tool mapping and combines logical usage on each physical head. Unknown or changing mapping is unverified. Automatic debit of a matching export plan requires a stable observed print, confirmed disabled auto-replenishment, unchanged spool assignments and uninterrupted monitoring; otherwise it requires review. The Mac beta maintains a separate copy of inventory and settings, with no automatic sync to the regular Tracker.
 

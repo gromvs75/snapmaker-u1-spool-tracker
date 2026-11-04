@@ -1,0 +1,14 @@
+<Configuration>
+  <Networking>Disable</Networking>
+  <ClipboardRedirection>Disable</ClipboardRedirection>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>C:\TrackerBeta12TestKit</HostFolder>
+      <SandboxFolder>C:\TestInputs</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>explorer.exe C:\TestInputs</Command>
+  </LogonCommand>
+</Configuration>

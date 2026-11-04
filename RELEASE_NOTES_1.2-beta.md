@@ -1,0 +1,50 @@
+# 1.2 beta — integration candidate
+
+This is a test candidate, not a published release. **Windows GUI and real Snorca slicing on Windows are not yet validated.** Both CI packages were built from commit `83be812`.
+
+Guides: [English](MANUAL_1.2_BETA_EN.md) · [Русский](MANUAL_1.2_BETA_RU.md).
+
+## Added
+
+- Automatic observation of completed Snorca slice files, compact forecast in Overview, plate selection, and automatic window reveal.
+- Inventory-backed forecast with the configured reserve, without debiting or reserving filament.
+- Forecast captions in Russian, German and English (English fallback for other languages).
+- Running or paused prints keep their existing head-card estimates; the slice forecast has its own summary.
+- Native backup import/export remains available in the main application.
+
+## Data and operation
+
+Beta uses a separate `SnapmakerSpoolTracker-Beta12` data directory next to the usual app directory. It uses loopback port 8766 (separate from 1.1 on 8765). It starts empty and does not automatically import the installed Tracker database. To migrate, explicitly export/import a backup. An imported normal backup may enable its printer monitor; use the isolated mode for offline tests.
+
+The observer reads `<OS temporary directory>/snapmaker_orca_model`. It waits if the directory does not exist yet. Use `--slice-root PATH` for a custom Snorca backup root. No Snorca settings are modified. File layout support is based on Snorca 2.4.1 non-BBL results; Windows GUI slicing is not yet validated.
+
+`--isolated-root PATH` requires `PATH/ISOLATED_TRACKER_TEST` containing `offline-only` followed by a newline. It uses only `PATH/inventory`, `PATH/slices` and a random loopback port. Printer monitors are not started, printer/sender/accounting HTTP actions are denied, and imported printer settings are disabled. It never falls back to the normal data directory or the real Snorca directory. Optional `--slice-root` must stay inside the test root.
+
+## Limitations before release
+
+- Material mapping is assumed: 1→T0 … 4→T3. This is visibly labelled, not confirmed by the printer.
+- Forecast follows the project with the latest completed slice, not the currently focused or edited GUI project.
+- The observer does not start/stop/pause prints. Existing printer-monitor features are separate.
+- macOS packages are arm64 (Apple Silicon), ad-hoc signed and not notarized. No Intel Mac package is included.
+- Windows requires a functioning WebView2 runtime. CI packaging/self-test does not substitute for Windows GUI validation.
+- Temporary slice files may disappear after an OS cleanup. Inventory is persistent in the app data directory.
+
+## Validation
+
+| Check | Evidence / limitation |
+|---|---|
+| Real Slice, reslice and multiple plates in Snorca GUI | Previously exercised in the isolated macOS Lab |
+| Integrated main application on macOS | Native window checked with synthetic completed/partial slice files, plate switching, repeated auto-show and shortage; spool balances and assignments preserved |
+| Earlier candidate restart | Forecast and inventory verified through the isolated local API; native window after that restart was not visually verified |
+| Current macOS local package | arm64; built-in self-test and signature verification passed; 51 focused tests passed; ad-hoc signed, not notarized |
+| Current macOS CI | 426 passed, 4 skipped; packaging, built-in self-test and signature verification passed; arm64 |
+| Windows CI | 405 passed, 25 skipped; packaging and built-in self-test passed; x64 |
+| Windows native GUI / real Snorca Slice | **Not validated**; a prepared offline Sandbox test kit does not count as an executed test |
+
+Backup tests cover restoring spool assignments and balances. The Lab's native backup cycle was tested separately; it must not be described as a completed Windows GUI import test.
+
+Current build runs at commit `83be812`: [macOS](https://github.com/gromvs75/snapmaker-u1-spool-tracker/actions/runs/41889187825) (passed) · [Windows](https://github.com/gromvs75/snapmaker-u1-spool-tracker/actions/runs/41889187834) (passed). The current CI Mac ZIP is `SnapmakerSpoolTracker-1.2-beta-macOS.zip`. A separately verified local build is also retained. Actions artifacts have limited retention and may require sign-in. No release-tag download URL is claimed here.
+
+The earlier hosted-runner failures and naming changes are recorded in the [build verification report](dev/BETA12_RENAME_AND_CI_RU.md). They do not change the successful results above.
+
+No physical U1 was used for these integration tests. Existing printer-control functions should not be inferred to be physically validated by these results.

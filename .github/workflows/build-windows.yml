@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [main, fix/stable-release-hardening]
+    branches: [main, fix/stable-release-hardening, codex/v1.1-beta-prep, codex/v1.2-beta-integration-build]
   pull_request:
   workflow_dispatch:
 
@@ -15,13 +15,24 @@ jobs:
           python-version: '3.11'
           cache: pip
       - name: Install dependencies
-        run: python -m pip install -r requirements-dev.txt
+        run: python -m pip install -r requirements-dev.txt -r requirements-sender.txt
       - name: Test
         run: python -m pytest -q
       - name: Package executable
-        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name SnapmakerSpoolTracker spool_tracker.py
+        run: python -m PyInstaller --noconfirm --clean --windowed --onefile --name SnapmakerSpoolTracker-1.2.0-beta.1-Windows spool_tracker.py
+      - name: Smoke-test packaged application
+        shell: pwsh
+        run: |
+          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-1.2.0-beta.1-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { throw "Packaged self-test failed: $($app.ExitCode)" }
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $file = 'dist/SnapmakerSpoolTracker-1.2.0-beta.1-Windows.exe'
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-Windows
-          path: dist/SnapmakerSpoolTracker.exe
+          name: SnapmakerSpoolTracker-1.2.0-beta.1-Windows
+          path: dist/SnapmakerSpoolTracker-1.2.0-beta.1-Windows.exe*
           if-no-files-found: error

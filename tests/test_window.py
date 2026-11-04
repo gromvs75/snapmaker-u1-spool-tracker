@@ -75,7 +75,7 @@ def test_tray_information_rows_are_actionable_and_open_dashboard(tmp_path, monke
     store = Store(tmp_path)
     store.read()
     store.update(lambda db: db["spools"].update({"one": {
-        "name": "Black", "material": "PLA", "remaining_g": 960}}))
+        "name": "Black", "material": "PLA", "remaining_g": 960, "color": "#121619"}}))
     store.update(lambda db: db["slots"].__setitem__("1", "one"))
     monkeypatch.setattr(spool_tracker, "STORE", store)
     controller = SimpleNamespace(shows=0, quits=0)
@@ -85,12 +85,39 @@ def test_tray_information_rows_are_actionable_and_open_dashboard(tmp_path, monke
     app.window_controller = controller
     items = [item for item in app.build_menu() if isinstance(item, MenuItem)]
     assert all(item.enabled for item in items)
-    assert "Black — 960g" in items[1].text
+    assert "T0 · Black — 960 g" in items[1].text
+    assert items[1]._tracker_toolhead is True
+    assert items[1]._tracker_color == '#121619'
+    assert [item.text.split(' · ')[0] for item in items[1:5]] == ['T0', 'T1', 'T2', 'T3']
     for item in items[:-1]:
         item.action(None, item)
     assert controller.shows == 6  # title, four rows, Configure
     items[-1].action(None, items[-1])
     assert controller.quits == 1
+
+
+def test_native_menu_decorates_only_toolheads(monkeypatch):
+    class NativeImage:
+        def alloc(self): return self
+        def initWithData_(self, data): self.data = data; return self
+        def setSize_(self, size): self.size = size
+        def setTemplate_(self, template): self.template = template
+    class NativeData:
+        @staticmethod
+        def dataWithBytes_length_(data, length): return data[:length]
+    class NativeItem:
+        def __init__(self): self.image = None
+        def setImage_(self, image): self.image = image
+    class Icon:
+        def _create_menu_item(self, descriptor, callbacks): return NativeItem()
+    monkeypatch.setitem(sys.modules, 'AppKit', SimpleNamespace(NSImage=NativeImage()))
+    monkeypatch.setitem(sys.modules, 'Foundation', SimpleNamespace(NSData=NativeData))
+    icon = Icon()
+    spool_tracker.install_macos_toolhead_icons(icon)
+    item = icon._create_menu_item(SimpleNamespace(_tracker_toolhead=True, _tracker_color='#f09422'), [])
+    assert item.image is not None and item.image.size == (18, 22)
+    assert item.image.data.startswith(b'\x89PNG')
+    assert icon._create_menu_item(SimpleNamespace(), []).image is None
 
 
 def test_hook_mode_never_creates_dashboard(monkeypatch):
@@ -99,6 +126,24 @@ def test_hook_mode_never_creates_dashboard(monkeypatch):
     monkeypatch.setattr(spool_tracker, "DashboardWindow", lambda: 1 / 0)
     monkeypatch.setattr(spool_tracker.sys, "argv", ["spool_tracker.py", "job.gcode"])
     assert spool_tracker.main() == 7
+
+
+def test_package_self_test_does_not_touch_data_or_open_gui(monkeypatch):
+    monkeypatch.setattr(spool_tracker.sys, "argv", ["spool_tracker.py", "--self-test"])
+    monkeypatch.setattr(spool_tracker, "configure_logging", lambda: 1 / 0)
+    monkeypatch.setattr(spool_tracker, "DashboardWindow", lambda: 1 / 0)
+    assert spool_tracker.main() == 0
+
+
+def test_native_guard_alert_describes_actual_pause(monkeypatch):
+    calls = []
+    monkeypatch.setattr(spool_tracker, "show_dialog", lambda message, lang: calls.append((message, lang)))
+    spool_tracker.TrayApp._notify_guard({"language": "ru", "last_guard": {
+        "filename": "test.gcode", "state": "paused"}})
+    assert len(calls) == 1
+    assert "test.gcode" in calls[0][0]
+    assert "поставил печать на паузу" in calls[0][0]
+    assert calls[0][1] == "ru"
 
 
 def test_second_tray_launch_exits_without_creating_gui(tmp_path, monkeypatch):

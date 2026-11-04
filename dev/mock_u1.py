@@ -44,6 +44,8 @@ class MockU1:
         else:
             self.data = {"files": {}, "selected": "", "state": "standby",
                          "current_filename": "", "history": []}
+        self.data.setdefault("extruder_map_table", [0, 1, 2, 3])
+        self.data.setdefault("auto_replenish_filament", False)
         for path in sorted(self.samples.glob("*.gcode")):
             self.data["files"].setdefault(path.name, str(path.resolve()))
         if not self.data["selected"] and self.data["files"]:
@@ -66,7 +68,7 @@ class MockU1:
         default_name = source_name[:-3] if source_name.lower().endswith(".pp") else source_name
         name = _filename(filename or default_name)
         with self.lock:
-            if self.data["state"] == "printing":
+            if self.data["state"] in ("printing", "paused"):
                 raise SimulatorError("Finish the current print before changing files")
             self.data["files"][name] = str(source)
             self.data["selected"] = name
@@ -110,13 +112,27 @@ class MockU1:
         with self.lock:
             if self.data["state"] == state:
                 return  # Repeated Complete/Cancel/Error is the same printer job.
-            if self.data["state"] != "printing":
+            if self.data["state"] not in ("printing", "paused"):
                 raise SimulatorError("No active print")
             job = self.data["history"][-1]
             job["status"] = "completed" if state == "complete" else state
             job["end_time"] = time.time()
             job["print_duration"] = max(0.0, job["end_time"] - job["start_time"])
             self.data["state"] = state
+            self._save()
+
+    def pause(self):
+        with self.lock:
+            if self.data["state"] != "printing":
+                raise SimulatorError("Print is not running")
+            self.data["state"] = "paused"
+            self._save()
+
+    def resume(self):
+        with self.lock:
+            if self.data["state"] != "paused":
+                raise SimulatorError("Print is not paused")
+            self.data["state"] = "printing"
             self._save()
 
     def idle(self):
@@ -137,7 +153,9 @@ class MockU1:
             return {"webhooks": {"state": "ready"},
                     "print_stats": {"state": self.data["state"],
                                     "filename": self.data["current_filename"],
-                                    "print_duration": duration}}
+                                    "print_duration": duration},
+                    "print_task_config": {"extruder_map_table": list(self.data["extruder_map_table"]),
+                                          "auto_replenish_filament": self.data["auto_replenish_filament"]}}
 
     def history(self, start=0, limit=50, order="desc"):
         with self.lock:
@@ -223,9 +241,10 @@ def make_handler(simulator):
                     self._send(HTTPStatus.OK, _page(simulator.view()).encode("utf-8"),
                                "text/html; charset=utf-8")
                 elif url.path == "/printer/objects/query":
-                    if not {"webhooks", "print_stats"}.issubset(params):
-                        raise SimulatorError("Query webhooks and print_stats")
-                    self._json({"status": simulator.status(), "eventtime": time.time()})
+                    available = simulator.status()
+                    if not params or any(name not in available for name in params):
+                        raise SimulatorError("Unknown printer object")
+                    self._json({"status": {name: available[name] for name in params}, "eventtime": time.time()})
                 elif url.path == "/server/history/list":
                     start = max(0, int(params.get("start", ["0"])[0]))
                     limit = min(500, max(0, int(params.get("limit", ["50"])[0])))
@@ -260,6 +279,18 @@ def make_handler(simulator):
         def do_POST(self):
             if not self._local_request():
                 self._error(HTTPStatus.FORBIDDEN, "Localhost only")
+                return
+            if self.path in ("/printer/print/pause", "/printer/print/resume", "/printer/print/cancel"):
+                try:
+                    if self.path.endswith("pause"):
+                        simulator.pause()
+                    elif self.path.endswith("cancel"):
+                        simulator.finish("cancelled")
+                    else:
+                        simulator.resume()
+                    self._json({})  # Stock U1 Klipper webhook's empty success response.
+                except SimulatorError as exc:
+                    self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             origin = self.headers.get("Origin")
             expected = f"http://{HOST}:{self.server.server_port}"

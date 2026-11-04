@@ -1,7 +1,7 @@
 name: macOS build
 on:
   push:
-    branches: [main, fix/stable-release-hardening, codex/v1.1-beta-prep, v1.2-beta-integration-build]
+    branches: [main, fix/stable-release-hardening, v1.1-beta-prep, v1.2-beta-integration-build]
   pull_request:
   workflow_dispatch:
 

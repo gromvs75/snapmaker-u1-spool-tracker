@@ -20,7 +20,7 @@ The beta uses its own `SnapmakerSpoolTracker-PublicBeta11` data directory and ma
 
 The macOS package is currently built locally for Apple silicon and is not notarized; Intel macOS support is unverified. The Windows package was built on a GitHub Actions Windows runner, where automated tests and the packaged command-line self-test passed. Edge WebView2 Runtime is needed. The interactive Windows dashboard and a connection to a physical U1 have not yet been tested on Windows.
 
-Step-by-step installation and migration: [English guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/codex/v1.1-beta-prep/MANUAL_1.1_BETA_EN.md) · [Russian guide](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/codex/v1.1-beta-prep/MANUAL_1.1_RU_DRAFT.md).
+Step-by-step installation and migration: [English guide](guide-en.md) · [Russian guide](guide-ru.md).
 
 ## Test and report
 

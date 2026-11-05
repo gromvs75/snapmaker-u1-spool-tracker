@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1-spoolman-preview1"
-WEB_PORT = 8771
+APP_VERSION = "1.2.1-spoolman-preview2"
+WEB_PORT = 8772
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview1", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview2", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 

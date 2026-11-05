@@ -28,24 +28,24 @@ jobs:
       - name: Test
         run: python -m pytest -q
       - name: Package executable
-        run: python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-Spoolman-Preview1-Windows src/spool_tracker.py
+        run: python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-Spoolman-Preview2-Windows src/spool_tracker.py
       - name: Smoke-test packaged application
         shell: pwsh
         run: |
-          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-Spoolman-Preview1-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
+          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-Spoolman-Preview2-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
           if ($app.ExitCode -ne 0) { throw "Packaged self-test failed: $($app.ExitCode)" }
       - name: Checksum
         shell: pwsh
         run: |
-          $file = 'dist/SnapmakerSpoolTracker-Spoolman-Preview1-Windows.exe'
+          $file = 'dist/SnapmakerSpoolTracker-Spoolman-Preview2-Windows.exe'
           $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $file -Leaf)" | Set-Content "$file.sha256"
       - name: Build provenance
-        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-Spoolman-Preview1-Windows.exe dist/BUILD-INFO-Windows.json
+        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-Spoolman-Preview2-Windows.exe dist/BUILD-INFO-Windows.json
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-Spoolman-Preview1-Windows
+          name: SnapmakerSpoolTracker-Spoolman-Preview2-Windows
           path: |
-            dist/SnapmakerSpoolTracker-Spoolman-Preview1-Windows.exe*
+            dist/SnapmakerSpoolTracker-Spoolman-Preview2-Windows.exe*
             dist/BUILD-INFO-Windows.json
           if-no-files-found: error

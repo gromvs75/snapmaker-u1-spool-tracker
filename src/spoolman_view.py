@@ -1,33 +1,65 @@
 """Settings panel for the optional Spoolman integration; all dynamic text is escaped."""
 PANEL = '''
 <style>
-#sm-connect {display:grid;grid-template-columns:170px minmax(0,1fr);gap:12px;align-items:center}
-#sm-connect label:has(input),#sm-connect .form-inline {grid-column:1 / -1}
-#sm-connect input[type=url],#sm-connect select {width:100%;box-sizing:border-box}
-#sm-connect label:has(input) {display:flex;gap:10px;align-items:center;line-height:1.5}
+#spoolman-panel {padding:26px}
+#sm-connect {display:grid;gap:24px}
+#sm-connect [hidden],#spoolman-panel [hidden] {display:none!important}
+#sm-summary {display:flex;justify-content:space-between;gap:16px;align-items:center;border:1px solid #394255;border-radius:12px;padding:16px 20px;margin:22px 0 28px;background:#131925}
+#sm-saved-mode {color:#a6dca0;font-weight:650}
+#sm-server {display:grid;grid-template-columns:170px minmax(0,1fr);gap:16px;align-items:center}
+#sm-url {width:100%;box-sizing:border-box}
+.sm-access {display:grid;gap:24px}
+.sm-access h3 {margin:0 0 6px}
+.sm-access p {margin:0}
+.sm-toggle {display:flex;align-items:center;gap:18px;cursor:pointer;width:fit-content}
+.sm-toggle input {appearance:none;-webkit-appearance:none;position:relative;flex:0 0 48px;width:48px;height:28px;min-height:28px;padding:0;box-sizing:border-box;border:1px solid #657087;border-radius:30px;background:#50596a;margin:0;cursor:pointer;transition:background .15s}
+.sm-toggle input:before {content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:white;box-shadow:0 1px 4px #0005;transition:transform .15s}
+.sm-toggle input:checked {background:#3978f6;border-color:#3978f6}
+.sm-toggle input:checked:before {transform:translateX(20px)}
+.sm-toggle input:focus-visible {outline:3px solid #9abaff;outline-offset:4px}
+.sm-toggle input:disabled {opacity:.4;cursor:not-allowed}
+.sm-toggle strong {display:block;font-size:16px;line-height:1.5}
+.sm-toggle small {display:block;color:var(--muted,#9ca8bc);font-size:13px;line-height:1.6}
+#sm-send-row {display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:center}
+#sm-sole-row {display:flex;gap:12px;align-items:flex-start;line-height:1.5}
+#sm-sole {margin-top:4px;flex:none}
+#sm-selection {border-top:1px solid #394255;margin-top:24px;padding-top:16px}
+#sm-attach {display:grid;grid-template-columns:minmax(0,1fr) 85px auto;gap:12px}
+#sm-attach select {width:100%;min-width:0}
+#sm-history {border-top:1px solid #394255;margin-top:20px;padding-top:18px}
+#sm-history summary {cursor:pointer;font-weight:600}
 #sm-queue button,#sm-linked button {margin:4px}
-@media(max-width:650px){#sm-connect{grid-template-columns:1fr}#sm-connect>*{grid-column:1!important}}
+#sm-refresh,#sm-linked button,#sm-queue button {background:#222c3e;color:#e1e8f4}
+#sm-error:empty {display:none}
+@media(max-width:650px){#sm-server,#sm-send-row{grid-template-columns:1fr}#sm-summary{align-items:flex-start;flex-direction:column}#sm-attach{grid-template-columns:1fr 85px}#sm-assign{grid-column:1/-1}#spoolman-panel{padding:20px}}
 </style>
 <div class="card" id="spoolman-panel">
  <h2>Spoolman · Preview</h2>
  <p id="sm-help" class="subtitle"></p>
+ <div id="sm-summary"><span id="sm-mode-label"></span><span id="sm-saved-mode"></span></div>
  <form id="sm-connect">
-  <label for="sm-url" id="sm-url-label">Server URL</label>
-  <input id="sm-url" type="url" placeholder="http://127.0.0.1:7912" autocomplete="off">
-  <label for="sm-mode" id="sm-mode-label">Mode</label>
-  <select id="sm-mode"><option value="off">Off</option><option value="read">Read only</option><option value="send">Send usage</option></select>
-  <label><input id="sm-sole" type="checkbox"> <span id="sm-sole-text"></span></label>
+  <div id="sm-server"><label for="sm-url" id="sm-url-label">Server URL</label>
+  <input id="sm-url" type="url" placeholder="http://127.0.0.1:7912" autocomplete="off"></div>
+  <div class="sm-access">
+   <div><h3 id="sm-access-title"></h3><p id="sm-access-help" class="subtitle"></p></div>
+   <label class="sm-toggle"><input id="sm-read" type="checkbox" role="switch" aria-labelledby="sm-read-title"><span><strong id="sm-read-title"></strong><small id="sm-read-help"></small></span></label>
+   <div id="sm-send-row">
+    <label class="sm-toggle"><input id="sm-send" type="checkbox" role="switch" aria-labelledby="sm-send-title"><span><strong id="sm-send-title"></strong><small id="sm-send-help"></small></span></label>
+    <label id="sm-sole-row" hidden><input id="sm-sole" type="checkbox"> <span id="sm-sole-text"></span></label>
+   </div>
+  </div>
   <div class="form-inline"><button id="sm-save" type="submit">Save</button><button id="sm-refresh" type="button">Refresh</button></div>
  </form>
  <p id="sm-status" role="status" aria-live="polite"></p>
+ <div id="sm-selection"><h3 id="sm-selection-title"></h3>
  <form id="sm-attach" class="form-inline">
   <select id="sm-spool" aria-label="Spoolman spool"></select>
   <select id="sm-head" aria-label="Toolhead"><option value="0">T0</option><option value="1">T1</option><option value="2">T2</option><option value="3">T3</option></select>
   <button id="sm-assign" type="submit">Assign</button>
  </form>
  <p id="sm-detach-help" class="subtitle"></p>
- <div id="sm-linked"></div>
- <h3 id="sm-queue-title">Usage delivery</h3><div id="sm-queue"></div>
+ <div id="sm-linked"></div></div>
+ <details id="sm-history"><summary id="sm-queue-title">Usage delivery</summary><div id="sm-queue"></div></details>
  <p id="sm-error" role="alert" style="color:#ffab91"></p>
 </div>
 '''
@@ -35,7 +67,7 @@ SCRIPT = r'''
 <script>
 (() => {
  const $ = id => document.getElementById('sm-' + id);
- let loaded = false, busy = false;
+ let loaded = false, busy = false, savedMode = "off";
  const ru = () => currentLang === 'ru';
  const t = (r,e) => ru() ? r : e;
  async function call(action, body) {
@@ -51,20 +83,31 @@ SCRIPT = r'''
   if(document.getElementById('view-settings').hidden && !force)return;
   const data=await call('status'), s=data.state;
   $('help').textContent=t('Оригинальная прошивка U1. Каталог и остатки — в Spoolman; прогноз после нарезки ничего не списывает. Поддерживается 0.27.1.','Stock U1 firmware. Spoolman stores inventory; slicing only forecasts usage. Supports 0.27.1.');
-  $('url-label').textContent=t('Адрес сервера','Server URL'); $('mode-label').textContent=t('Режим','Mode');
-  [...$('mode').options].forEach((o,i)=>o.textContent=[t('Отключено','Off'),t('Только чтение; расход передаёт другая интеграция','Read only; another integration sends usage'),t('Tracker отправляет расход','Tracker sends usage')][i]);
+  $('url-label').textContent=t('Адрес Spoolman','Spoolman URL'); $('mode-label').textContent=t('Режим работы Tracker','Tracker mode');
+  $('saved-mode').textContent=({off:t('Отключено','Off'),read:t('Только чтение','Read only'),send:t('Чтение и списание','Read and send usage')})[s.mode];
+  $('access-title').textContent=t('Доступ к Spoolman','Spoolman connection');
+  $('access-help').textContent=t('Выберите, что будет делать Tracker. Изменения применяются после сохранения.','Choose what Tracker does. Changes apply after saving.');
+  $('read-title').textContent=t('Читать каталог и остатки','Read catalog and balances');
+  $('read-help').textContent=t('Для выбора катушек и прогноза после нарезки','For spool selection and slicing forecasts');
+  $('send-title').textContent=t('Передавать расход печати','Send print usage');
+  $('send-help').textContent=t('Списывать филамент в Spoolman после учёта печати','Deduct filament in Spoolman after accounting for a print');
+  $('selection-title').textContent=t('Катушки для T0–T3','Spools for T0–T3');
   $('sole-text').textContent=t('Подтверждаю: только этот Tracker отправляет расход данного U1.','I confirm: only this Tracker sends usage for this U1.');
-  $('save').textContent=t('Сохранить подключение','Save connection'); $('refresh').textContent=t('Обновить каталог','Refresh catalog'); $('assign').textContent=t('Назначить','Assign');
+  $('save').textContent=t('Сохранить настройки','Save settings'); $('refresh').textContent=t('Обновить каталог','Refresh catalog'); $('assign').textContent=t('Назначить','Assign');
   $('detach-help').textContent=t('Отвязка удаляет только локальную ссылку; катушка в Spoolman остаётся. Для автономного учёта создайте локальную катушку с проверенным остатком.','Detach removes only the local link. The Spoolman spool is retained. For standalone use, create a local spool with a verified balance.');
   $('queue-title').textContent=t('Передача расхода','Usage delivery');
-  $('status').textContent=s.mode==='off' ? t('Подключение выключено','Connection off') : (s.error || (s.checked_at ? t('Каталог обновлён: ','Catalog refreshed: ')+new Date(s.checked_at*1000).toLocaleString() : t('Данные ещё не получены','No data yet')));
-  if(!loaded){$('url').value=s.url; $('mode').value=s.mode; loaded=true;}
+  $('status').textContent=s.mode==='off' ? t('Подключение выключено','Connection off') : (s.error || (s.checked_at ? t('Каталог обновлён: ','Catalog refreshed: ')+new Date(s.checked_at*1000).toLocaleString(ru()?'ru-RU':'en-GB') : t('Данные ещё не получены','No data yet')));
+  savedMode=s.mode;
+  if(!loaded){$('url').value=s.url; $('read').checked=s.mode!=='off'; $('send').checked=s.mode==='send'; $('sole').checked=s.mode==='send'; loaded=true;}
+  updateControls();
   const selected=$('spool').value; $('spool').replaceChildren();
-  for(const item of Object.values(s.catalog)) {if(item.archived||item.remaining_g===null)continue;const o=document.createElement('option');o.value=item.id;o.textContent='#'+item.id+' · '+item.name+' · '+item.material+' · '+item.remaining_g+' g';$('spool').append(o);}
+  for(const item of Object.values(s.catalog)) {if(item.archived||item.remaining_g===null)continue;const o=document.createElement('option');o.value=item.id;o.textContent='#'+item.id+' · '+item.name+' · '+item.material+' · '+item.remaining_g+t(' г',' g');$('spool').append(o);}
   if([...$('spool').options].some(o=>o.value===selected))$('spool').value=selected;
+  updateControls();
   $('linked').replaceChildren();
   for(const item of data.linked){const line=document.createElement('p');line.append(document.createTextNode(item.name+' '));line.append(button(t('Отвязать','Detach'),async()=>{if(confirm(t('Отвязать катушку? Данные Spoolman не удаляются.','Detach this spool? Spoolman data is kept.')))await call('detach',{id:item.id});}));$('linked').append(line);}
   $('queue').replaceChildren();
+  if(Object.values(s.outbox).some(op=>['pending','sending','uncertain'].includes(op.state)))$('history').open=true;
   const labels={pending:t('Ожидает отправки','Pending'),sending:t('Отправляется','Sending'),uncertain:t('Результат неизвестен — нужна сверка','Uncertain — review required'),sent:t('Подтверждено','Confirmed'),external:t('Только чтение — не отправлено','Read only — not sent'),resolved:t('Закрыто вручную','Closed manually')};
   for(const [id,op] of Object.entries(s.outbox).reverse().slice(0,50)){
    const line=document.createElement('p');line.append(document.createTextNode('#'+op.spool_id+' · '+op.grams+' g · '+labels[op.state]+' '));
@@ -76,7 +119,18 @@ SCRIPT = r'''
   }
   if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet');
  }
- $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:$('mode').value,sole_sender:$('sole').checked});loaded=false;});};
+ function updateControls() {
+  const read=$('read').checked, send=read&&$('send').checked;
+  $('send').disabled=!read;
+  $('sole-row').hidden=!send; $('sole').required=send;
+  $('url').required=read;
+  $('selection').hidden=savedMode==='off';
+  $('refresh').disabled=savedMode==='off';
+  $('assign').disabled=savedMode==='off'||!$('spool').options.length;
+ }
+ $('read').onchange=()=>{if(!$('read').checked){$('send').checked=false;$('sole').checked=false;}updateControls();};
+ $('send').onchange=()=>{$('sole').checked=false;updateControls();};
+ $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:!$('read').checked?'off':$('send').checked?'send':'read',sole_sender:$('sole').checked});loaded=false;});};
  $('refresh').onclick=()=>actSM(()=>call('refresh',{}));
  $('attach').onsubmit=e=>{e.preventDefault();actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
  document.getElementById('nav-settings').addEventListener('click',()=>refresh(true).catch(e=>$('error').textContent=e.message));

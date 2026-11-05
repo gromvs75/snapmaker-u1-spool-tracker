@@ -1,8 +1,8 @@
-# Spoolman Preview 1
+# Spoolman Preview 2
 
 Separate test app for **stock U1 firmware**, supporting Spoolman **0.27.1**.
 No changes to Snorca or printer firmware. No installed inventory is imported.
-Data lives in `SnapmakerSpoolTracker-SpoolmanPreview1`; local UI port is 8771.
+Data lives in `SnapmakerSpoolTracker-SpoolmanPreview2`; local UI port is 8772.
 Printer monitoring starts disabled. Do not run two usage senders for the same U1.
 
 In Settings → Spoolman, enter the server base URL (without `/api/v1` or credentials).

@@ -31,20 +31,20 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean packaging/SnapmakerSpoolTracker.spec
       - name: Smoke-test and verify package
         run: |
-          dist/SnapmakerSpoolTracker-Spoolman-Preview1.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
-          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-Spoolman-Preview1.app
+          dist/SnapmakerSpoolTracker-Spoolman-Preview2.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
+          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-Spoolman-Preview2.app
       - name: Zip app bundle
         working-directory: dist
-        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-Spoolman-Preview1.app SnapmakerSpoolTracker-Spoolman-Preview1-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-Spoolman-Preview2.app SnapmakerSpoolTracker-Spoolman-Preview2-macOS.zip
       - name: Checksum
         working-directory: dist
-        run: shasum -a 256 SnapmakerSpoolTracker-Spoolman-Preview1-macOS.zip > SnapmakerSpoolTracker-Spoolman-Preview1-macOS.zip.sha256
+        run: shasum -a 256 SnapmakerSpoolTracker-Spoolman-Preview2-macOS.zip > SnapmakerSpoolTracker-Spoolman-Preview2-macOS.zip.sha256
       - name: Build provenance
-        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-Spoolman-Preview1-macOS.zip dist/BUILD-INFO-macOS.json
+        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-Spoolman-Preview2-macOS.zip dist/BUILD-INFO-macOS.json
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-Spoolman-Preview1-macOS
+          name: SnapmakerSpoolTracker-Spoolman-Preview2-macOS
           path: |
-            dist/SnapmakerSpoolTracker-Spoolman-Preview1-macOS.zip*
+            dist/SnapmakerSpoolTracker-Spoolman-Preview2-macOS.zip*
             dist/BUILD-INFO-macOS.json
           if-no-files-found: error

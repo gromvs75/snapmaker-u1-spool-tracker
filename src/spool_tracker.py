@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1-spoolman-preview2"
-WEB_PORT = 8772
+APP_VERSION = "1.2.1-spoolman-preview3"
+WEB_PORT = 8773
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview2", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview3", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 
@@ -609,6 +609,7 @@ HTML_PAGE = """<!DOCTYPE html>
         <button id="printer-test" type="button">Test Connection</button>
       </div>
     </form>
+    <p id="printer-test-result" class="subtitle" role="status" aria-live="polite"></p>
     <p id="printer-status" class="subtitle" aria-live="polite">Disconnected</p>
     <button id="heads-read" type="button">Read head counters</button>
     <div id="heads-content" aria-live="polite"></div>
@@ -869,7 +870,8 @@ window.addEventListener('pywebviewready', updateBackupAvailability);
 function updateMonitor(data) {
   const x = extra[currentLang] || extra.en;
   const status = data.monitor;
-  const text = `${status.connected ? x.connected : x.disconnected} · ${status.state}` +
+  const disabled = {ru:'Автоматический учёт выключен',en:'Automatic accounting is off',de:'Automatische Erfassung ist ausgeschaltet',uk:'Автоматичний облік вимкнено',es:'La contabilidad automática está desactivada'};
+  const text = status.state === 'disabled' ? (disabled[currentLang] || disabled.en) : `${status.connected ? x.connected : x.disconnected} · ${status.state}` +
     (status.filename ? ` · ${status.filename}` : '') + (status.error ? ` · ${status.error}` : '');
   if (el('printer-status').textContent !== text) el('printer-status').textContent = text;
   if (el('printer-status').classList) el('printer-status').classList.toggle('is-connected', !!status.connected);
@@ -1299,6 +1301,7 @@ el('add-spool-form').addEventListener('submit', event => act(async () => {
 el('reserve-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData();
 }));
+for (const id of ['printer-host','printer-port']) el(id).addEventListener('input',()=>{el('printer-test-result').textContent='';});
 function printerFields() {
   return {host:el('printer-host').value.trim(), port:Number(el('printer-port').value), enabled:el('printer-enabled').checked, guard_mode:el('guard-mode').value};
 }
@@ -1309,9 +1312,19 @@ el('printer-form').addEventListener('submit', event => act(async () => {
   await api('/api/printer/config', fields); await loadData();
 }));
 el('printer-test').addEventListener('click', () => act(async () => {
-  const result = await api('/api/printer/test', printerFields());
-  const x = extra[currentLang] || extra.en;
-  el('printer-status').textContent = `${x.connected} · ${result.result.state}`;
+  const fields = printerFields(), key = `${fields.host}:${fields.port}`;
+  const output = el('printer-test-result');
+  const text = {ru:['Проверяем соединение…','Соединение проверено','Не удалось подключиться'],en:['Checking connection…','Connection verified','Connection failed'],de:['Verbindung wird geprüft…','Verbindung geprüft','Verbindung fehlgeschlagen'],uk:['Перевіряємо з’єднання…','З’єднання перевірено','Не вдалося підключитися'],es:['Comprobando conexión…','Conexión verificada','Error de conexión']}[currentLang] || ['Checking connection…','Connection verified','Connection failed'];
+  output.textContent = text[0] + ' · ' + key;
+  el('printer-test').disabled = true;
+  try {
+    const result = await api('/api/printer/test', fields);
+    if (`${printerFields().host}:${printerFields().port}` === key)
+      output.textContent = text[1] + ' · ' + key + ' · ' + result.result.state;
+  } catch(e) {
+    if (`${printerFields().host}:${printerFields().port}` === key)
+      output.textContent = text[2] + ' · ' + key + ' · ' + e.message;
+  } finally {el('printer-test').disabled = false;}
 }));
 el('cal-read').addEventListener('click', () => act(async () => {
   const result = await api('/api/printer/tags');
@@ -1804,7 +1817,9 @@ class DashboardWindow:
         if sys.platform == 'darwin':
             # Cocoa's import sets Regular policy; override it before the GUI starts.
             from webview.platforms import cocoa
+            from macos_menu import install_menu_bar_recovery
             import AppKit
+            self._menu_recovery = install_menu_bar_recovery()
             AppKit.NSApplication.sharedApplication().setActivationPolicy_(
                 AppKit.NSApplicationActivationPolicyAccessory)
         if ISOLATED_ROOT is not None:

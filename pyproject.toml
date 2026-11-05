@@ -14,7 +14,7 @@ snapmaker-tracker = "spool_tracker:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["accounting", "backup", "feed_evidence", "forecast", "forecast_backup", "forecast_service", "forecast_view", "gcode", "material_guard", "moonraker", "motion_allocation", "motion_analysis", "motion_reconcile", "motion_stream", "physical_usage", "preflight", "presend", "print_statistics", "sender", "sender_view", "slice_observer", "spool_identity", "spoolman_bridge", "spoolman_view", "spool_tracker", "storage", "tag_evidence", "tool_mapping"]
+py-modules = ["accounting", "backup", "feed_evidence", "forecast", "forecast_backup", "forecast_service", "forecast_view", "gcode", "material_guard", "moonraker", "motion_allocation", "motion_analysis", "motion_reconcile", "motion_stream", "physical_usage", "preflight", "presend", "print_statistics", "sender", "sender_view", "slice_observer", "spool_identity", "spoolman_bridge", "spoolman_view", "macos_menu", "spool_tracker", "storage", "tag_evidence", "tool_mapping"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements/runtime.txt"]}

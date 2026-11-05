@@ -98,11 +98,12 @@ SCRIPT = r"""
  }
  $('plate').onchange = () => { selected = $('plate').value; render(); };
  $('hide').onclick = () => window.pywebview && window.pywebview.api.hide();
- window.refreshSliceForecast = async function() {
+ window.refreshSliceForecast = async function(selectLatest = false) {
   try {
    const response = await fetch('/api/forecast', {cache:'no-store'}); if (!response.ok) throw Error('forecast unavailable');
    const next = await response.json(); const changed = next.revision !== revision;
    state = next;
+   if (selectLatest) selected = next.latest;
    if (changed) { selected = next.latest; revision = next.revision; setView('overview'); }
    const nextSignature = JSON.stringify([next, currentLang]);
    if (nextSignature !== signature) { signature = nextSignature; render(); }

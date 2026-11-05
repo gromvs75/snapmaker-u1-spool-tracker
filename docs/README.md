@@ -8,6 +8,11 @@
 - [Development, tests and desktop builds](development.md)
 - [Windows offline testing](../dev/windows_slice_check/README_RU.md) — **Windows GUI and real Snorca slicing remain untested**.
 
+## Integration planning
+
+- [План интеграции Spoolman](plans/spoolman-integration-ru.md)
+- [Этап 1: контракт API и проверка сбоев](plans/spoolman-api-contract-ru.md)
+
 ## Previous versions
 
 These documents describe earlier versions.

@@ -1,6 +1,6 @@
-# Tracker 1.2.1 — preparation guide
+# Tracker 1.2.1 — user guide
 
-**1.2.1 is not published yet. Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.2.1 release notes](../releases/1.2.1.md).
+**[Download 1.2.1](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1). Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.2.1 release notes](../releases/1.2.1.md).
 
 ## The new workflow
 
@@ -16,9 +16,9 @@ A green ✓ means the estimated requirement plus reserve fits the recorded balan
 
 **Slicing does not deduct or reserve filament.** Reslicing replaces the forecast for that plate; it does not record a printed job. The forecast feature does not upload G-code or start, stop, pause, or block a print. Existing print monitoring/accounting is a separate feature. While a print is running or paused, its head-card estimates take precedence; the slice summary remains separate.
 
-## Prepared packages
+## Packages
 
-macOS: `SnapmakerSpoolTracker-1.2.1-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.2.1-Windows.exe` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. These are not published downloads. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
+macOS: `SnapmakerSpoolTracker-1.2.1-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.2.1-Windows.exe` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. Downloads are attached to the release linked above. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
 
 Keep packages separate from installed applications while reviewing. Use `--isolated-root` and artificial data for offline validation; ordinary launch is not isolated. Windows GUI remains unverified.
 
@@ -50,7 +50,7 @@ Create a fresh directory containing `ISOLATED_TRACKER_TEST` with exactly `offlin
 SnapmakerSpoolTracker --isolated-root PATH
 ```
 
-On macOS, use the binary inside `Contents/MacOS/` of the candidate `.app`; on Windows, use the candidate `.exe`. This mode uses only the explicit test inventory and an ephemeral loopback port. Printer-monitor threads do not start; printer, sender and accounting-control routes are blocked. The default watched directory is `PATH/slices`; `--slice-root` may override it only with a path inside the test root. The native webview storage is also kept in that test root.
+On macOS, use the binary inside `Contents/MacOS/` of the `.app`; on Windows, use the `.exe`. This mode uses only the explicit test inventory and an ephemeral loopback port. Printer-monitor threads do not start; printer, sender and accounting-control routes are blocked. The default watched directory is `PATH/slices`; `--slice-root` may override it only with a path inside the test root. The native webview storage is also kept in that test root.
 
 For actual Snorca slicing, both applications must share the isolated temporary directory; the [Windows Sandbox kit](../../dev/windows_slice_check/README_RU.md) prepares this arrangement. No real U1 or host profiles are needed. That kit is prepared but has not been executed on Windows here.
 

@@ -1,6 +1,6 @@
 # Documentation
 
-## In preparation: 1.2.1
+## Current: 1.2.1
 
 - [English user guide](guides/en.md)
 - [Русская инструкция](guides/ru.md)
@@ -18,6 +18,8 @@ These documents describe earlier versions.
 - **1.0:** [English](archive/1.0/guide-en.md) · [Русский](archive/1.0/guide-ru.md) · [Reference](archive/1.0/reference.md) · [Step by step](archive/1.0/step-by-step.md) · [Russian overview](archive/1.0/overview-ru.md)
 
 ## Release preparation
+
+- [1.2.1 Reddit and Snapmaker Forum drafts — not posted](releases/1.2.1-posts.md)
 
 The following are archived preparation texts for 1.2 beta; they are not instructions to publish again:
 

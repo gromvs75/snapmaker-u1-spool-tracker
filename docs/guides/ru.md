@@ -1,6 +1,6 @@
-# Tracker 1.2.1 — инструкция к готовящемуся выпуску
+# Tracker 1.2.1 — инструкция
 
-**1.2.1 пока не опубликована. Windows GUI и настоящая нарезка Snorca на Windows остаются непроверенными.** См. [заметки к выпуску](../releases/1.2.1.md).
+**[Скачать 1.2.1](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1). Windows GUI и настоящая нарезка Snorca на Windows остаются непроверенными.** См. [заметки к выпуску](../releases/1.2.1.md).
 
 ## Как работает прогноз
 
@@ -16,9 +16,9 @@
 
 **Нарезка ничего не списывает и не резервирует.** Повторная нарезка обновляет прогноз. Этот механизм не отправляет G-code и не запускает, не останавливает и не блокирует печать. Учёт фактически наблюдаемой печати — отдельная функция. Во время печати, в том числе на паузе, головки сохраняют её данные; сводка новой нарезки показана отдельно.
 
-## Подготовленные пакеты
+## Сборки
 
-macOS: `SnapmakerSpoolTracker-1.2.1-macOS.zip` (Apple Silicon arm64, ad-hoc подпись, без нотарификации). Windows: `SnapmakerSpoolTracker-1.2.1-Windows.exe` (x64, для окна нужен WebView2). Рядом со сборками — SHA256 и BUILD-INFO. Пакеты пока не опубликованы. Предыдущий [pre-release 1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta) доступен на GitHub.
+macOS: `SnapmakerSpoolTracker-1.2.1-macOS.zip` (Apple Silicon arm64, ad-hoc подпись, без нотарификации). Windows: `SnapmakerSpoolTracker-1.2.1-Windows.exe` (x64, для окна нужен WebView2). Рядом со сборками — SHA256 и BUILD-INFO. Пакеты приложены к релизу по ссылке выше. Предыдущий [pre-release 1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta) доступен на GitHub.
 
 Для проверки держите сборки отдельно от установленных приложений. Офлайн-проверка требует `--isolated-root` и искусственных данных; обычный запуск не изолирован. Windows GUI остаётся непроверенным.
 

@@ -4,7 +4,7 @@ Local filament inventory and automatic forecasts after slicing in Snapmaker Orca
 
 Keep Tracker in the menu bar or tray and slice a model in Snorca. The icon and menu show estimated usage, balances and reserve-aware **✓ / ✕** indicators. On macOS the menu opens automatically after slicing; the main window opens only on request and there is no Dock icon. No manual G-code export is needed; slicing does not deduct filament or start printing.
 
-**1.2.1 is being prepared; it is not published.** The previous [1.2 beta pre-release](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta) is available. Packages target **macOS Apple Silicon (arm64)** and **Windows x64**.
+**[1.2.1 is available on GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1).** Packages target **macOS Apple Silicon (arm64)** and **Windows x64**.
 
 **Windows GUI and real Snorca slicing on Windows remain unverified.** The earlier automatic-window behavior was not validated on Windows either. In 1.2.1 automatic menu opening is macOS-only; Windows updates the tray icon and menu without opening the dashboard. CI and executable self-tests do not replace desktop testing.
 

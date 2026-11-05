@@ -1,3 +1,4 @@
+from spoolman_bridge import book
 """Planned G-code snapshots and idempotent physical-print accounting."""
 import hashlib
 import math
@@ -142,6 +143,8 @@ def apply_history_job(store, printer, job, remote_fingerprint=None, mapping_evid
             run = {"job_id": job["job_id"], "plan_id": plan_id,
                    "start_time": float(job["start_time"]), "status": "active",
                    "filename": job["filename"]}
+            if db.get('spoolman', {}).get('mode') in ('read', 'send'):
+                run['spoolman_epoch'] = db['spoolman']['epoch']
             db["runs"][key] = run
             if len(mappings) > 1:
                 run["status"] = "review"
@@ -211,9 +214,7 @@ def apply_history_job(store, printer, job, remote_fingerprint=None, mapping_evid
                         run["review_reason"] = "The captured spool is no longer available"
                         return "review"
                     consumption[spool_id] = consumption.get(spool_id, 0.0) + grams
-            for spool_id, grams in consumption.items():
-                spool = db["spools"][spool_id]
-                spool["remaining_g"] = round(max(0.0, spool["remaining_g"] - grams), 3)
+            book(db, key, consumption)
             run["status"] = "committed"
             _set_plan_status(plan, "committed")
             return "committed"
@@ -269,9 +270,7 @@ def reconcile_completed_review(store, key, consumption, measurements=None):
             spool = db["spools"].get(spool_id)
             if spool is None or grams > spool["remaining_g"]:
                 raise ValueError("Spool is unavailable or consumption exceeds its balance")
-        for spool_id, grams in amounts.items():
-            spool = db["spools"][spool_id]
-            spool["remaining_g"] = round(spool["remaining_g"] - grams, 3)
+        book(db, key, amounts)
         run["status"] = "committed"
         run["accounting_method"] = "manual_review"
         run["manual_consumption"] = amounts
@@ -337,8 +336,7 @@ def commit_motion_watch(store, key, capture):
         for spool_id, grams in amounts.items():
             if spool_id not in db['spools'] or grams > db['spools'][spool_id]['remaining_g']:
                 raise ValueError('Spool unavailable or its balance is below the estimated usage')
-        for spool_id, grams in amounts.items():
-            db['spools'][spool_id]['remaining_g'] = round(db['spools'][spool_id]['remaining_g'] - grams, 3)
+        book(db, key, amounts)
         run.update({'status': 'committed', 'accounting_method': 'motion_estimate',
                     'motion_consumption': amounts, 'motion_capture_id': capture['capture_id'], 'motion_epoch': capture['epoch']})
         _set_plan_status(db['plans'][run['plan_id']], 'committed')
@@ -410,8 +408,7 @@ def commit_unchanged_slicer_estimate(store, key, evidence):
             amounts[spool_id] = grams
         if not amounts:
             raise ValueError('No known G-code consumption')
-        for spool_id, grams in amounts.items():
-            db['spools'][spool_id]['remaining_g'] = round(db['spools'][spool_id]['remaining_g'] - grams, 3)
+        book(db, key, amounts)
         run['status'] = 'committed'
         _set_plan_status(db['plans'][run['plan_id']], 'committed')
         return True
@@ -505,8 +502,7 @@ def commit_stream_estimate(store, key, evidence):
                 raise ValueError('Spool balance changed during print')
             if grams > db['spools'][spool_id]['remaining_g']:
                 raise ValueError('Estimated weight exceeds recorded balance')
-        for spool_id, grams in amounts.items():
-            db['spools'][spool_id]['remaining_g'] = round(db['spools'][spool_id]['remaining_g'] - grams, 3)
+        book(db, key, amounts)
         run.update({'status': 'committed', 'accounting_method': 'motion_estimate',
                     'motion_consumption': amounts, 'motion_capture_id': capture_id, 'motion_epoch': epoch})
         _set_plan_status(db['plans'][run['plan_id']], 'committed')

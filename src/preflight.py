@@ -1,5 +1,7 @@
 """Pure preflight comparison for T0 through T3."""
 
+from spoolman_bridge import unavailable
+
 def check(weights, db):
     margin = db["safety_margin_g"]
     rows = []
@@ -10,6 +12,8 @@ def check(weights, db):
         if required == 0:
             status = "unused"
         elif spool is None:
+            status = "unassigned"
+        elif unavailable(db, spool_id):
             status = "unassigned"
         elif remaining < required + margin:
             status = "insufficient"

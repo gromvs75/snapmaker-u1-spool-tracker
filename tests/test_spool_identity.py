@@ -55,4 +55,4 @@ def test_version_two_backup_is_migrated_and_new_schema_is_distinct(tmp_path):
     path = tmp_path / 'old.json'
     path.write_text(json.dumps(document))
     restored = parse_backup(path)
-    assert restored['schema_version'] == 4
+    assert restored['schema_version'] == 5

@@ -23,6 +23,7 @@ class ForecastService:
         self.stop_event = threading.Event()
         self.thread = None
         self.updates = 0
+        self.inventory_refresh = None
 
     def poll(self):
         if not self.root.is_dir():
@@ -32,6 +33,8 @@ class ForecastService:
         events = self.observer.poll()
         self.state.accept(events)
         if events:
+            if self.inventory_refresh:
+                self.inventory_refresh()
             self.on_change()
             self.updates += 1
         return events

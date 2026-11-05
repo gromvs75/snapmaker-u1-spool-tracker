@@ -25,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument('--tracker', action='store_true', help='Also exercise Tracker against this disposable server')
     args = parser.parse_args()
     upstream = args.upstream.resolve()
     commit = subprocess.check_output(
@@ -188,6 +189,44 @@ def main():
                 archived = new_spool(archived=True)
                 status, value, _ = request(port, "PUT", f'/spool/{archived["id"]}/use', {"use_weight": 1})
                 check("archived_write_not_blocked_by_server", status == 200 and value["used_weight"] == 1)
+                if args.tracker:
+                    import sys
+                    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
+                    from spoolman_bridge import Bridge, remote_id
+                    from storage import Store
+                    from accounting import create_plan, apply_history_job, fingerprint_file
+                    from backup import create_backup, import_backup
+                    tracker_store = Store(Path(temp) / 'tracker')
+                    bridge = Bridge(tracker_store)
+                    base_url = 'http://127.0.0.1:%d' % port
+                    bridge.configure(base_url, 'send', True)
+                    fresh = new_spool()
+                    bridge.attach(fresh['id'], 0)
+                    local_id = remote_id(base_url, fresh['id'])
+                    tracker_store.update(lambda db: db['printer'].update(enabled=True))
+                    gcode = Path(temp) / 'test.gcode'
+                    gcode.write_text('; test')
+                    create_plan(tracker_store, gcode, 'test.gcode', [20, 0, 0, 0], tracker_store.read(), now=999)
+                    config = tracker_store.read()['printer']
+                    job = {'job_id': 'fake-job-1', 'filename': 'test.gcode', 'start_time': 1000, 'status': 'in_progress'}
+                    apply_history_job(tracker_store, config, job, fingerprint_file(gcode),
+                                      {'mapping': [0, 1, 2, 3], 'auto_replenish': False})
+                    job['status'] = 'completed'
+                    apply_history_job(tracker_store, config, job)
+                    old_backup = Path(temp) / 'tracker-backup.json'
+                    old_backup.write_text(json.dumps(create_backup(tracker_store, 'preview')))
+                    check('tracker_queues_without_local_debit', tracker_store.read()['spools'][local_id]['remaining_g'] == 1000
+                          and len(tracker_store.read()['spoolman']['outbox']) == 1)
+                    bridge.send_one()
+                    apply_history_job(tracker_store, config, job)
+                    bridge.send_one()
+                    real = request(port, 'GET', '/spool/%d' % fresh['id'])[1]
+                    check('tracker_real_server_exactly_one_normal_send', real['used_weight'] == 20
+                          and tracker_store.read()['spools'][local_id]['remaining_g'] == 980)
+                    import_backup(tracker_store, old_backup)
+                    bridge.send_one()
+                    check('tracker_restore_does_not_replay', request(port, 'GET', '/spool/%d' % fresh['id'])[1]['used_weight'] == 20
+                          and tracker_store.read()['spoolman']['mode'] == 'off')
                 report["native_auth"] = "No credentials required for tested loopback REST API; 403 test is origin guard, not user authentication."
         finally:
             listener.close()

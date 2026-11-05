@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1"
-WEB_PORT = 8766
+APP_VERSION = "1.2.1-spoolman-preview1"
+WEB_PORT = 8771
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-Beta12", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview1", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 
@@ -1388,11 +1388,16 @@ from forecast_view import install as install_forecast_view
 HTML_PAGE = install_forecast_view(HTML_PAGE.replace('1.1.0-beta.1', APP_VERSION), lab=False)
 
 
+from spoolman_view import install as install_spoolman_view
+HTML_PAGE = install_spoolman_view(HTML_PAGE)
+
+
 class WebHandler(BaseHTTPRequestHandler):
     store = STORE
     window_controller = None
     sender_controller = None
     forecast_service = None
+    spoolman_bridge = None
     isolated = False
 
     def log_message(self, fmt, *args):
@@ -1418,6 +1423,11 @@ class WebHandler(BaseHTTPRequestHandler):
         if self.isolated and self.path not in ('/', '/index.html', '/api/data', '/api/statistics', '/api/forecast', '/api/sender/status'):
             return self._response(403, {'error': 'Printer access disabled in isolated mode'})
         try:
+            if self.path == '/api/spoolman/status':
+                from spoolman_bridge import blank
+                db = self.store.read()
+                return self._response(200, {'state': db.get('spoolman', blank()),
+                    'linked': [dict(id=k, name=v['name']) for k, v in db['spools'].items() if v.get('spoolman')]})
             if self.path == '/api/forecast':
                 return self._response(200, self.forecast_service.snapshot() if self.forecast_service else {'entries': [], 'revision': 0, 'safety_margin_g': 0, 'error': ''})
             if self.path in ("/", "/index.html"):
@@ -1483,6 +1493,24 @@ class WebHandler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(length))
             if not isinstance(body, dict):
                 raise ValidationError("JSON body must be an object")
+            if self.path.startswith('/api/spoolman/'):
+                bridge = self.spoolman_bridge
+                if bridge is None:
+                    raise ValueError('Spoolman service unavailable')
+                action = self.path.rsplit('/', 1)[1]
+                if action == 'configure':
+                    bridge.configure(body.get('url'), body.get('mode'), body.get('sole_sender'))
+                elif action == 'refresh':
+                    bridge.refresh()
+                elif action == 'attach':
+                    bridge.attach(body.get('id'), body.get('slot'))
+                elif action == 'resolve':
+                    bridge.resolve(body.get('id'), body.get('action'), body.get('note'))
+                elif action == 'detach':
+                    bridge.detach(body.get('id'))
+                else:
+                    raise ValueError('Unknown Spoolman action')
+                return self._response(200, {'status': 'ok'})
             if self.path.startswith("/api/sender/"):
                 if self.sender_controller is None:
                     return self._response(409, {"error": "Sender test environment is not enabled"})
@@ -1524,6 +1552,8 @@ class WebHandler(BaseHTTPRequestHandler):
             return self._response(500, {"error": "Internal server error"})
 
     def _change(self, db, body):
+        if self.path in ('/api/spools/update', '/api/spools/delete', '/api/spools/color') and db['spools'].get(body.get('id'), {}).get('spoolman'):
+            raise ValueError('Manage this spool in Spoolman; use Detach to remove its local link')
         if self.path == "/api/lang":
             lang = body.get("language")
             if lang not in I18N:
@@ -1539,6 +1569,9 @@ class WebHandler(BaseHTTPRequestHandler):
             for slot, spool_id in body.items():
                 if not isinstance(spool_id, str) or (spool_id and spool_id not in db["spools"]):
                     raise ValidationError(f"Invalid spool ID for slot {slot}")
+            external = [sid for sid in body.values() if db['spools'].get(sid, {}).get('spoolman')]
+            if len(external) != len(set(external)):
+                raise ValueError('One Spoolman spool cannot feed multiple heads')
             db["slots"] = body
         elif self.path == "/api/spools/add":
             spool_id = f"spool_{uuid.uuid4().hex}"
@@ -1878,7 +1911,7 @@ class TrayApp:
     def _forecast_status(snapshot):
         entry = next((e for e in snapshot.get('entries', [])
                       if e['source'] == snapshot.get('latest')), None)
-        if snapshot.get('error') or entry is None or not any(r['used'] > 0 for r in entry['rows']):
+        if snapshot.get('error') or (entry and entry.get('unknown')) or entry is None or not any(r['used'] > 0 for r in entry['rows']):
             return 'unknown', entry
         if any(r['used'] > 0 and not r.get('spool_id') for r in entry['rows']):
             return 'unknown', entry
@@ -1913,6 +1946,8 @@ class TrayApp:
                 if row['used'] > 0:
                     if not row.get('spool_id'):
                         title += ' · —'
+                    elif row.get('unknown'):
+                        title += ' · ? Spoolman'
                     elif row['enough']:
                         title += f" · ✓ {forecast_text['after']} ≈ {row['after']:g} {unit}"
                     else:
@@ -1920,7 +1955,7 @@ class TrayApp:
                         title += f" · ✕ {forecast_text['missing']} {missing:g} {unit}"
             item = pystray.MenuItem(title, self._open_forecast if entry else self._open_dashboard)
             row = entry['rows'][i-1] if entry and not snapshot.get('error') else None
-            item._tracker_status = ('ok' if row['enough'] else 'shortage') if row and row['used'] > 0 and row.get('spool_id') else None
+            item._tracker_status = ('ok' if row['enough'] else 'shortage') if row and row['used'] > 0 and row.get('spool_id') and not row.get('unknown') else None
             item._tracker_toolhead = True
             item._tracker_color = spool.get('color') if spool else None
             items.append(item)
@@ -2052,11 +2087,17 @@ class TrayApp:
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
             server_started = True
             if ISOLATED_ROOT is None:
+                from spoolman_bridge import Bridge
+                self.spoolman_bridge = Bridge(STORE)
+                self.spoolman_bridge.start()
+                DashboardHandler.spoolman_bridge = self.spoolman_bridge
                 self.monitor.start()
                 self.motion_diagnostic.start()
             from forecast_service import ForecastService
             self.forecast_service = ForecastService(STORE, self._on_slice_completed, SLICE_ROOT)
             DashboardHandler.forecast_service = self.forecast_service
+            if hasattr(self, "spoolman_bridge"):
+                self.forecast_service.inventory_refresh = self.spoolman_bridge.refresh
             if ISOLATED_ROOT is not None:
                 (ISOLATED_ROOT / 'runtime.json').write_text(json.dumps({'url': f'http://127.0.0.1:{WEB_PORT}', 'watch': str(SLICE_ROOT), 'version': APP_VERSION}))
             options = {}
@@ -2074,6 +2115,8 @@ class TrayApp:
             return 0
         finally:
             self.stop_event.set()
+            if hasattr(self, 'spoolman_bridge'):
+                self.spoolman_bridge.stop()
             if hasattr(self, 'forecast_service'):
                 self.forecast_service.stop()
             self.motion_diagnostic.stop()

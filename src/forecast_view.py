@@ -55,16 +55,17 @@ SCRIPT = r"""
    const row = entry && entry.rows[i];
    if (!row) return;
    head.querySelectorAll('.head-state,.head-required').forEach(e => e.remove());
+   const unknown = row.unknown ? (currentLang === 'ru' ? 'Нет актуального остатка Spoolman' : 'Spoolman balance unavailable') : '';
    const kind = row.used === 0 ? 'unused' : row.enough ? 'ok' : 'shortage';
-   const symbol = row.enough ? '✓' : '✕';
+   const symbol = row.unknown ? '?' : row.enough ? '✓' : '✕';
    const status = document.createElement('div'); status.className = 'forecast-head-status ' + kind;
-   status.textContent = row.used === 0 ? tr().unused : symbol + ' ' + (row.enough ? tr().ok : tr().bad);
+   status.textContent = unknown || (row.used === 0 ? tr().unused : symbol + ' ' + (row.enough ? tr().ok : tr().bad));
    head.append(status);
    const caption = head.querySelector('.printhead-material');
    if (caption) {caption.textContent = grams(row.used); caption.title = tr().usage;}
    const note = document.createElement('div'); note.className = 'forecast-head-note';
    if (row.used > 0) {
-    note.textContent = row.enough ? tr().after + grams(row.after) : tr().missing + grams(Math.max(0, state.safety_margin_g - row.after)) + tr().withReserve;
+    note.textContent = unknown || (row.enough ? tr().after + grams(row.after) : tr().missing + grams(Math.max(0, state.safety_margin_g - row.after)) + tr().withReserve);
     head.append(note);
    }
    if (row.used > 0) {
@@ -92,7 +93,7 @@ SCRIPT = r"""
   $('single').hidden = entries.length !== 1; $('single').textContent = entries.length === 1 ? plateLabel(entries[0]) : '';
   const entry = entries.find(e => e.source === selected);
   $('time').textContent = entry ? new Date(entry.observed_at * 1000).toLocaleString(currentLang || 'en') : '';
-  $('status').textContent = entry ? (entry.shortage ? '✕ ' + tr().shortage : '✓ ' + tr().enough) : tr().waiting;
+  $('status').textContent = entry && entry.unknown ? (currentLang === 'ru' ? '? Нет актуального остатка Spoolman' : '? Spoolman balance unavailable') : entry ? (entry.shortage ? '✕ ' + tr().shortage : '✓ ' + tr().enough) : tr().waiting;
   $('status').style.color = entry && entry.shortage ? '#ffab91' : '#82dfb0';
   paintHeads();
  }

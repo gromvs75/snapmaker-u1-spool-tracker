@@ -25,7 +25,7 @@ def create_backup(store, app_version):
         "backup_version": BACKUP_VERSION,
         "app_version": app_version,
         "exported_at": datetime.now(timezone.utc).isoformat(),
-        "data": {key: snapshot[key] for key in DURABLE_KEYS},
+        "data": {key: snapshot[key] for key in (DURABLE_KEYS | ({"spoolman"} if "spoolman" in snapshot else set()))},
     }
 
 
@@ -72,9 +72,9 @@ def parse_backup(path):
     if not isinstance(document.get("app_version"), str) or not isinstance(document.get("exported_at"), str):
         raise StorageError("Incomplete backup metadata")
     data = document.get("data")
-    if not isinstance(data, dict) or set(data) != DURABLE_KEYS:
+    if not isinstance(data, dict) or set(data) - {"spoolman"} != DURABLE_KEYS:
         raise StorageError("Incomplete or unexpected backup data")
-    if data.get("schema_version") not in (2, 3, empty_db()["schema_version"]):
+    if data.get("schema_version") not in (2, 3, 4, empty_db()["schema_version"]):
         raise StorageError("Unsupported database schema in backup")
     restored = validate_db(data)
     # A backup must not silently arm printer-control commands after import.

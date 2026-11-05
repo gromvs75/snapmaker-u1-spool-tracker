@@ -1,4 +1,5 @@
 """Inventory-backed slice forecasts; never modifies inventory or contacts printers."""
+from spoolman_bridge import unavailable
 import copy
 import re
 import threading
@@ -22,14 +23,15 @@ def forecast_entry(entry, stock=STOCK, inventory=None):
     for i, used in enumerate(entry['weights']):
         sid = slots.get(str(i+1))
         spool = spools.get(sid)
+        unknown = bool(spool and unavailable(inventory, sid))
         remaining = spool['remaining_g'] if spool else 0
         required = totals.get(sid, used)
         rows.append({'tool': f'T{i}', 'spool_id': sid,
                      'name': spool['name'] if spool else 'Катушка не назначена',
-                     'used': used, 'remaining': remaining,
+                     'used': used, 'remaining': remaining, 'unknown': unknown and used > 0,
                      'after': round(remaining-required, 3),
-                     'enough': used == 0 or bool(spool and remaining >= required + inventory['safety_margin_g'])})
-    return dict(entry, rows=rows, shortage=any(not r['enough'] for r in rows),
+                     'enough': used == 0 or bool(spool and not unknown and remaining >= required + inventory['safety_margin_g'])})
+    return dict(entry, rows=rows, unknown=any(r['unknown'] for r in rows), shortage=any(not r['enough'] for r in rows),
                 label=f"Пластина {int(index[1])+1 if index else '?'}")
 
 

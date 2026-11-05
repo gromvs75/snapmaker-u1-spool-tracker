@@ -10,6 +10,8 @@
 
 ## Integration planning
 
+- [Spoolman Preview: настройка и ограничения](guides/spoolman-preview-ru.md)
+
 - [План интеграции Spoolman](plans/spoolman-integration-ru.md)
 - [Этап 1: контракт API и проверка сбоев](plans/spoolman-api-contract-ru.md)
 

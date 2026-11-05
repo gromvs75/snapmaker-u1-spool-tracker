@@ -1,5 +1,7 @@
 # Tracker 1.2.1 — user guide
 
+**Works with the original Snapmaker U1 firmware. No custom firmware or printer-side installation is required.**
+
 **[Download 1.2.1](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1). Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.2.1 release notes](../releases/1.2.1.md).
 
 ## The new workflow

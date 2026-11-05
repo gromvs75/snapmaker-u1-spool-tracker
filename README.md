@@ -1,5 +1,7 @@
 # Snapmaker U1 Spool Tracker
 
+**For the original Snapmaker U1 firmware. No custom firmware or printer-side installation required.**
+
 Local filament inventory and automatic forecasts after slicing in Snapmaker Orca (Snorca).
 
 Keep Tracker in the menu bar or tray and slice a model in Snorca. The icon and menu show estimated usage, balances and reserve-aware **✓ / ✕** indicators. On macOS the menu opens automatically after slicing; the main window opens only on request and there is no Dock icon. No manual G-code export is needed; slicing does not deduct filament or start printing.

@@ -25,7 +25,7 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2 beta"
+APP_VERSION = "1.2.1"
 WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None
@@ -1583,17 +1583,24 @@ class WebHandler(BaseHTTPRequestHandler):
             raise ValidationError("Unknown API endpoint")
 
 
-def create_tray_icon():
+def create_tray_icon(status=None):
     from PIL import Image, ImageDraw
     image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     dc = ImageDraw.Draw(image)
     for box, color in zip([(6, 6, 26, 26), (36, 6, 56, 26), (6, 36, 26, 56), (36, 36, 56, 56)],
                           [(240, 80, 80), (80, 160, 240), (80, 210, 120), (250, 190, 50)]):
         dc.ellipse(box, fill=color)
+    if status in ('ok', 'shortage'):
+        dc.ellipse((24, 24, 63, 63), fill='#258a47' if status == 'ok' else '#c93636')
+        if status == 'ok':
+            dc.line([(32, 43), (40, 51), (55, 35)], fill='white', width=6)
+        else:
+            dc.line([(35, 35), (53, 53)], fill='white', width=6)
+            dc.line([(53, 35), (35, 53)], fill='white', width=6)
     return image
 
 
-def create_toolhead_menu_icon(color=None):
+def create_toolhead_menu_icon(color=None, status=None):
     """Small neutral toolhead with the user's selected filament color."""
     from PIL import Image, ImageDraw
     from io import BytesIO
@@ -1604,6 +1611,9 @@ def create_toolhead_menu_icon(color=None):
     draw.polygon([(23, 60), (37, 60), (30, 70)], fill='#aab6c0')
     draw.ellipse((19, 18, 41, 40), fill=color or '#8595a3', outline='#5e6b77', width=2)
     draw.rounded_rectangle((15, 46, 45, 51), radius=2, fill='#88949e')
+    if status in ('ok', 'shortage'):
+        badge = create_tray_icon(status).crop((24, 24, 64, 64)).resize((28, 28))
+        image.alpha_composite(badge, (32, 0))
     output = BytesIO()
     image.save(output, format='PNG')
     return output.getvalue()
@@ -1618,7 +1628,7 @@ def install_macos_toolhead_icons(icon):
         item = original(descriptor, callbacks)
         if getattr(descriptor, '_tracker_toolhead', False):
             try:
-                payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None))
+                payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None), getattr(descriptor, '_tracker_status', None))
                 data = Foundation.NSData.dataWithBytes_length_(payload, len(payload))
                 picture = AppKit.NSImage.alloc().initWithData_(data)
                 picture.setSize_((18, 22))
@@ -1719,7 +1729,7 @@ class DashboardWindow:
             return
         self.pending_forecast = False
         self.show()
-        self.window.evaluate_js('refreshSliceForecast(); setView("overview");')
+        self.window.evaluate_js('refreshSliceForecast(true); setView("overview");')
         if sys.platform == 'darwin':
             from AppKit import NSApplication
             from PyObjCTools import AppHelper
@@ -1758,10 +1768,53 @@ class DashboardWindow:
             self.window.destroy()
 
     def run(self):
+        if sys.platform == 'darwin':
+            # Cocoa's import sets Regular policy; override it before the GUI starts.
+            from webview.platforms import cocoa
+            import AppKit
+            AppKit.NSApplication.sharedApplication().setActivationPolicy_(
+                AppKit.NSApplicationActivationPolicyAccessory)
         if ISOLATED_ROOT is not None:
             self.webview.start(private_mode=True, storage_path=str(ISOLATED_ROOT / 'webview'))
         else:
             self.webview.start()
+
+
+TRAY_FORECAST_TEXT = {'en': {'ok': '✓ Enough including reserve',
+        'shortage': '✕ Not enough filament',
+        'unknown': '— Forecast unavailable',
+        'plate': 'Plate',
+        'mapping': 'Latest slice · assumed mapping 1→T0…4→T3',
+        'after': 'after',
+        'missing': 'short by'},
+ 'ru': {'ok': '✓ Хватает с резервом',
+        'shortage': '✕ Не хватает',
+        'unknown': '— Нет достоверного прогноза',
+        'plate': 'Пластина',
+        'mapping': 'Последняя нарезка · карта 1→T0…4→T3 предполагается',
+        'after': 'после',
+        'missing': 'не хватает'},
+ 'de': {'ok': '✓ Genug Filament einschließlich Reserve',
+        'shortage': '✕ Nicht genug Filament',
+        'unknown': '— Keine verlässliche Prognose',
+        'plate': 'Platte',
+        'mapping': 'Letzter Slicing-Vorgang · Zuordnung 1→T0…4→T3 angenommen',
+        'after': 'danach',
+        'missing': 'es fehlen'},
+ 'uk': {'ok': '✓ Вистачає з резервом',
+        'shortage': '✕ Не вистачає',
+        'unknown': '— Немає достовірного прогнозу',
+        'plate': 'Пластина',
+        'mapping': 'Остання нарізка · відповідність 1→T0…4→T3 припускається',
+        'after': 'після',
+        'missing': 'не вистачає'},
+ 'es': {'ok': '✓ Suficiente filamento con reserva',
+        'shortage': '✕ Filamento insuficiente',
+        'unknown': '— Previsión no disponible',
+        'plate': 'Placa',
+        'mapping': 'Último laminado · asignación supuesta 1→T0…4→T3',
+        'after': 'después',
+        'missing': 'faltan'}}
 
 
 class TrayApp:
@@ -1817,18 +1870,57 @@ class TrayApp:
         if message:
             show_dialog(f"{filename}\n\n{message}", lang)
 
-    def build_menu(self):
+    def _forecast_snapshot(self):
+        service = getattr(self, 'forecast_service', None)
+        return service.snapshot() if service is not None else {}
+
+    @staticmethod
+    def _forecast_status(snapshot):
+        entry = next((e for e in snapshot.get('entries', [])
+                      if e['source'] == snapshot.get('latest')), None)
+        if snapshot.get('error') or entry is None or not any(r['used'] > 0 for r in entry['rows']):
+            return 'unknown', entry
+        if any(r['used'] > 0 and not r.get('spool_id') for r in entry['rows']):
+            return 'unknown', entry
+        return ('shortage' if entry['shortage'] else 'ok'), entry
+
+    def build_menu(self, snapshot=None):
         import pystray
         db = STORE.read()
         tr = I18N.get(db["language"], I18N["en"])
         items = [pystray.MenuItem(tr["tray_title"], self._open_dashboard), pystray.Menu.SEPARATOR]
+        snapshot = self._forecast_snapshot() if snapshot is None else snapshot
+        status, entry = self._forecast_status(snapshot)
+        forecast_text = TRAY_FORECAST_TEXT.get(db['language'], TRAY_FORECAST_TEXT['en'])
+        if snapshot:
+            label = forecast_text[status]
+            if entry:
+                from datetime import datetime
+                plate = entry['label'].split()[-1]
+                observed = datetime.fromtimestamp(entry.get('observed_at', 0)).strftime('%d.%m %H:%M')
+                label += f" · {forecast_text['plate']} {plate} · {observed}"
+            items.append(pystray.MenuItem(label, self._open_forecast))
+            items.append(pystray.MenuItem(forecast_text['mapping'], self._open_forecast))
+            items.append(pystray.Menu.SEPARATOR)
         for i in range(1, 5):
             spool = db["spools"].get(db["slots"][str(i)])
             unit = 'гр.' if db['language'] == 'ru' else 'g'
             empty = {'ru': 'Не назначена', 'uk': 'Не призначена', 'de': 'Nicht zugewiesen', 'es': 'Sin asignar'}.get(db['language'], 'Unassigned')
             title = (f"T{i-1} · {spool['name']} — {spool['remaining_g']:g} {unit}"
                      if spool else f'T{i-1} · {empty}')
-            item = pystray.MenuItem(title, self._open_dashboard)
+            if entry and not snapshot.get('error'):
+                row = entry['rows'][i-1]
+                if row['used'] > 0:
+                    if not row.get('spool_id'):
+                        title += ' · —'
+                    elif row['enough']:
+                        title += f" · ✓ {forecast_text['after']} ≈ {row['after']:g} {unit}"
+                    else:
+                        missing = max(0, snapshot['safety_margin_g'] - row['after'])
+                        title += f" · ✕ {forecast_text['missing']} {missing:g} {unit}"
+            item = pystray.MenuItem(title, self._open_forecast if entry else self._open_dashboard)
+            row = entry['rows'][i-1] if entry and not snapshot.get('error') else None
+            item._tracker_status = ('ok' if row['enough'] else 'shortage') if row and row['used'] > 0 and row.get('spool_id') else None
             item._tracker_toolhead = True
             item._tracker_color = spool.get('color') if spool else None
             items.append(item)
@@ -1836,6 +1928,11 @@ class TrayApp:
             pystray.MenuItem(tr["tray_open"], self._open_dashboard),
             pystray.MenuItem(tr["tray_quit"], self._quit)])
         return pystray.Menu(*items)
+
+    def _open_forecast(self, icon=None, item=None):
+        if self.window_controller is not None:
+            # evaluate_js waits for Cocoa; menu callbacks run on the Cocoa thread.
+            threading.Thread(target=self.window_controller.show_forecast, daemon=True).start()
 
     def _open_dashboard(self, icon=None, item=None):
         if self.window_controller is not None:
@@ -1877,12 +1974,35 @@ class TrayApp:
         last = None
         while not self.stop_event.wait(1):
             try:
-                stamp = STORE.path.stat().st_mtime_ns
+                stamp = (STORE.path.stat().st_mtime_ns, json.dumps(self._forecast_snapshot(), sort_keys=True))
                 if stamp != last:
                     self._schedule_menu_refresh()
                     last = stamp
             except (OSError, StorageError):
                 LOGGER.exception("Tray refresh failed")
+
+    def _on_slice_completed(self):
+        if sys.platform == 'darwin':
+            from PyObjCTools import AppHelper
+            AppHelper.callAfter(self._show_slice_menu)
+        else:
+            self._schedule_menu_refresh()
+
+    def _show_slice_menu(self):
+        # NSStatusBarButton opens the native menu without revealing the dashboard.
+        # Menu tracking is modal: never replace its NSMenu while it is open.
+        if self.stop_event.is_set() or self.icon is None or getattr(self, '_menu_presented', False):
+            return
+        self._refresh_menu()
+        self._menu_presented = True
+        try:
+            self.icon.visible = True
+            self.icon._status_item.button().performClick_(None)
+        except Exception:
+            LOGGER.exception('Could not open the slice forecast menu')
+        finally:
+            self._menu_presented = False
+            self._refresh_menu()
 
     def _schedule_menu_refresh(self):
         if sys.platform == "darwin":
@@ -1892,12 +2012,15 @@ class TrayApp:
             self._refresh_menu()
 
     def _refresh_menu(self):
-        if self.stop_event.is_set() or self.icon is None:
+        if self.stop_event.is_set() or self.icon is None or getattr(self, '_menu_presented', False):
             return
         try:
             # Setting pystray's menu invokes NSStatusItem.setMenu_ on macOS.
             # AppKit requires this to run on the main application thread.
-            self.icon.menu = self.build_menu()
+            snapshot = self._forecast_snapshot()
+            self.icon.menu = self.build_menu(snapshot)
+            status, _ = self._forecast_status(snapshot)
+            self.icon.icon = create_tray_icon(status)
         except (OSError, StorageError):
             LOGGER.exception("Tray refresh failed")
 
@@ -1932,9 +2055,8 @@ class TrayApp:
                 self.monitor.start()
                 self.motion_diagnostic.start()
             from forecast_service import ForecastService
-            self.forecast_service = ForecastService(STORE, self.window_controller.show_forecast, SLICE_ROOT)
+            self.forecast_service = ForecastService(STORE, self._on_slice_completed, SLICE_ROOT)
             DashboardHandler.forecast_service = self.forecast_service
-            self.forecast_service.start()
             if ISOLATED_ROOT is not None:
                 (ISOLATED_ROOT / 'runtime.json').write_text(json.dumps({'url': f'http://127.0.0.1:{WEB_PORT}', 'watch': str(SLICE_ROOT), 'version': APP_VERSION}))
             options = {}
@@ -1947,6 +2069,7 @@ class TrayApp:
                 install_macos_toolhead_icons(self.icon)
             threading.Thread(target=self._refresh, daemon=True).start()
             self.icon.run_detached(setup=self._show_tray_icon)
+            self.forecast_service.start()
             self.window_controller.run()
             return 0
         finally:

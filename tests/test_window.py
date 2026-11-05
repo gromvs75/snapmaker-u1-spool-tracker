@@ -38,7 +38,8 @@ class FakeWindow:
         self.calls.append("destroy")
 
 
-def test_single_window_show_hide_reopen_and_quit():
+def test_single_window_show_hide_reopen_and_quit(monkeypatch):
+    monkeypatch.setattr(spool_tracker.sys, "platform", "win32")
     window = FakeWindow()
     webview = SimpleNamespace(create_window=lambda *args, **kwargs: window,
                               start=lambda: window.calls.append("start"))

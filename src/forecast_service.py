@@ -15,14 +15,14 @@ def default_slice_root():
 
 
 class ForecastService:
-    def __init__(self, store, reveal, root=None):
+    def __init__(self, store, on_change, root=None):
         self.root = Path(root) if root is not None else default_slice_root()
         self.state = ForecastState(store=store)
-        self.reveal = reveal
+        self.on_change = on_change
         self.observer = None
         self.stop_event = threading.Event()
         self.thread = None
-        self.auto_shows = 0
+        self.updates = 0
 
     def poll(self):
         if not self.root.is_dir():
@@ -32,14 +32,15 @@ class ForecastService:
         events = self.observer.poll()
         self.state.accept(events)
         if events:
-            self.reveal()
-            self.auto_shows += 1
+            self.on_change()
+            self.updates += 1
         return events
 
     def snapshot(self):
         result = self.state.snapshot()
         result['watch_root'] = str(self.root)
-        result['auto_shows'] = self.auto_shows
+        result['auto_shows'] = 0  # Compatibility: slicing never opens a window.
+        result['updates'] = self.updates
         monitor = self.state.store.read().get('monitor', {})
         # Preserve print-start figures on the head cards throughout an active job,
         # including a temporary disconnect. Forecast remains in its own card.

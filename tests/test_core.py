@@ -182,7 +182,7 @@ def test_macos_tray_refresh_runs_on_main_thread(monkeypatch, tmp_path):
     class Icon:
         menu = None
     app.icon = Icon()
-    monkeypatch.setattr(app, "build_menu", lambda: "updated menu")
+    monkeypatch.setattr(app, "build_menu", lambda snapshot=None: "updated menu")
     worker = threading.Thread(target=app._schedule_menu_refresh)
     worker.start()
     worker.join(timeout=2)

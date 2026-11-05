@@ -30,7 +30,7 @@ Run from the repository root after installing the development requirements:
 python -m PyInstaller --noconfirm --clean packaging/SnapmakerSpoolTracker.spec
 
 # Windows x64 (run on Windows)
-python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.2-beta-Windows src/spool_tracker.py
+python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.2.1-Windows src/spool_tracker.py
 ```
 
 CI runs tests, packages the application and executes `--self-test`. macOS additionally verifies the ad-hoc signature. This does not notarize the application and does not validate Windows GUI behavior. Builds and caches belong in ignored output directories, never alongside user data.

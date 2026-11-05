@@ -1,7 +1,7 @@
 name: macOS build
 on:
   push:
-    branches: [main, fix/stable-release-hardening, v1.1-beta-prep, v1.2-beta-integration-build]
+    branches: [release-1.2.1, main, fix/stable-release-hardening, v1.1-beta-prep, v1.2-beta-integration-build]
   pull_request:
   workflow_dispatch:
 
@@ -31,16 +31,20 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean packaging/SnapmakerSpoolTracker.spec
       - name: Smoke-test and verify package
         run: |
-          dist/SnapmakerSpoolTracker-1.2-beta.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
-          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-1.2-beta.app
+          dist/SnapmakerSpoolTracker-1.2.1.app/Contents/MacOS/SnapmakerSpoolTracker --self-test
+          codesign --verify --deep --strict dist/SnapmakerSpoolTracker-1.2.1.app
       - name: Zip app bundle
         working-directory: dist
-        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-1.2-beta.app SnapmakerSpoolTracker-1.2-beta-macOS.zip
+        run: ditto -c -k --sequesterRsrc --keepParent SnapmakerSpoolTracker-1.2.1.app SnapmakerSpoolTracker-1.2.1-macOS.zip
       - name: Checksum
         working-directory: dist
-        run: shasum -a 256 SnapmakerSpoolTracker-1.2-beta-macOS.zip > SnapmakerSpoolTracker-1.2-beta-macOS.zip.sha256
+        run: shasum -a 256 SnapmakerSpoolTracker-1.2.1-macOS.zip > SnapmakerSpoolTracker-1.2.1-macOS.zip.sha256
+      - name: Build provenance
+        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-1.2.1-macOS.zip dist/BUILD-INFO-macOS.json
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-1.2-beta-macOS
-          path: dist/SnapmakerSpoolTracker-1.2-beta-macOS.zip*
+          name: SnapmakerSpoolTracker-1.2.1-macOS
+          path: |
+            dist/SnapmakerSpoolTracker-1.2.1-macOS.zip*
+            dist/BUILD-INFO-macOS.json
           if-no-files-found: error

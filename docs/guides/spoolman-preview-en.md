@@ -38,3 +38,26 @@ corrections v1.4 are deferred.
 
 [Spoolman](https://github.com/Donkie/Spoolman), by Daniel Hultgren, is an independent
 MIT-licensed project. This integration uses its API; its source is not bundled.
+
+## U1 connection and JSON import
+
+A fresh Preview starts with the printer monitor disabled. `Disconnected · disabled`
+means monitoring is off, not necessarily a network failure. Entering a host does not
+start monitoring. Saving settings and testing the connection are separate actions;
+a connection test does not enable automatic accounting.
+
+A JSON backup restores the printer host/port and automatic-accounting setting,
+in addition to inventory, assignments and history. If accounting was enabled in
+the backup, importing it can reconnect the monitor. Import is not required to
+configure a printer. Stop other Tracker instances accounting for this U1 before
+import, and review monitoring settings afterward. Strict guard is reset to warn.
+
+For the initial Spoolman read-only test, keep both usage delivery and printer
+monitoring off. U1 connectivity is not required to browse the catalog. Spoolman
+read-only mode does not disable accounting for local Tracker spools. Restoring a
+backup disables the Spoolman integration separately; reconnect it explicitly.
+
+Known macOS issue reported on 2026-11-05 (Preview 2): the system menu bar may
+vanish after switching Spaces with the settings window open. The user reports
+that clicking the desktop restores it. Root cause is unconfirmed; Preview 2
+contains no fix for this issue.

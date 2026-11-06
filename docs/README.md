@@ -34,15 +34,11 @@ These documents describe earlier versions.
 
 ## Release preparation
 
-- [1.3.0 Reddit and Snapmaker Forum drafts — not posted](releases/1.3.0-posts.md)
 
-- [1.2.1 Reddit and Snapmaker Forum drafts — not posted](releases/1.2.1-posts.md)
 
 The following are archived preparation texts for 1.2 beta; they are not instructions to publish again:
 
 - [Review checklist](release-1.2-beta/REVIEW_RU.md)
 - [GitHub release copy](release-1.2-beta/GITHUB_RELEASE_EN.md)
-- [Reddit copy](release-1.2-beta/REDDIT_EN.md)
-- [Snapmaker Forum copy](release-1.2-beta/SNAPMAKER_FORUM_EN.md)
 
 [Back to the project](../README.md)

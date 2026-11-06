@@ -77,7 +77,7 @@ Start with read-only mode before enabling usage delivery. Real U1 printing with 
 | Folder | Contents |
 |---|---|
 | [`src/`](src/) | Application modules |
-| [`docs/`](docs/) | Current guides, release notes, archived manuals and unposted announcement copy |
+| [`docs/`](docs/) | Current guides, release notes and archived manuals |
 | [`tests/`](tests/) | Automated checks |
 | [`dev/`](dev/) | Simulators, fixtures, isolated lab apps and historical validation records |
 | [`packaging/`](packaging/) | Desktop build specification and app icon |

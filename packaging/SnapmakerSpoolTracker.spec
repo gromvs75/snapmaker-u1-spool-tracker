@@ -9,7 +9,7 @@ a = Analysis(
     [str(ROOT / 'src' / 'spool_tracker.py')],
     pathex=[str(ROOT / 'src'), str(ROOT)],
     binaries=[],
-    datas=[],
+    datas=[(str(ROOT / 'LICENSE'), 'licenses'), (str(ROOT / 'docs' / 'licenses'), 'licenses'), (str(ROOT / 'docs' / 'guides'), 'guides')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -49,14 +49,14 @@ coll = COLLECT(
 )
 app = BUNDLE(
     coll,
-    name='SnapmakerSpoolTracker-Spoolman-Preview5.app',
+    name='SnapmakerSpoolTracker-1.3.0.app',
     icon=str(ROOT / 'packaging' / 'AppIcon.icns'),
-    bundle_identifier='local.snapmaker-spool-tracker.spoolman.preview5',
+    bundle_identifier='local.snapmaker-spool-tracker.v12beta1',
     info_plist={
         'LSUIElement': True,
         'CFBundleName': 'Snapmaker Spool Tracker',
-        'CFBundleDisplayName': 'Tracker Spoolman Preview 5',
-        'CFBundleShortVersionString': '1.2.1',
-        'CFBundleVersion': '3',
+        'CFBundleDisplayName': 'Snapmaker Spool Tracker 1.3.0',
+        'CFBundleShortVersionString': '1.3.0',
+        'CFBundleVersion': '13',
     },
 )

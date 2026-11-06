@@ -82,7 +82,7 @@ SCRIPT = r'''
  async function refresh(force=false) {
   if(document.getElementById('view-settings').hidden && !force)return;
   const data=await call('status'), s=data.state;
-  $('help').textContent=t('Оригинальная прошивка U1. Каталог и остатки — в Spoolman; прогноз после нарезки ничего не списывает. Поддерживается 0.27.1.','Stock U1 firmware. Spoolman stores inventory; slicing only forecasts usage. Supports 0.27.1.');
+  $('help').textContent=t('Подключается через Tracker. Установка компонентов на принтер не требуется. Каталог и остатки — в Spoolman; прогноз после нарезки ничего не списывает. Поддерживается 0.27.1.','Connects through Tracker. No components need to be installed on the printer. Spoolman stores inventory; slicing only forecasts usage. Supports 0.27.1.');
   $('url-label').textContent=t('Адрес Spoolman','Spoolman URL'); $('mode-label').textContent=t('Режим работы Tracker','Tracker mode');
   $('saved-mode').textContent=({off:t('Отключено','Off'),read:t('Только чтение','Read only'),send:t('Чтение и списание','Read and send usage')})[s.mode];
   $('access-title').textContent=t('Доступ к Spoolman','Spoolman connection');
@@ -133,6 +133,7 @@ SCRIPT = r'''
  $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:!$('read').checked?'off':$('send').checked?'send':'read',sole_sender:$('sole').checked});loaded=false;});};
  $('refresh').onclick=()=>actSM(()=>call('refresh',{}));
  $('attach').onsubmit=e=>{e.preventDefault();actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
+ window.refreshSpoolmanAfterRestore=async()=>{loaded=false;await refresh(true);};
  document.getElementById('nav-settings').addEventListener('click',()=>refresh(true).catch(e=>$('error').textContent=e.message));
  setInterval(()=>{if(!busy)refresh().catch(e=>$('error').textContent=e.message);},3000);
 })();

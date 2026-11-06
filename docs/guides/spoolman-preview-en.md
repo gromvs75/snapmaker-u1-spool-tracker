@@ -1,8 +1,8 @@
-# Spoolman Preview 2
+# Spoolman Preview 7
 
 Separate test app for **stock U1 firmware**, supporting Spoolman **0.27.1**.
 No changes to Snorca or printer firmware. No installed inventory is imported.
-Data lives in `SnapmakerSpoolTracker-SpoolmanPreview2`; local UI port is 8772.
+Data lives in `SnapmakerSpoolTracker-SpoolmanPreview7`; local UI port is 8777.
 Printer monitoring starts disabled. Do not run two usage senders for the same U1.
 
 In Settings → Spoolman, enter the server base URL (without `/api/v1` or credentials).
@@ -57,7 +57,28 @@ monitoring off. U1 connectivity is not required to browse the catalog. Spoolman
 read-only mode does not disable accounting for local Tracker spools. Restoring a
 backup disables the Spoolman integration separately; reconnect it explicitly.
 
-Known macOS issue reported on 2026-11-05 (Preview 2): the system menu bar may
+Known macOS issue reported on 2026-11-05 (Preview 7): the system menu bar may
 vanish after switching Spaces with the settings window open. The user reports
-that clicking the desktop restores it. Root cause is unconfirmed; Preview 2
+that clicking the desktop restores it. Root cause is unconfirmed; Preview 7
 contains no fix for this issue.
+
+## Detailed setup and attribution
+
+The full step-by-step Russian guide is `spoolman-preview-ru.md` alongside this file.
+Spoolman is a separate server; use version 0.27.1, not latest. On macOS, the upstream
+recommended installation route is Docker: https://github.com/Donkie/Spoolman/wiki/Installation .
+Use a persistent database volume and bind localhost for local-only tests. Create a
+physical spool, not just a filament library entry. Start with read-only mode and
+printer monitoring disabled. Assign the spool ID to one head, slice and check the
+forecast. Enable usage only after confirming this Tracker is the sole sender for U1.
+A matched registered print plan is required; slice observation alone is not registration.
+See en.md for the existing slicer hook setup.
+
+Export/import Tracker JSON through the native app window. Back up Spoolman's database
+separately; Tracker JSON does not restore remote balances. Restore disables Spoolman
+and makes unfinished operations uncertain. Reconnect the same server and audit them
+before allowing retries. Never run two independent senders for the same printer.
+
+The distribution includes the upstream MIT license and author attribution in licenses/.
+Spoolman copyright (c) 2023 Daniel Hultgren; independent API integration, no endorsement.
+Spoolman server/client code is not bundled. Windows GUI remains unverified.

@@ -1,6 +1,8 @@
 # Snapmaker U1 Spool Tracker
 
-**For the original Snapmaker U1 firmware. No custom firmware or printer-side installation required.**
+**Учёт катушек и прогноз расхода для Snapmaker U1 — без изменения прошивки.**
+
+**Spool tracking and usage forecasts for Snapmaker U1 — without firmware changes.**
 
 Local filament inventory and automatic forecasts after slicing in Snapmaker Orca (Snorca).
 
@@ -9,6 +11,18 @@ Keep Tracker in the menu bar or tray and slice a model in Snorca. The icon and m
 **[1.2.1 is available on GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1).** Packages target **macOS Apple Silicon (arm64)** and **Windows x64**.
 
 **Windows GUI and real Snorca slicing on Windows remain unverified.** The earlier automatic-window behavior was not validated on Windows either. In 1.2.1 automatic menu opening is macOS-only; Windows updates the tray icon and menu without opening the dashboard. CI and executable self-tests do not replace desktop testing.
+
+## Spoolman integration — 1.3.0 (prepared, not published)
+
+**Подключается через Tracker. Установка компонентов на принтер не требуется.**
+Connects through Tracker. No components need to be installed on the printer.
+
+1.3.0 adds optional Spoolman 0.27.1 catalog/stock reading and confirmed-print usage delivery. Read-only mode never sends consumption. Sending requires explicit sole-sender confirmation; ambiguous writes require manual review. Spoolman is installed separately.
+The 1.3.0 packages are prepared for testing; 1.2.1 remains the published release.
+[Integration guide (RU)](docs/guides/spoolman-ru.md) ·
+[English guide](docs/guides/spoolman-en.md) ·
+[1.3.0 notes](docs/releases/1.3.0.md) ·
+[Spoolman attribution and MIT license](docs/licenses/Spoolman-NOTICE.md).
 
 ## Start here
 
@@ -23,7 +37,7 @@ Keep Tracker in the menu bar or tray and slice a model in Snorca. The icon and m
 
 ## Data and limitations
 
-- 1.2.1 keeps the existing **1.2 beta inventory directory**. Test Menu 1/2 inventories and older stable data are not imported automatically. See the guides before importing a backup.
+- 1.3.0 keeps the existing **1.2 beta inventory directory**. Test Menu 1/2 inventories and older stable data are not imported automatically. See the guides before importing a backup.
 - Forecast mapping is **assumed: material 1→T0 … 4→T3**. This is visibly labelled and does not confirm the printer's actual mapping.
 - Forecasts use the latest completed Snorca 2.4.1 slice and recorded balances. They are estimates, not a guarantee that a print will finish.
 - For testing without printer access, use the documented `--isolated-root` mode with artificial data. Normal backup import can enable saved printer-monitor settings.

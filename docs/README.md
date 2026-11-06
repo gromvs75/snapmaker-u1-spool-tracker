@@ -1,6 +1,11 @@
 # Documentation
 
-## Current: 1.2.1
+## Prepared: 1.3.0 (not published)
+
+- [Spoolman integration (RU)](guides/spoolman-ru.md) · [English](guides/spoolman-en.md)
+- [1.3.0 release notes](releases/1.3.0.md)
+
+## Published: 1.2.1
 
 - [English user guide](guides/en.md)
 - [Русская инструкция](guides/ru.md)
@@ -8,9 +13,12 @@
 - [Development, tests and desktop builds](development.md)
 - [Windows offline testing](../dev/windows_slice_check/README_RU.md) — **Windows GUI and real Snorca slicing remain untested**.
 
-## Integration planning
+## Spoolman test builds
 
 - [Spoolman Preview: настройка и ограничения](guides/spoolman-preview-ru.md)
+
+- [Preview 7 release notes](releases/spoolman-preview7.md)
+- [Spoolman license and attribution](licenses/Spoolman-NOTICE.md)
 
 - [План интеграции Spoolman](plans/spoolman-integration-ru.md)
 - [Этап 1: контракт API и проверка сбоев](plans/spoolman-api-contract-ru.md)

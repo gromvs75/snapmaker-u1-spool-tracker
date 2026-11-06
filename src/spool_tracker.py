@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1-spoolman-preview5"
-WEB_PORT = 8775
+APP_VERSION = "1.3.0"
+WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview5", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-Beta12", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 
@@ -478,8 +478,8 @@ HTML_PAGE = """<!DOCTYPE html>
     <div class="brand-logo">U1</div>
     <div class="brand-text">
       <h1 id="t-title">Snapmaker U1 Spool Tracker</h1>
-      <p id="t-subtitle" class="subtitle">Filament inventory and print-start checks for four toolheads</p>
-      <span id="build-label" class="subtitle">1.1.0-beta.1</span> · <span id="test-badge">TEST DATA</span>
+      <p id="t-subtitle" class="subtitle">Spool tracking and usage forecasts for Snapmaker U1 — without firmware changes.</p>
+      <span id="build-label" class="subtitle">1.1.0-beta.1</span><span id="test-badge" hidden>TEST DATA</span>
     </div>
     <nav class="top-nav" aria-label="Main navigation">
       <button type="button" data-view="overview" aria-current="page" id="nav-overview">Overview</button>
@@ -641,7 +641,7 @@ const dict = {
   en: {
     slotLabel: "Slot",
     toolheadPrefix: "Toolhead T",
-    subtitle: "Filament inventory and print-start checks for four toolheads",
+    subtitle: "Spool tracking and usage forecasts for Snapmaker U1 — without firmware changes.",
     slotsHdr: "Active Slots Configuration (T0 – T3)",
     saveSlots: "Save Slot Assignments",
     emptySlot: "-- Empty / Unassigned --",
@@ -660,7 +660,7 @@ const dict = {
   ru: {
     slotLabel: "Слот",
     toolheadPrefix: "Сопло T",
-    subtitle: "Учёт филамента и проверка запуска печати для четырёх головок",
+    subtitle: "Учёт катушек и прогноз расхода для Snapmaker U1 — без изменения прошивки.",
     slotsHdr: "Активные слоты сопел (T0 – T3)",
     saveSlots: "Сохранить привязку слотов",
     emptySlot: "-- Пусто / Не привязано --",
@@ -679,7 +679,7 @@ const dict = {
   de: {
     slotLabel: "Slot",
     toolheadPrefix: "Druckkopf T",
-    subtitle: "Filamentbestand und Druckstartprüfung für vier Druckköpfe",
+    subtitle: "Spulenverwaltung und Verbrauchsprognosen für Snapmaker U1 — ohne Firmware-Änderungen.",
     slotsHdr: "Aktive Slot-Konfiguration (T0 – T3)",
     saveSlots: "Slot-Zuweisung speichern",
     emptySlot: "-- Leer / Nicht zugewiesen --",
@@ -698,7 +698,7 @@ const dict = {
   uk: {
     slotLabel: "Слот",
     toolheadPrefix: "Сопло T",
-    subtitle: "Облік філаменту та перевірка старту друку для чотирьох голівок",
+    subtitle: "Облік котушок і прогноз витрат для Snapmaker U1 — без зміни прошивки.",
     slotsHdr: "Активні слоти сопел (T0 – T3)",
     saveSlots: "Зберегти прив'язку слотів",
     emptySlot: "-- Порожньо / Не прив'язано --",
@@ -717,7 +717,7 @@ const dict = {
   es: {
     slotLabel: "Ranura",
     toolheadPrefix: "Cabezal T",
-    subtitle: "Inventario de filamento y revisión del inicio para cuatro cabezales",
+    subtitle: "Gestión de bobinas y previsión de consumo para Snapmaker U1 — sin modificar el firmware.",
     slotsHdr: "Configuración de ranuras activas (T0 – T3)",
     saveSlots: "Guardar asignación de ranuras",
     emptySlot: "-- Vacío / Sin asignar --",
@@ -823,7 +823,7 @@ function applyTexts(lang) {
   el('overview-title').textContent = lang === 'ru' ? 'Состояние печати' : 'Print overview';
   el('latest-heading').textContent = lang === 'ru' ? 'Последняя учтённая печать' : 'Latest accounted print';
   el('preflight-details-label').textContent = lang === 'ru' ? 'Подробности проверки' : 'Check details';
-  el('t-subtitle').textContent = lang === 'ru' ? 'Учёт филамента для четырёх головок' : t.subtitle;
+  el('t-subtitle').textContent = t.subtitle;
   el('build-label').textContent = ' · 1.1.0-beta.1';
   el('test-badge').textContent = ({en:'test data', ru:'тестовая копия данных', de:'Testdaten', uk:'тестова копія даних', es:'datos de prueba'})[lang] || 'test data';
   el('t-slots-hdr').textContent = t.slotsHdr;
@@ -1384,7 +1384,7 @@ el('backup-export').addEventListener('click', () => act(() => withBackupDialog(a
 el('backup-import').addEventListener('click', () => act(() => withBackupDialog(async () => {
   if (!confirm((extra[currentLang] || extra.en).importConfirm)) return;
   const result = await window.pywebview.api.import_backup();
-  if (result.status === 'ok') { await loadData(); alert((extra[currentLang] || extra.en).importDone); }
+  if (result.status === 'ok') { await loadData(); if (window.refreshSpoolmanAfterRestore) await window.refreshSpoolmanAfterRestore(); alert((extra[currentLang] || extra.en).importDone); }
 })));
 setInterval(pollLive, 2500);
 act(loadData);

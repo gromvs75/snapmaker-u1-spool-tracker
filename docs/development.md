@@ -30,7 +30,7 @@ Run from the repository root after installing the development requirements:
 python -m PyInstaller --noconfirm --clean packaging/SnapmakerSpoolTracker.spec
 
 # Windows x64 (run on Windows)
-python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.2.1-Windows src/spool_tracker.py
+python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.3.0-Windows src/spool_tracker.py
 ```
 
 CI runs tests, packages the application and executes `--self-test`. macOS additionally verifies the ad-hoc signature. This does not notarize the application and does not validate Windows GUI behavior. Builds and caches belong in ignored output directories, never alongside user data.
@@ -40,3 +40,13 @@ CI runs tests, packages the application and executes `--self-test`. macOS additi
 Run tools from the repository root after the editable install, for example `python -m dev.mock_u1`. Isolated window prototypes are invoked as `python -m dev.labs.forecast_lab_app` or `python -m dev.labs.sender_test_app`. These are experimental tools, not the ordinary forecast workflow. Read their instructions before running them.
 
 See [dev/](../dev/README.md) for fixtures and lab scope. Historical source commands in archived reports refer to the layout used at the time; use this guide for current paths.
+
+## Prepared 1.3.0 distributions
+
+Use `scripts/package_release.py macOS dist/SnapmakerSpoolTracker-1.3.0.app` or
+`scripts/package_release.py Windows dist/SnapmakerSpoolTracker-1.3.0-Windows.exe`
+after PyInstaller. These include Spoolman guides and attribution. Run
+`scripts/write_build_info.py ARCHIVE OUTPUT.json` to record source and checksum.
+The release app keeps the 1.2.1 data directory and port; do not launch it normally
+against production data during release preparation. `--self-test` is data-free.
+Windows GUI remains unverified. No release is published by these workflows.

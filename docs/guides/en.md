@@ -1,14 +1,47 @@
-# Tracker 1.2.1 — user guide
+# Tracker 1.3.0 — user guide
 
 **Works with the original Snapmaker U1 firmware. No custom firmware or printer-side installation is required.**
 
-**[Download 1.2.1](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1). Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.2.1 release notes](../releases/1.2.1.md).
+**[Download 1.3.0](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.0). Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.3.0 release notes](../releases/1.3.0.md).
+
+## Installation and Snorca post-processing
+
+1. [Download 1.3.0](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.0), unzip it and move `SnapmakerSpoolTracker-1.3.0.app` to `/Applications`. You may rename it to `SnapmakerSpoolTracker.app` for a version-independent path. Before replacing an older installation, export its JSON backup and quit it.
+2. Open Tracker. From its menu-bar icon, choose **Configure Spools & Slots**, add your spools and assign T0–T3. Spoolman is optional; start with read-only mode if connecting it.
+3. **For automatic accounting, configure Snorca:** open **Process / Print Settings → Others → Post-processing scripts**, paste the command below and save the process preset. If the field is hidden, enable advanced/expert settings. Replace an old Tracker command rather than adding a second one.
+
+If you renamed the app to `SnapmakerSpoolTracker.app`:
+
+```text
+/Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
+```
+
+If you kept the name from the 1.3.0 archive:
+
+```text
+/Applications/SnapmakerSpoolTracker-1.3.0.app/Contents/MacOS/SnapmakerSpoolTracker;
+```
+
+Use **one** command matching the installed app name. Keep the trailing semicolon; quote paths containing spaces. Do not paste this into printer Start G-code or Terminal. Check the saved preset for each print process you use.
+
+4. To account for completed prints, enter the U1 address and port (normally `7125`) in Tracker, test the connection, enable automatic accounting and save. For Spoolman consumption, separately enable usage delivery and confirm the sole sender only after completing the [integration guide](spoolman-en.md).
+5. First test with a small model: slice for the menu forecast, then export G-code through the configured preset **without starting a print** to check the hook. Post-processing registers the print plan; slicing/exporting/uploading never deducts filament. Accounting requires the matching file and a successfully observed print.
+
+**Forecast versus accounting:** the menu forecast works without the post-processing command. Automatic accounting needs the registered plan from that command and printer monitoring. A green forecast alone does not confirm that accounting is configured.
+
+**Windows:** extract the ZIP to a permanent directory such as `C:\Tools\SnapmakerSpoolTracker`. Install Microsoft Edge WebView2 Runtime if required for the dashboard. Use the actual executable path in the same Snorca post-processing field, for example:
+
+```text
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.0-Windows.exe;
+```
+
+Save the process preset. Windows GUI and real Snorca slicing remain unverified.
 
 ## The new workflow
 
 1. Keep Tracker running in the menu bar/tray.
 2. Check the spool assignments and remaining grams in Tracker.
-3. Slice a model in Snapmaker Orca (Snorca). No manual G-code export, file selection, post-processing-script change, or custom slicer build is required for this forecast workflow.
+3. Slice a model in Snapmaker Orca (Snorca). No manual G-code export, file selection, post-processing command, or custom slicer build is required for this forecast workflow.
 4. A completed slice updates the icon and menu. On macOS the menu opens automatically; the dashboard stays hidden and there is no Dock icon. On Windows, open the tray menu yourself. Balance changes refresh the result without automatically opening the menu.
 5. Click the menu forecast to open Overview for the latest completed plate. You can select another plate inside the window; this does not change the latest-slice status in the menu. Closing the window leaves Tracker running. Use Quit to stop it.
 
@@ -20,13 +53,13 @@ A green ✓ means the estimated requirement plus reserve fits the recorded balan
 
 ## Packages
 
-macOS: `SnapmakerSpoolTracker-1.2.1-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.2.1-Windows.exe` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. Downloads are attached to the release linked above. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
+macOS: `SnapmakerSpoolTracker-1.3.0-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.3.0-Windows.zip` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. Downloads are attached to the release linked above. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
 
 Keep packages separate from installed applications while reviewing. Use `--isolated-root` and artificial data for offline validation; ordinary launch is not isolated. Windows GUI remains unverified.
 
 ## Separate data and backup
 
-1.2.1 keeps the 1.2 beta database and port for continuity. If that database does not exist, it starts empty. It does not automatically import older stable or Menu Test inventories:
+1.3.0 keeps the 1.2 beta database and port for continuity. If that database does not exist, it starts empty. It does not automatically import older stable or Menu Test inventories:
 
 - macOS: `~/Library/Application Support/SnapmakerSpoolTracker-Beta12/`
 - Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker-Beta12\`

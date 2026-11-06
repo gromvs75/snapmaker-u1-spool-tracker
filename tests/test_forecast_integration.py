@@ -158,6 +158,7 @@ def test_macos_accessory_policy_applied_after_cocoa_import(monkeypatch):
                                 setActivationPolicy_=lambda value: calls.append(('policy', value)))))
     platforms = ModuleType('webview.platforms')
     platforms.cocoa = object()
+    monkeypatch.setattr('macos_menu.configure_accessory_panel', lambda cocoa: None)
     monkeypatch.setitem(sys.modules, 'webview.platforms', platforms)
     monkeypatch.setitem(sys.modules, 'AppKit', appkit)
     monkeypatch.setattr(spool_tracker.sys, 'platform', 'darwin')

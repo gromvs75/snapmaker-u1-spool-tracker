@@ -49,13 +49,13 @@ coll = COLLECT(
 )
 app = BUNDLE(
     coll,
-    name='SnapmakerSpoolTracker-Spoolman-Preview3.app',
+    name='SnapmakerSpoolTracker-Spoolman-Preview4.app',
     icon=str(ROOT / 'packaging' / 'AppIcon.icns'),
-    bundle_identifier='local.snapmaker-spool-tracker.spoolman.preview3',
+    bundle_identifier='local.snapmaker-spool-tracker.spoolman.preview4',
     info_plist={
         'LSUIElement': True,
         'CFBundleName': 'Snapmaker Spool Tracker',
-        'CFBundleDisplayName': 'Tracker Spoolman Preview 3',
+        'CFBundleDisplayName': 'Tracker Spoolman Preview 4',
         'CFBundleShortVersionString': '1.2.1',
         'CFBundleVersion': '3',
     },

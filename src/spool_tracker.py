@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1-spoolman-preview3"
-WEB_PORT = 8773
+APP_VERSION = "1.2.1-spoolman-preview4"
+WEB_PORT = 8774
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview3", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview4", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 
@@ -1776,10 +1776,6 @@ class DashboardWindow:
         self.pending_forecast = False
         self.show()
         self.window.evaluate_js('refreshSliceForecast(true); setView("overview");')
-        if sys.platform == 'darwin':
-            from AppKit import NSApplication
-            from PyObjCTools import AppHelper
-            AppHelper.callAfter(NSApplication.sharedApplication().activateIgnoringOtherApps_, True)
 
     def _on_shown(self):
         self.ready = True
@@ -1817,9 +1813,9 @@ class DashboardWindow:
         if sys.platform == 'darwin':
             # Cocoa's import sets Regular policy; override it before the GUI starts.
             from webview.platforms import cocoa
-            from macos_menu import install_menu_bar_recovery
+            from macos_menu import configure_accessory_panel
             import AppKit
-            self._menu_recovery = install_menu_bar_recovery()
+            configure_accessory_panel(cocoa)
             AppKit.NSApplication.sharedApplication().setActivationPolicy_(
                 AppKit.NSApplicationActivationPolicyAccessory)
         if ISOLATED_ROOT is not None:

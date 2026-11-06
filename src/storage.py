@@ -1,3 +1,4 @@
+import ipaddress
 """Persistent, process-safe inventory storage."""
 
 import copy
@@ -67,6 +68,11 @@ def printer_config(value):
     guard_mode = value.get("guard_mode", "warn")
     if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.\-]{0,252}", host):
         raise ValidationError("Enter a hostname or IPv4 address without a URL scheme")
+    if re.fullmatch(r"[0-9.]+", host):
+        try:
+            ipaddress.IPv4Address(host)
+        except ValueError as exc:
+            raise ValidationError("Invalid IPv4 address: use four numbers from 0 to 255") from exc
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValidationError("Port must be between 1 and 65535")
     if not isinstance(enabled, bool):

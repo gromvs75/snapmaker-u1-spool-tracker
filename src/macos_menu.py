@@ -1,31 +1,54 @@
-"""Keep a windowed accessory application's menu bar visible after activation."""
+"""Nonactivating Cocoa dashboard for a menu-bar-only application.
 
-def install_menu_bar_recovery():
+Keep the previous application's system menu bar while allowing input in Tracker.
+The nonactivating style must be set at NSPanel creation, not toggled afterward.
+"""
+
+def configure_accessory_panel(cocoa):
     import AppKit
+    import objc
     from PyObjCTools import AppHelper
-    app = AppKit.NSApplication.sharedApplication()
+    view = cocoa.BrowserView
+    if getattr(view, '_tracker_panel_installed', False):
+        return
 
-    def recover(_notification=None):
-        # Notifications can arrive before the Space transition has completed.
-        AppHelper.callAfter(restore)
+    class TrackerDashboardPanel(AppKit.NSPanel):
+        def initWithContentRect_styleMask_backing_defer_(self, rect, style, backing, defer):
+            self = objc.super(TrackerDashboardPanel, self).initWithContentRect_styleMask_backing_defer_(
+                rect, style | AppKit.NSWindowStyleMaskNonactivatingPanel, backing, defer)
+            if self is not None:
+                self.setFloatingPanel_(False)
+                self.setHidesOnDeactivate_(False)
+                self.setBecomesKeyOnlyIfNeeded_(False)
+                self.setLevel_(AppKit.NSNormalWindowLevel)
+                self.setAccessibilityRole_(AppKit.NSAccessibilityWindowRole)
+            return self
 
-    def restore():
-        window = app.keyWindow()
-        if not app.isActive() or window is None or not window.isVisible():
-            return
-        if window.styleMask() & AppKit.NSWindowStyleMaskFullScreen:
-            return
-        # Do not change Dock policy, global preferences or full-screen behaviour.
-        if not AppKit.NSMenu.menuBarVisible():
-            AppKit.NSMenu.setMenuBarVisible_(True)
+        def canBecomeKeyWindow(self):
+            return getattr(self, 'focus', True)
 
-    center = AppKit.NSNotificationCenter.defaultCenter()
-    workspace = AppKit.NSWorkspace.sharedWorkspace().notificationCenter()
-    tokens = []
-    for owner, event in [
-        (center, AppKit.NSApplicationDidBecomeActiveNotification),
-        (center, AppKit.NSWindowDidBecomeKeyNotification),
-        (workspace, AppKit.NSWorkspaceActiveSpaceDidChangeNotification),
-    ]:
-        tokens.append((owner, owner.addObserverForName_object_queue_usingBlock_(event, None, None, recover)))
-    return tokens  # Retain observers for the GUI loop's lifetime.
+        def canBecomeMainWindow(self):
+            return False
+
+    def show(instance):
+        # Unlike pywebview's default show(), do not activate an accessory app.
+        AppHelper.callAfter(instance.window.makeKeyAndOrderFront_, None)
+
+    def first_show(instance):
+        instance.window.setContentView_(instance.webview)
+        instance.window.makeFirstResponder_(instance.webview)
+        if not instance.hidden:
+            instance.window.makeKeyAndOrderFront_(None)
+        if instance.maximized:
+            instance.maximize()
+        elif instance.minimized:
+            instance.minimize()
+        instance.shown.set()
+        if not view.app.isRunning():
+            AppHelper.installMachInterrupt()
+            view.app.run()
+
+    view.WindowHost = TrackerDashboardPanel
+    view.show = show
+    view.first_show = first_show
+    view._tracker_panel_installed = True

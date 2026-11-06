@@ -1,6 +1,6 @@
 # Spoolman — Tracker 1.3.0
 
-Tracker 1.3.0 is prepared, not published. Supports **stock U1 firmware** and Spoolman **0.27.1**. Export a Tracker JSON backup before upgrading.
+Tracker 1.3.0 with Spoolman integration. Supports **stock U1 firmware** and Spoolman **0.27.1**. Export a Tracker JSON backup before upgrading.
 No changes to Snorca or printer firmware. Keeps the existing 1.2 beta / 1.2.1 inventory. Preview data is not imported automatically.
 Data lives in `SnapmakerSpoolTracker-Beta12`; local UI port is 8766.
 Printer monitoring starts disabled. Do not run two usage senders for the same U1.

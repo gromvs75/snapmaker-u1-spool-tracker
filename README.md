@@ -8,17 +8,17 @@ Local filament inventory and automatic forecasts after slicing in Snapmaker Orca
 
 Keep Tracker in the menu bar or tray and slice a model in Snorca. The icon and menu show estimated usage, balances and reserve-aware **✓ / ✕** indicators. On macOS the menu opens automatically after slicing; the main window opens only on request and there is no Dock icon. No manual G-code export is needed; slicing does not deduct filament or start printing.
 
-**[1.2.1 is available on GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.1).** Packages target **macOS Apple Silicon (arm64)** and **Windows x64**.
+**[1.3.0 is available on GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.0).** Packages target **macOS Apple Silicon (arm64)** and **Windows x64**.
 
 **Windows GUI and real Snorca slicing on Windows remain unverified.** The earlier automatic-window behavior was not validated on Windows either. In 1.2.1 automatic menu opening is macOS-only; Windows updates the tray icon and menu without opening the dashboard. CI and executable self-tests do not replace desktop testing.
 
-## Spoolman integration — 1.3.0 (prepared, not published)
+## Spoolman integration — 1.3.0
 
 **Подключается через Tracker. Установка компонентов на принтер не требуется.**
 Connects through Tracker. No components need to be installed on the printer.
 
 1.3.0 adds optional Spoolman 0.27.1 catalog/stock reading and confirmed-print usage delivery. Read-only mode never sends consumption. Sending requires explicit sole-sender confirmation; ambiguous writes require manual review. Spoolman is installed separately.
-The 1.3.0 packages are prepared for testing; 1.2.1 remains the published release.
+Start with read-only mode before enabling usage delivery. Real U1 printing with Spoolman and sustained operation still require user validation.
 [Integration guide (RU)](docs/guides/spoolman-ru.md) ·
 [English guide](docs/guides/spoolman-en.md) ·
 [1.3.0 notes](docs/releases/1.3.0.md) ·
@@ -29,7 +29,7 @@ The 1.3.0 packages are prepared for testing; 1.2.1 remains the published release
 | What you need | Link |
 |---|---|
 | Installation, inventory and backups | [English guide](docs/guides/en.md) · [Русская инструкция](docs/guides/ru.md) |
-| Changes and validation | [1.2.1 release notes](docs/releases/1.2.1.md) |
+| Changes and validation | [1.3.0 release notes](docs/releases/1.3.0.md) |
 | Published downloads | [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases) |
 | Help test Windows | [Offline test instructions](dev/windows_slice_check/README_RU.md) |
 | All documentation and older versions | [Documentation index](docs/README.md) |

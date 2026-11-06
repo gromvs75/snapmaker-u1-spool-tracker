@@ -1,11 +1,11 @@
 # Documentation
 
-## Prepared: 1.3.0 (not published)
+## Current: 1.3.0
 
 - [Spoolman integration (RU)](guides/spoolman-ru.md) · [English](guides/spoolman-en.md)
 - [1.3.0 release notes](releases/1.3.0.md)
 
-## Published: 1.2.1
+## General guides and previous 1.2.1 release
 
 - [English user guide](guides/en.md)
 - [Русская инструкция](guides/ru.md)
@@ -33,6 +33,8 @@ These documents describe earlier versions.
 - **1.0:** [English](archive/1.0/guide-en.md) · [Русский](archive/1.0/guide-ru.md) · [Reference](archive/1.0/reference.md) · [Step by step](archive/1.0/step-by-step.md) · [Russian overview](archive/1.0/overview-ru.md)
 
 ## Release preparation
+
+- [1.3.0 Reddit and Snapmaker Forum drafts — not posted](releases/1.3.0-posts.md)
 
 - [1.2.1 Reddit and Snapmaker Forum drafts — not posted](releases/1.2.1-posts.md)
 

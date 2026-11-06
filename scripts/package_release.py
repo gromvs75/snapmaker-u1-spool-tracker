@@ -1,4 +1,4 @@
-"""Assemble an unpublished desktop distribution with guides and attribution."""
+"""Assemble a desktop distribution with guides and attribution."""
 import argparse
 import hashlib
 from pathlib import Path
@@ -35,10 +35,10 @@ def main():
     notes = (ROOT / 'docs' / 'releases' / f'{VERSION}.md').read_text(encoding='utf-8')
     (stage / 'RELEASE-NOTES.md').write_text(notes.replace('../guides/', 'guides/').replace('../licenses/', 'licenses/'), encoding='utf-8')
     (stage / 'START-HERE.txt').write_text(
-        'Tracker 1.3.0 — prepared build, not published.\n'
+        'Tracker 1.3.0 — Spoolman integration.\n'
         'Stock U1 firmware; Spoolman is installed separately.\n'
         'Read guides/spoolman-ru.md or guides/spoolman-en.md before connecting.\n'
-        'Export your installed Tracker backup before any future upgrade.\n'
+        'Export your installed Tracker backup before upgrading.\n'
         'This build uses the existing 1.2 beta / 1.2.1 inventory directory.\n'
         'Do not run two instances accounting for the same printer.\n'
         'Spoolman: start read-only; leave printer monitoring and usage sending off for the first check.\n'

@@ -31,8 +31,17 @@ def configure_accessory_panel(cocoa):
             return False
 
     def show(instance):
-        # Unlike pywebview's default show(), do not activate an accessory app.
-        AppHelper.callAfter(instance.window.makeKeyAndOrderFront_, None)
+        def raise_panel():
+            window = instance.window
+            behavior = window.collectionBehavior()
+            window.setCollectionBehavior_((behavior & ~AppKit.NSWindowCollectionBehaviorCanJoinAllSpaces)
+                                          | AppKit.NSWindowCollectionBehaviorMoveToActiveSpace)
+            if window.isMiniaturized():
+                window.deminiaturize_(None)
+            window.makeKeyAndOrderFront_(None)
+            # A nonactivating app cannot otherwise reliably pass another app's key window.
+            window.orderFrontRegardless()
+        AppHelper.callAfter(raise_panel)
 
     def first_show(instance):
         instance.window.setContentView_(instance.webview)

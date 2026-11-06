@@ -15,10 +15,15 @@ def test_panel_never_activates_application_and_sets_style_at_creation(monkeypatc
         def setBecomesKeyOnlyIfNeeded_(self,v):pass
         def setLevel_(self,v):calls.append(('level',v))
         def setAccessibilityRole_(self,v):pass
+        def collectionBehavior(self):return 1
+        def setCollectionBehavior_(self,v):calls.append(('space',v))
+        def isMiniaturized(self):return getattr(self,'mini',False)
+        def deminiaturize_(self,v):calls.append(('restore',v));self.mini=False
+        def orderFrontRegardless(self):calls.append(('front',True))
         def setContentView_(self,v):pass
         def makeFirstResponder_(self,v):pass
         def makeKeyAndOrderFront_(self,v):calls.append(('show',v))
-    monkeypatch.setitem(sys.modules,'AppKit',SimpleNamespace(NSPanel=Panel,NSWindowStyleMaskNonactivatingPanel=128,NSNormalWindowLevel=0,NSAccessibilityWindowRole='AXWindow'))
+    monkeypatch.setitem(sys.modules,'AppKit',SimpleNamespace(NSPanel=Panel,NSWindowStyleMaskNonactivatingPanel=128,NSNormalWindowLevel=0,NSAccessibilityWindowRole='AXWindow',NSWindowCollectionBehaviorCanJoinAllSpaces=1,NSWindowCollectionBehaviorMoveToActiveSpace=2))
     monkeypatch.setitem(sys.modules,'objc',SimpleNamespace(super=super))
     monkeypatch.setitem(sys.modules,'PyObjCTools',SimpleNamespace(AppHelper=SimpleNamespace(callAfter=lambda fn,*a:fn(*a),installMachInterrupt=lambda:None)))
     view=SimpleNamespace(app=SimpleNamespace(isRunning=lambda:False,run=lambda:calls.append(('run',True))))
@@ -31,7 +36,12 @@ def test_panel_never_activates_application_and_sets_style_at_creation(monkeypatc
     view.first_show(instance)
     assert ('show',None) not in calls
     view.show(instance)
-    assert calls[-1]==('show',None)
+    assert calls[-3:]==[('space',2),('show',None),('front',True)]
+    panel.mini=True
+    view.show(instance)
+    assert calls[-4:]==[('space',2),('restore',None),('show',None),('front',True)]
+    view.show(instance)
+    assert calls[-3:]==[('space',2),('show',None),('front',True)]
     configure_accessory_panel(cocoa) # no duplicate Objective-C class
 
 

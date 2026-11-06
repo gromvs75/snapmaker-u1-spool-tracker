@@ -25,12 +25,12 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.2.1-spoolman-preview4"
-WEB_PORT = 8774
+APP_VERSION = "1.2.1-spoolman-preview5"
+WEB_PORT = 8775
 ISOLATED_ROOT = None
 SLICE_ROOT = None
 _normal_data = data_directory()
-STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview4", legacy_paths=())
+STORE = Store(_normal_data.parent / "SnapmakerSpoolTracker-SpoolmanPreview5", legacy_paths=())
 LOGGER = logging.getLogger("snapmaker_tracker")
 
 
@@ -1800,7 +1800,8 @@ class DashboardWindow:
             return
         self.pending_show = False
         self.window.show()
-        self.window.restore()
+        if sys.platform != 'darwin':
+            self.window.restore()
 
     def quit(self):
         if self.quitting:

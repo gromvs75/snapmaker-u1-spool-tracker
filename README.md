@@ -4,8 +4,6 @@
 
 # Snapmaker U1 Spool Tracker
 
-**Учёт катушек и прогноз расхода для Snapmaker U1 — без изменения прошивки.**
-
 **Spool tracking and usage forecasts for Snapmaker U1 — without firmware changes.**
 
 Local filament inventory and automatic forecasts after slicing in Snapmaker Orca (Snorca).
@@ -43,12 +41,11 @@ Use **one** command matching the installed app name. Keep the trailing semicolon
 
 **Windows:** extract the ZIP to a permanent folder and use the actual `.exe` path as the post-processing command; see the [Windows setup](docs/guides/en.md#installation-and-snorca-post-processing). **Windows GUI and real Snorca slicing remain unverified.**
 
-[Пошаговая инструкция на русском](docs/guides/ru.md#установка-и-настройка-постобработки-snorca) · [English setup guide](docs/guides/en.md#installation-and-snorca-post-processing)
+[Russian setup guide](docs/guides/ru.md#установка-и-настройка-постобработки-snorca) · [English setup guide](docs/guides/en.md#installation-and-snorca-post-processing)
 
 ## Spoolman integration — 1.3.0
 
-**Подключается через Tracker. Установка компонентов на принтер не требуется.**
-Connects through Tracker. No components need to be installed on the printer.
+**Connects through Tracker. No components need to be installed on the printer.**
 
 1.3.0 adds optional Spoolman 0.27.1 catalog/stock reading and confirmed-print usage delivery. Read-only mode never sends consumption. Sending requires explicit sole-sender confirmation; ambiguous writes require manual review. Spoolman is installed separately.
 Start with read-only mode before enabling usage delivery. Real U1 printing with Spoolman and sustained operation still require user validation.
@@ -61,7 +58,7 @@ Start with read-only mode before enabling usage delivery. Real U1 printing with 
 
 | What you need | Link |
 |---|---|
-| Installation, inventory and backups | [English guide](docs/guides/en.md) · [Русская инструкция](docs/guides/ru.md) |
+| Installation, inventory and backups | [English guide](docs/guides/en.md) · [Russian guide](docs/guides/ru.md) |
 | Changes and validation | [1.3.0 release notes](docs/releases/1.3.0.md) |
 | Published downloads | [GitHub Releases](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases) |
 | Help test Windows | [Offline test instructions](dev/windows_slice_check/README_RU.md) |

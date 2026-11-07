@@ -107,6 +107,92 @@ def test_simulator_serves_stock_shapes_and_real_file_bytes(rig):
     assert metadata["size"] == len(payload)
 
 
+def test_accounted_print_retires_only_its_slice_forecast(rig, tmp_path):
+    from forecast_service import ForecastService
+    from dev.observer_fixture import payload
+    folder = tmp_path / 'slices/session/Metadata'
+    folder.mkdir(parents=True)
+    source = folder / '.42.0.gcode'
+    source.write_bytes(payload('0, 0, 16.69, 0'))
+    service = ForecastService(rig.store, lambda: None, tmp_path / 'slices')
+    service.poll(); service.observer.settle = 0; service.poll()
+    assert len(service.snapshot()['entries']) == 1
+    rig.control('select', path=str(source), filename='printed.gcode')
+    rig.control('start'); rig.poll()
+    assert service.snapshot()['printing']
+    assert len(service.snapshot()['entries']) == 1
+    rig.control('complete'); rig.poll()
+    assert rig.remaining() == [1000, 1000, 983.31, 1000]
+    assert service.snapshot()['entries'] == []
+    rig.poll()
+    assert rig.remaining()[2] == 983.31
+    restarted = ForecastService(rig.store, lambda: None, tmp_path / 'slices')
+    restarted.poll(); restarted.observer.settle = 0; restarted.poll()
+    assert restarted.snapshot()['entries'] == []
+    # Equal usage is not identity: a different model must retain its forecast.
+    other = folder / '.42.1.gcode'
+    other.write_bytes(payload('0, 0, 16.69, 0').replace(b'G1 X1', b'G1 X2'))
+    restarted.poll(); restarted.poll()
+    assert [e['source'] for e in restarted.snapshot()['entries']] == [str(other.relative_to(service.root))]
+    # A new slice of the same bytes after the print is a new forecast.
+    event = dict(service.state.entries[str(source.relative_to(service.root))], completed_at_ns=time.time_ns())
+    restarted.state.accept([event])
+    assert len(restarted.snapshot()['entries']) == 2
+
+
+def test_accounted_forecast_clears_head_cards_in_browser(rig, tmp_path):
+    playwright = pytest.importorskip('playwright.sync_api')
+    from forecast_service import ForecastService
+    from dev.observer_fixture import payload
+    folder = tmp_path / 'slices/session/Metadata'
+    folder.mkdir(parents=True)
+    source = folder / '.42.0.gcode'
+    source.write_bytes(payload('0, 0, 16.69, 0'))
+    service = ForecastService(rig.store, lambda: None, tmp_path / 'slices')
+    service.poll(); service.observer.settle = 0; service.poll()
+    rig.store.update(lambda db: db.update(language='ru'))
+    rig.control('select', path=str(source), filename='printed.gcode')
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        def respond(route):
+            path = route.request.url.split('http://tracker.test', 1)[-1]
+            if path == '/':
+                route.fulfill(content_type='text/html', body=spool_tracker.HTML_PAGE)
+            elif path == '/api/data':
+                route.fulfill(json=rig.store.read())
+            elif path == '/api/forecast':
+                route.fulfill(json=service.snapshot())
+            else:
+                route.fulfill(json={})
+        page.route('**/*', respond)
+        try:
+            page.goto('http://tracker.test/')
+            head = page.locator('#sidebar-slots .sidebar-slot').nth(2)
+            playwright.expect(head.locator('.forecast-head-note')).to_contain_text('983,31')
+            rig.control('start'); rig.poll()
+            page.evaluate('pollLive()')
+            playwright.expect(head.locator('.forecast-head-note')).to_have_count(0)
+            rig.control('complete'); rig.poll()
+            # Exercise both independent refreshes, including the transient stale
+            # forecast applied after the inventory has already updated.
+            page.evaluate('pollLive()')
+            page.evaluate('refreshSliceForecast()')
+            playwright.expect(head.locator('.head-remaining')).to_contain_text('983.31')
+            playwright.expect(page.locator('.forecast-head-note')).to_have_count(0)
+            playwright.expect(page.locator('.forecast-head-icon')).to_have_count(0)
+            playwright.expect(head.locator('.printhead-material')).to_have_text('PLA')
+            page.evaluate('pollLive()')
+            page.evaluate('refreshSliceForecast()')
+            playwright.expect(head.locator('.printhead-material')).to_have_text('PLA')
+            assert rig.remaining()[2] == 983.31
+            assert not errors
+        finally:
+            browser.close()
+
+
 def test_print_start_checks_remote_file_without_orca_export(rig):
     rig.store.update(lambda db: db["spools"]["spool0"].update({"remaining_g": 50.0}))
     rig.control("select", filename="single_tool.gcode")

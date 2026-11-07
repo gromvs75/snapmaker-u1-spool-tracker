@@ -76,7 +76,8 @@ SCRIPT = r"""
   });
  }
  const baseRenderSidebar = renderSidebar;
- renderSidebar = function(data) {baseRenderSidebar(data); paintHeads();};
+ let headData = null;
+ renderSidebar = function(data) {headData = data; baseRenderSidebar(data); paintHeads();};
  function render() {
   const entries = state.entries;
   $('heading').textContent = tr().title;
@@ -95,6 +96,9 @@ SCRIPT = r"""
   $('time').textContent = entry ? new Date(entry.observed_at * 1000).toLocaleString(currentLang || 'en') : '';
   $('status').textContent = entry && entry.unknown ? (currentLang === 'ru' ? '? Нет актуального остатка Spoolman' : '? Spoolman balance unavailable') : entry ? (entry.shortage ? '✕ ' + tr().shortage : '✓ ' + tr().enough) : tr().waiting;
   $('status').style.color = entry && entry.shortage ? '#ffab91' : '#82dfb0';
+  // Forecast captions overwrite the base cards. Rebuild them when a forecast
+  // disappears, even if inventory and monitor signatures have not changed.
+  if (headData) { sidebarSignature = ''; baseRenderSidebar(headData); }
   paintHeads();
  }
  $('plate').onchange = () => { selected = $('plate').value; render(); };

@@ -1,8 +1,9 @@
 # Documentation
 
-## Current: 1.3.0
+## Current: 1.3.1
 
 - [Spoolman integration (RU)](guides/spoolman-ru.md) · [English](guides/spoolman-en.md)
+- [1.3.1 release notes](releases/1.3.1.md)
 - [1.3.0 release notes](releases/1.3.0.md)
 
 ## General guides and previous 1.2.1 release

@@ -59,11 +59,27 @@ class ForecastState:
 
     def snapshot(self):
         inventory = self.store.read() if self.store is not None else None
+        # Match content, not the temporary Snorca filename or material weights.
+        # A later slice of the same model is a new forecast, even if bytes match.
+        accounted = {}
+        if inventory is not None:
+            for run in inventory['runs'].values():
+                if run['status'] != 'committed':
+                    continue
+                plan = inventory['plans'].get(run['plan_id'], {})
+                digest = plan.get('sha256')
+                if digest:
+                    accounted[digest] = max(accounted.get(digest, 0), run['start_time'])
         with self.lock:
             project = str(Path(self.latest).parent.parent) if self.latest else None
-            current = [e for e in sorted(self.entries.values(), key=lambda e: e['source']) if str(Path(e['source']).parent.parent) == project]
+            current = [e for e in sorted(self.entries.values(), key=lambda e: e['source'])
+                       if str(Path(e['source']).parent.parent) == project
+                       and not (e.get('sha256') in accounted and
+                                e.get('completed_at_ns', e.get('observed_at', 0) * 1e9) / 1e9
+                                <= accounted[e['sha256']])]
+            latest = max(current, key=lambda e: e.get('completed_at_ns', e.get('observed_at', 0) * 1e9))['source'] if current else None
             return copy.deepcopy({'entries': [forecast_entry(e, self.stock, inventory) for e in current],
-                                  'latest': self.latest, 'project': project,
+                                  'latest': latest, 'project': project,
                                   'safety_margin_g': inventory['safety_margin_g'] if inventory is not None else 5,
                                   'revision': self.revision, 'error': self.error,
                                   'mapping': [0, 1, 2, 3], 'mapping_assumed': True})

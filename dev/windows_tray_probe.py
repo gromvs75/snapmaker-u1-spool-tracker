@@ -10,7 +10,7 @@ from ctypes import wintypes
 
 import faulthandler
 faulthandler.enable()
-faulthandler.dump_traceback_later(15, repeat=True)
+faulthandler.dump_traceback_later(30, repeat=True)
 print("PROBE imports", flush=True)
 
 import spool_tracker
@@ -21,6 +21,8 @@ user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
 user32.FindWindowW.restype = wintypes.HWND
 user32.GetMenuItemCount.argtypes = [wintypes.HMENU]
 user32.GetMenuItemCount.restype = ctypes.c_int
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.IsWindowVisible.restype = wintypes.BOOL
 results = []
 
 
@@ -59,8 +61,14 @@ def probe(app):
             finally:
                 win32.PostMessage(icon._menu_hwnd, 0x001F, 0, 0)  # WM_CANCELMODE
             app._schedule_menu_refresh()
-        app.window_controller.show()
-        record(result='PASS')
+        app._open_dashboard()
+        native = app.window_controller.window.native.Handle.ToInt64()
+        wait_for(lambda: user32.IsWindowVisible(native))
+        app.window_controller.window.evaluate_js("window.pywebview.api.hide(); true")
+        wait_for(lambda: not user32.IsWindowVisible(native))
+        app._open_dashboard()
+        wait_for(lambda: user32.IsWindowVisible(native))
+        record(result='PASS', window='shown, hidden through JS API, reopened')
     except Exception as exc:
         record(result='FAIL', error=repr(exc))
     finally:
@@ -83,5 +91,9 @@ with tempfile.TemporaryDirectory(prefix='tracker-tray-probe-') as directory:
     threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=probe, args=(app,), daemon=True).start()
     print("PROBE app.run", flush=True)
-    app.run()
+    try:
+        assert app.run() == 0
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+        logging.shutdown()
     assert any(row.get('result') == 'PASS' for row in results), results

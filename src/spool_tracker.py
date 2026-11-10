@@ -25,7 +25,7 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.3.3rc1"
 WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None
@@ -2093,16 +2093,32 @@ class TrayApp:
             return 1
         server_started = False
         try:
+            if ISOLATED_ROOT is None:
+                from spoolman_bridge import Bridge, WorkerLockUnavailable
+                self.spoolman_bridge = Bridge(STORE)
+                try:
+                    self.spoolman_bridge.start()
+                except WorkerLockUnavailable as exc:
+                    LOGGER.warning("Inventory worker lock unavailable: %s", exc)
+                    lang = STORE.read().get("language", "en")
+                    message = (
+                        "Не удалось получить блокировку Tracker. Возможно, другая версия ещё работает. "
+                        "Закройте все экземпляры Tracker, включая значок в трее, и повторите запуск. "
+                        "Если ошибка повторится, перезагрузите Windows. Данные и файл блокировки удалять не нужно."
+                        if lang == "ru" else
+                        "Tracker could not acquire its inventory lock. Another version may still be running. "
+                        "Close all Tracker instances, including the tray icon, then try again. "
+                        "If this persists, restart your computer. Do not delete your data or the lock file."
+                    )
+                    show_dialog(message, lang)
+                    return 1
+                DashboardHandler.spoolman_bridge = self.spoolman_bridge
             import pystray
             self.window_controller = DashboardWindow()
             DashboardHandler.window_controller = self.window_controller
             threading.Thread(target=self.server.serve_forever, daemon=True).start()
             server_started = True
             if ISOLATED_ROOT is None:
-                from spoolman_bridge import Bridge
-                self.spoolman_bridge = Bridge(STORE)
-                self.spoolman_bridge.start()
-                DashboardHandler.spoolman_bridge = self.spoolman_bridge
                 self.monitor.start()
                 self.motion_diagnostic.start()
             from forecast_service import ForecastService

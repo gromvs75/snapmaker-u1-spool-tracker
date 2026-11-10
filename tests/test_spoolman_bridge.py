@@ -167,11 +167,11 @@ def test_reprint_is_separate_operation(tmp_path):
 
 def test_two_workers_cannot_start(tmp_path):
     store,fake,bridge,sid=setup(tmp_path)
-    from filelock import Timeout
+    from spoolman_bridge import WorkerLockUnavailable
     bridge.process_lock.acquire()
     try:
         second=Bridge(store,lambda url:fake)
-        with pytest.raises(Timeout):second.start()
+        with pytest.raises(WorkerLockUnavailable):second.start()
     finally:bridge.process_lock.release()
 
 

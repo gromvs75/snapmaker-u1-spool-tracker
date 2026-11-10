@@ -12,7 +12,7 @@ import uuid
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler
 from urllib.error import HTTPError
-from filelock import FileLock
+from filelock import FileLock, Timeout
 
 
 def endpoint(value):
@@ -165,6 +165,10 @@ def book(db, job, amounts):
             state['outbox'][key] = {'job': job, 'local_id': sid, 'url': ref['url'],
                 'spool_id': ref['id'], 'grams': grams, 'created_at': time.time(),
                 'state': 'pending' if state['mode'] == 'send' else 'external'}
+
+
+class WorkerLockUnavailable(RuntimeError):
+    """Another process owns the inventory worker lock."""
 
 
 class Bridge:
@@ -339,7 +343,10 @@ class Bridge:
 
     def start(self):
         self.store.directory.mkdir(parents=True, exist_ok=True)
-        self.process_lock.acquire()  # One worker per local inventory.
+        try:
+            self.process_lock.acquire()  # One worker per local inventory.
+        except Timeout as exc:
+            raise WorkerLockUnavailable(str(self.process_lock.lock_file)) from exc
         self.recover()
         def run():
             while not self.stop_event.is_set():

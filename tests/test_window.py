@@ -155,3 +155,36 @@ def test_second_tray_launch_exits_without_creating_gui(tmp_path, monkeypatch):
     monkeypatch.setattr(spool_tracker.TrayApp, "_activate_existing", staticmethod(lambda: True))
     monkeypatch.setattr(spool_tracker, "DashboardWindow", lambda: 1 / 0)
     assert spool_tracker.TrayApp().run() == 0
+
+
+def test_busy_worker_lock_exits_before_gui_and_monitoring(tmp_path, monkeypatch):
+    from filelock import FileLock, Timeout
+    import pytest
+    store = Store(tmp_path / "inventory", legacy_paths=())
+    store.read()
+    monkeypatch.setattr(spool_tracker, "STORE", store)
+    monkeypatch.setattr(spool_tracker, "ISOLATED_ROOT", None)
+    calls = []
+    server = SimpleNamespace(server_port=8766, server_close=lambda: calls.append("closed"))
+    monkeypatch.setattr(spool_tracker, "ThreadingHTTPServer", lambda *args: server)
+    monkeypatch.setattr(spool_tracker, "DashboardWindow", lambda: pytest.fail("GUI started"))
+    monkeypatch.setattr(spool_tracker, "show_dialog", lambda message, lang: calls.append(message))
+    app = spool_tracker.TrayApp()
+    monkeypatch.setattr(app.monitor, "start", lambda: pytest.fail("Printer monitoring started"))
+    monkeypatch.setattr(app.motion_diagnostic, "start", lambda: pytest.fail("Motion recorder started"))
+    lock_path = str(store.directory / "spoolman-worker.lock")
+    owner = FileLock(lock_path, timeout=0)
+    contender = FileLock(lock_path, timeout=0)
+    before = store.read()
+    with owner:
+        assert app.run() == 1
+        assert calls[-1] == "closed"
+        assert len(calls) == 2
+        assert "Tracker" in calls[0]
+        assert app.spoolman_bridge.thread is None
+        assert store.read() == before
+        with pytest.raises(Timeout):
+            contender.acquire()
+    # Exiting the rejected instance must not damage the lock or prevent restart.
+    with contender:
+        assert contender.is_locked

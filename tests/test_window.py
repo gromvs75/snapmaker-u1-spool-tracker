@@ -194,9 +194,11 @@ def test_webview_injection_exposes_only_backup_actions(monkeypatch):
     import json
     import webview.util
     scripts = []
+    inspected_handles = []
     class InternalHandle:
         def __dir__(self):
-            raise AssertionError("Internal native object was traversed")
+            inspected_handles.append(self)
+            return []
     bridge = spool_tracker.BackupBridge(InternalHandle(), InternalHandle())
     bridge._window = InternalHandle()
     loaded = threading.Event()
@@ -209,5 +211,6 @@ def test_webview_injection_exposes_only_backup_actions(monkeypatch):
     webview.util.inject_pywebview('edgechromium', window)
     assert loaded.wait(3), 'JS API initialization did not finish'
     assert window.events._pywebviewready.is_set()
+    assert inspected_handles == [], "Native handles leaked into JS API inspection"
     functions = json.loads(scripts[-1])
     assert {row['func'] for row in functions} == {'hide', 'export_backup', 'import_backup'}

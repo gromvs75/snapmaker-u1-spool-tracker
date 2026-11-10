@@ -39,9 +39,17 @@ def configure_logging():
         return
     STORE.directory.mkdir(parents=True, exist_ok=True)
     handler = RotatingFileHandler(STORE.directory / "tracker.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s pid=%(process)d thread=%(threadName)s %(name)s: %(message)s"))
     LOGGER.addHandler(handler)
     LOGGER.setLevel(logging.INFO)
+    for name in ('pystray', 'pywebview'):
+        library_logger = logging.getLogger(name)
+        library_logger.addHandler(handler)
+        library_logger.setLevel(logging.INFO)
+    def thread_failure(args):
+        LOGGER.error("Unhandled background exception in %s", args.thread.name if args.thread else "unknown",
+                     exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+    threading.excepthook = thread_failure
 
 
 
@@ -1761,6 +1769,7 @@ class DashboardWindow:
             self.window.events.loaded += self._on_loaded
 
     def _on_loaded(self):
+        LOGGER.info("Dashboard loaded")
         self.ready = True
         if self.pending_forecast:
             self.show_forecast()
@@ -1778,6 +1787,7 @@ class DashboardWindow:
         self.window.evaluate_js('refreshSliceForecast(true); setView("overview");')
 
     def _on_shown(self):
+        LOGGER.info("Dashboard shown")
         self.ready = True
         if self.quitting:
             self.window.destroy()
@@ -1982,20 +1992,24 @@ class TrayApp:
             threading.Thread(target=self.window_controller.show_forecast, daemon=True).start()
 
     def _open_dashboard(self, icon=None, item=None):
+        LOGGER.info("Tray requested dashboard")
         if self.window_controller is not None:
             self.window_controller.show()
 
     def _quit(self, icon=None, item=None):
+        LOGGER.info("Quit requested")
         if self.window_controller is not None:
             self.window_controller.quit()
 
     @staticmethod
     def _show_tray_icon(icon):
+        LOGGER.info("Tray setup ready")
         if sys.platform == "darwin":
             from PyObjCTools import AppHelper
             AppHelper.callAfter(setattr, icon, "visible", True)
         else:
             icon.visible = True
+            LOGGER.info("Tray icon visible")
 
     @staticmethod
     def _activate_existing():
@@ -2139,7 +2153,9 @@ class TrayApp:
             threading.Thread(target=self._refresh, daemon=True).start()
             self.icon.run_detached(setup=self._show_tray_icon)
             self.forecast_service.start()
+            LOGGER.info("Starting dashboard event loop")
             self.window_controller.run()
+            LOGGER.info("Dashboard event loop stopped")
             return 0
         finally:
             self.stop_event.set()

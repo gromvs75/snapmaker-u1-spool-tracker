@@ -8,6 +8,11 @@ import threading
 import time
 from ctypes import wintypes
 
+import faulthandler
+faulthandler.enable()
+faulthandler.dump_traceback_later(15, repeat=True)
+print("PROBE imports", flush=True)
+
 import spool_tracker
 from pystray._util import win32
 
@@ -75,5 +80,6 @@ with tempfile.TemporaryDirectory(prefix='tracker-tray-probe-') as directory:
         os._exit(2)
     threading.Thread(target=watchdog, daemon=True).start()
     threading.Thread(target=probe, args=(app,), daemon=True).start()
+    print("PROBE app.run", flush=True)
     app.run()
     assert any(row.get('result') == 'PASS' for row in results), results

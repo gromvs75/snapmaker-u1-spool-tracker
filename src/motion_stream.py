@@ -426,7 +426,11 @@ class MotionStreamRecorder:
                             # Wait for late motion and history, just as for a
                             # completion. Only the motion path can debit a
                             # partial print; the full slicer plan cannot.
-                            if print_state in ('printing', 'paused') and summary.valid:
+                            profile_at_cancel = current_profile()
+                            same_failed_job = (print_state == 'error' and error_job_start is not None
+                                               and isinstance(profile_at_cancel, dict)
+                                               and profile_at_cancel.get('started_at') == error_job_start)
+                            if (print_state in ('printing', 'paused') or same_failed_job) and summary.valid:
                                 cancel_heads = summary.result()
                                 cancel_total_mm = printer_total_mm
                                 try:

@@ -99,6 +99,10 @@ def apply_history_job(store, printer, job, remote_fingerprint=None, mapping_evid
         if run and run["status"] != "active":
             # A printer history record can transiently report an error before
             # the very same job resumes. Do not apply this to cancellations.
+            if run['status'] == 'error' and status == 'cancelled':
+                run['status'] = 'cancelled'
+                run['terminal_status'] = 'cancelled'
+                _set_plan_status(db['plans'][run['plan_id']], 'cancelled')
             if run['status'] == 'error' and status in ('in_progress', 'completed'):
                 run['status'] = 'review'
                 run['review_reason'] = 'Print resumed after an error; continuity requires verification'
@@ -113,9 +117,9 @@ def apply_history_job(store, printer, job, remote_fingerprint=None, mapping_evid
                         run["replenishment_observed"] = True
                 except MappingError:
                     pass
-            if (run['status'] == 'review' and status == 'completed'
+            if (run['status'] == 'review' and status in ('completed', 'cancelled')
                     and run.get('terminal_status') in ('error', 'interrupted')):
-                run['terminal_status'] = 'completed'
+                run['terminal_status'] = status
             if run["status"] == "review" and status != "in_progress" and not run.get("terminal_status"):
                 run["terminal_status"] = status
             return run["status"]

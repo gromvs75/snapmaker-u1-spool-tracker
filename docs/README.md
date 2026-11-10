@@ -1,9 +1,10 @@
 # Documentation
 
-## Current: 1.3.1
+## Current: 1.3.2
 
 - [Spoolman integration (RU)](guides/spoolman-ru.md) · [English](guides/spoolman-en.md)
-- [1.3.1 release notes](releases/1.3.1.md)
+- [1.3.2 release notes](releases/1.3.2.md)
+- [1.3.1: completed-print forecast fix](releases/1.3.1.md)
 - [1.3.0 release notes](releases/1.3.0.md)
 
 ## General guides and previous 1.2.1 release

@@ -1,7 +1,7 @@
 name: Tests
 on:
   push:
-    branches: [release-1.3.1, release-1.3.0, release-1.2.1, main, fix/stable-release-hardening]
+    branches: [release-1.3.2, release-1.3.1, release-1.3.0, release-1.2.1, main, fix/stable-release-hardening]
   pull_request:
   workflow_dispatch:
 

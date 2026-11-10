@@ -1,12 +1,16 @@
-# Tracker 1.3.1 — инструкция
+# Tracker 1.3.2 — инструкция
+
+## Изменения в 1.3.2
+
+Исправлен учёт частичного расхода, когда наблюдаемая печать сначала переходит в ошибку, а затем отменяется. Используется проверенная запись движений до отмены; повторное событие не списывает расход ещё раз. При отсутствии записи, несовпадении счётчиков или неопределённой катушке нужна проверка. Исправление очистки прогноза учтённой печати из 1.3.1 сохранено. Обновление не восстанавливает автоматически старые неучтённые задания. См. [заметки к выпуску](../releases/1.3.2.md).
 
 **Работает на оригинальной прошивке Snapmaker U1. Кастомная прошивка и установка компонентов на принтер не нужны.**
 
-**[Скачать 1.3.1](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.1). Windows GUI и настоящая нарезка Snorca на Windows остаются непроверенными.** См. [заметки к выпуску](../releases/1.3.1.md).
+**[Скачать 1.3.2](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.2). Windows GUI и настоящая нарезка Snorca на Windows остаются непроверенными.** См. [заметки к выпуску](../releases/1.3.2.md).
 
 ## Установка и настройка постобработки Snorca
 
-1. Скачайте архив 1.3.1. На Mac распакуйте его и перенесите `SnapmakerSpoolTracker-1.3.1.app` в `/Applications`. Можно переименовать его в `SnapmakerSpoolTracker.app`, чтобы путь не зависел от версии. Перед заменой прежней установки экспортируйте JSON-backup и завершите старый Tracker.
+1. Скачайте архив 1.3.2. На Mac распакуйте его и перенесите `SnapmakerSpoolTracker-1.3.2.app` в `/Applications`. Можно переименовать его в `SnapmakerSpoolTracker.app`, чтобы путь не зависел от версии. Перед заменой прежней установки экспортируйте JSON-backup и завершите старый Tracker.
 2. Запустите приложение, откройте через значок строки меню «Настроить катушки и слоты…», добавьте катушки и назначьте T0–T3. Для локальных катушек Spoolman не нужен; если подключаете Spoolman, начните с чтения каталога.
 3. В Snorca откройте **Процесс / Print Settings → Прочее / Others → Скрипты постобработки / Post-processing scripts**. Если поле скрыто, включите расширенный/экспертный режим настроек. Вставьте **одну** команду, соответствующую имени установленного приложения.
 
@@ -16,18 +20,18 @@
 /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
 ```
 
-Если имя из архива 1.3.1 не меняли:
+Если имя из архива 1.3.2 не меняли:
 
 ```text
-/Applications/SnapmakerSpoolTracker-1.3.1.app/Contents/MacOS/SnapmakerSpoolTracker;
+/Applications/SnapmakerSpoolTracker-1.3.2.app/Contents/MacOS/SnapmakerSpoolTracker;
 ```
 
 Точку с запятой в конце сохраните. Если в пути есть пробелы, заключите путь в двойные кавычки, а `;` оставьте после кавычек. Команда вставляется именно в **скрипты постобработки**, не в стартовый G-code принтера и не в Терминал. Замените старую команду Tracker, если она уже есть: не вызывайте две версии. Сохраните пресет процесса и проверьте поле в каждом используемом пресете.
 
-На Windows распакуйте ZIP в постоянную папку, например `C:\Tools\SnapmakerSpoolTracker`. Для EXE из архива 1.3.1 пример команды:
+На Windows распакуйте ZIP в постоянную папку, например `C:\Tools\SnapmakerSpoolTracker`. Для EXE из архива 1.3.2 пример команды:
 
 ```text
-C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.1-Windows.exe;
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.2-Windows.exe;
 ```
 
 Укажите свой фактический путь. Для окна Windows нужен Microsoft Edge WebView2 Runtime. **Windows GUI и настоящая нарезка Snorca на Windows остаются непроверенными.**
@@ -53,13 +57,13 @@ C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.1-Windows.exe;
 
 ## Сборки
 
-macOS: `SnapmakerSpoolTracker-1.3.1-macOS.zip` (Apple Silicon arm64, ad-hoc подпись, без нотарификации). Windows: `SnapmakerSpoolTracker-1.3.1-Windows.zip` (x64, для окна нужен WebView2). Рядом со сборками — SHA256 и BUILD-INFO. Пакеты приложены к релизу по ссылке выше. Предыдущий [pre-release 1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta) доступен на GitHub.
+macOS: `SnapmakerSpoolTracker-1.3.2-macOS.zip` (Apple Silicon arm64, ad-hoc подпись, без нотарификации). Windows: `SnapmakerSpoolTracker-1.3.2-Windows.zip` (x64, для окна нужен WebView2). Рядом со сборками — SHA256 и BUILD-INFO. Пакеты приложены к релизу по ссылке выше. Предыдущий [pre-release 1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta) доступен на GitHub.
 
 Для проверки держите сборки отдельно от установленных приложений. Офлайн-проверка требует `--isolated-root` и искусственных данных; обычный запуск не изолирован. Windows GUI остаётся непроверенным.
 
 ## База и резервные копии
 
-1.3.1 сохраняет каталог базы и порт версий 1.2 beta / 1.2.1. Если этой базы нет, создаётся пустая. Данные старых стабильных версий и Menu Test 1/2 автоматически не импортируются:
+1.3.2 сохраняет каталог базы и порт версий 1.2 beta / 1.2.1. Если этой базы нет, создаётся пустая. Данные старых стабильных версий и Menu Test 1/2 автоматически не импортируются:
 
 - macOS: `~/Library/Application Support/SnapmakerSpoolTracker-Beta12/`.
 - Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker-Beta12\`.

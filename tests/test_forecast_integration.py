@@ -106,14 +106,14 @@ def test_main_backup_bridge_restore_and_export_offline(tmp_path, monkeypatch):
     source.write_text(json.dumps(doc))
     module = SimpleNamespace(FileDialog=SimpleNamespace(OPEN=1, SAVE=2))
     bridge = spool_tracker.BackupBridge(store, module)
-    bridge.window = SimpleNamespace(create_file_dialog=lambda *a, **k: [str(source)])
+    bridge._window = SimpleNamespace(create_file_dialog=lambda *a, **k: [str(source)])
     monkeypatch.setattr(spool_tracker, 'ISOLATED_ROOT', tmp_path)
     assert bridge.import_backup()['status'] == 'ok'
     assert store.read()['spools']['s']['remaining_g'] == 77.5
     assert store.read()['slots']['1'] == 's'
     assert not store.read()['printer']['enabled']
     out = tmp_path / 'roundtrip.json'
-    bridge.window.create_file_dialog = lambda *a, **k: str(out)
+    bridge._window.create_file_dialog = lambda *a, **k: str(out)
     assert bridge.export_backup()['status'] == 'ok'
     assert parse_backup(out)['spools'] == store.read()['spools']
 

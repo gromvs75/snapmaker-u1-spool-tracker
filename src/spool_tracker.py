@@ -25,7 +25,7 @@ from print_statistics import summarize_prints
 from spool_identity import calibration
 from motion_stream import MotionStreamRecorder
 
-APP_VERSION = "1.3.3rc1"
+APP_VERSION = "1.3.3rc2"
 WEB_PORT = 8766
 ISOLATED_ROOT = None
 SLICE_ROOT = None
@@ -1708,29 +1708,33 @@ def normalize_dialog_path(result):
 
 
 class BackupBridge:
-    """Native dialogs are available only to pywebview's injected JS API."""
+    """Expose only actions: pywebview recursively inspects public attributes.
+
+    Native window/store handles must stay private to avoid traversing the
+    WinForms object graph while generating the JavaScript API.
+    """
 
     def __init__(self, store, webview_module):
-        self.store = store
-        self.webview = webview_module
-        self.window = None
+        self._store = store
+        self._webview = webview_module
+        self._window = None
 
     def hide(self):
-        self.window.hide()
+        self._window.hide()
 
     def export_backup(self):
         filename = f"SnapmakerSpoolTracker-backup-{time.strftime('%Y-%m-%d')}.json"
-        selected = normalize_dialog_path(self.window.create_file_dialog(
-            self.webview.FileDialog.SAVE, directory=str(Path.home() / "Documents"),
+        selected = normalize_dialog_path(self._window.create_file_dialog(
+            self._webview.FileDialog.SAVE, directory=str(Path.home() / "Documents"),
             save_filename=filename, file_types=("JSON backup (*.json)",)))
         if not selected:
             return {"status": "cancelled"}
-        path = write_backup(self.store, selected, APP_VERSION)
+        path = write_backup(self._store, selected, APP_VERSION)
         return {"status": "ok", "path": str(path)}
 
     def import_backup(self):
-        selected = normalize_dialog_path(self.window.create_file_dialog(
-            self.webview.FileDialog.OPEN, directory=str(Path.home() / "Documents"),
+        selected = normalize_dialog_path(self._window.create_file_dialog(
+            self._webview.FileDialog.OPEN, directory=str(Path.home() / "Documents"),
             file_types=("JSON backup (*.json)",)))
         if not selected:
             return {"status": "cancelled"}
@@ -1740,9 +1744,9 @@ class BackupBridge:
             restored = parse_backup(selected)
             restored['printer'] = empty_db()['printer']
             restored['monitor'] = empty_db()['monitor']
-            destination = self.store.replace_snapshot(restored)
+            destination = self._store.replace_snapshot(restored)
         else:
-            destination = import_backup(self.store, selected)
+            destination = import_backup(self._store, selected)
         return {"status": "ok", "safety_backup": str(destination)}
 
 
@@ -1758,7 +1762,7 @@ class DashboardWindow:
         self.window = webview_module.create_window(
             "Snapmaker U1 Spool Tracker", f"http://127.0.0.1:{WEB_PORT}",
             js_api=self.backup_bridge, width=900, height=750, min_size=(760, 560), hidden=True)
-        self.backup_bridge.window = self.window
+        self.backup_bridge._window = self.window
         self.window.events.shown += self._on_shown
         self.window.events.closing += self._on_closing
         self.ready = False

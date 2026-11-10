@@ -179,7 +179,7 @@ def test_native_bridge_uses_whole_save_and_open_paths(tmp_path, wrap):
         SAVE = 20
         OPEN = 10
     bridge = BackupBridge(store, type("Webview", (), {"FileDialog": FileDialog}))
-    bridge.window = Window()
+    bridge._window = Window()
     exported = bridge.export_backup()
     assert exported == {"status": "ok", "path": str(path)}
     assert path.is_file()  # A string path must never be reduced to its first character, '/'.
@@ -200,7 +200,7 @@ def test_native_bridge_cancelled_dialogs(tmp_path, result):
         SAVE = 20
         OPEN = 10
     bridge = BackupBridge(store, type("Webview", (), {"FileDialog": FileDialog}))
-    bridge.window = Window()
+    bridge._window = Window()
     assert bridge.export_backup() == {"status": "cancelled"}
     assert bridge.import_backup() == {"status": "cancelled"}
     assert not (store.directory / "backups").exists()

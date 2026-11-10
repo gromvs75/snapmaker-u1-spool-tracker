@@ -43,6 +43,8 @@ def probe(app):
     try:
         wait_for(lambda: app.icon is not None and app.icon.visible)
         wait_for(lambda: app.window_controller.ready)
+        assert app.window_controller.window.events.loaded.wait(15), "JS API did not load"
+        record(api=app.window_controller.window.evaluate_js("Object.keys(window.pywebview.api).sort()"))
         icon = app.icon
         for attempt in range(3):
             time.sleep(2)

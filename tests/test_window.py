@@ -188,3 +188,26 @@ def test_busy_worker_lock_exits_before_gui_and_monitoring(tmp_path, monkeypatch)
     # Exiting the rejected instance must not damage the lock or prevent restart.
     with contender:
         assert contender.is_locked
+
+
+def test_webview_injection_exposes_only_backup_actions(monkeypatch):
+    import json
+    import webview.util
+    scripts = []
+    class InternalHandle:
+        def __dir__(self):
+            raise AssertionError("Internal native object was traversed")
+    bridge = spool_tracker.BackupBridge(InternalHandle(), InternalHandle())
+    bridge._window = InternalHandle()
+    loaded = threading.Event()
+    window = SimpleNamespace(
+        _js_api=bridge, _functions={}, _expose_lock=threading.Lock(),
+        run_js=scripts.append,
+        events=SimpleNamespace(before_load=threading.Event(),
+                               _pywebviewready=threading.Event(), loaded=loaded))
+    monkeypatch.setattr(webview.util, 'load_js_files', lambda *args: ('bootstrap', '%(functions)s'))
+    webview.util.inject_pywebview('edgechromium', window)
+    assert loaded.wait(3), 'JS API initialization did not finish'
+    assert window.events._pywebviewready.is_set()
+    functions = json.loads(scripts[-1])
+    assert {row['func'] for row in functions} == {'hide', 'export_backup', 'import_backup'}

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '1.3.3rc1'
+VERSION = '1.3.3rc2'
 
 
 def main():
@@ -35,7 +35,7 @@ def main():
     notes = (ROOT / 'docs' / 'releases' / f'{VERSION}.md').read_text(encoding='utf-8')
     (stage / 'RELEASE-NOTES.md').write_text(notes.replace('../guides/', 'guides/').replace('../licenses/', 'licenses/'), encoding='utf-8')
     (stage / 'START-HERE.txt').write_text(
-        'Tracker 1.3.3rc1 — startup lock handling test build.\n'
+        'Tracker 1.3.3rc2 — startup lock handling test build.\n'
         'Stock U1 firmware; Spoolman is installed separately.\n'
         'Read guides/spoolman-ru.md or guides/spoolman-en.md before connecting.\n'
         'Export your installed Tracker backup before upgrading.\n'

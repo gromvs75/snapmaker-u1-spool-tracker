@@ -28,10 +28,21 @@ def atomic(path, raw):
     tmp = path.with_name(path.name + '.tmp')
     with tmp.open('wb') as f:
         f.write(raw); f.flush(); os.fsync(f.fileno())
-    os.replace(tmp, path)
-    fd = os.open(path.parent, os.O_RDONLY)
-    try: os.fsync(fd)
-    finally: os.close(fd)
+    if os.name == 'nt':
+        # Windows cannot open directories through os.open for POSIX fsync.
+        # Flush the file above, then request a write-through same-volume move.
+        import ctypes
+        from ctypes import wintypes
+        move = ctypes.WinDLL('kernel32', use_last_error=True).MoveFileExW
+        move.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD)
+        move.restype = wintypes.BOOL
+        if not move(str(tmp), str(path), 0x1 | 0x8):
+            raise ctypes.WinError(ctypes.get_last_error())
+    else:
+        os.replace(tmp, path)
+        fd = os.open(path.parent, os.O_RDONLY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
 
 
 class BenchMigration:

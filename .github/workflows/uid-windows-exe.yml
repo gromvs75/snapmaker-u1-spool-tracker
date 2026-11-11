@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install build and verification dependencies
-        run: python -m pip install pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 pytest==8.3.5 pytest-timeout==2.3.1
+        run: python -m pip install pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1
       - name: Accounting and migration regressions
         run: python -m pytest tests/test_uid_accounting.py tests/test_uid_client.py tests/test_uid_gui.py tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py tests/test_uid_migration.py --timeout=45 --junitxml=output/uid-windows-exe/pytest.xml -q
       - name: Build one-file windowed EXE

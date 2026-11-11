@@ -5,7 +5,7 @@ analysis = Analysis(
     [str(ROOT/'dev/labs/uid_windows_bench/app.py')],
     pathex=[str(ROOT/'src'),str(ROOT)],
     datas=[(str(ROOT/'src/tracker_uid_gui.html'),'.')],
-    hiddenimports=['webview.platforms.winforms','webview.platforms.edgechromium'],
+    hiddenimports=['websocket','webview.platforms.winforms','webview.platforms.edgechromium'],
     excludes=['pytest','tkinter','PyQt5','PyQt6','PySide2','PySide6'],
     noarchive=False, optimize=0,
 )

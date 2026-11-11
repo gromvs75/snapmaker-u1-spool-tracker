@@ -1,5 +1,4 @@
 """Windows WebView2 integration check; synthetic local HTTP/SQLite only."""
-import importlib.util
 import json
 import platform
 from pathlib import Path
@@ -11,12 +10,10 @@ import traceback
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT / 'src'), str(ROOT)]
-spec = importlib.util.spec_from_file_location('gui_fixture', ROOT / 'dev/labs/uid_gui_bench/run.py')
-fixture = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(fixture)
+from dev.labs.uid_gui_bench import run as fixture
 
 
-def main():
+def main(output=None):
     if sys.platform != 'win32':
         raise SystemExit('This check requires actual Windows')
     import webview
@@ -27,14 +24,15 @@ def main():
     if status != win32con.DISP_CHANGE_SUCCESSFUL:
         raise RuntimeError(f'Cannot configure dedicated CI desktop: {status}')
     from PIL import ImageGrab
-    out = ROOT / 'output/uid-windows-gui'
+    out = Path(output) if output is not None else ROOT / 'output/uid-windows-gui'
     out.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix='uid-windows-ci-'))
     owner, fleet = fixture.setup(root, resolution=True)
     server = fixture.serve(owner, fleet, 0, status_reader=lambda pid: (root/'print-state.txt').read_text())
     threading.Thread(target=server.serve_forever, daemon=True).start()
     window = webview.create_window('Tracker 2.0 Windows CI', f'http://127.0.0.1:{server.server_port}', width=1375, height=1000, x=20, y=20)
-    result = {'platform': platform.platform(), 'checks': [], 'success': False,
+    result = {'frozen': bool(getattr(sys, 'frozen', False)), 'executable': sys.executable,
+              'bundle': getattr(sys, '_MEIPASS', None), 'platform': platform.platform(), 'checks': [], 'success': False,
               'interaction': 'Win32 mouse clicks and drag in native WebView2; DOM assertions'}
 
     def js(code):
@@ -143,6 +141,8 @@ def main():
             (root/'clock-offset.txt').write_text('1802');refresh()
             check('state.jobs[0].unlock.completed&&!state.jobs[0].unlock.expired', 'completed window does not relock')
             shot('completed')
+            from dev.labs.uid_windows_bench.replay import verify
+            result['accounting_replay']=verify(root/'replay.sqlite')
             result['success']=True
         except BaseException:
             result['error']=traceback.format_exc()

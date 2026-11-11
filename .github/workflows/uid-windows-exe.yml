@@ -1,0 +1,53 @@
+name: Tracker 2 Windows EXE bench
+on:
+  push:
+    branches: ['test/uid-windows-exe']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  packaged-gui:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build and verification dependencies
+        run: python -m pip install pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 pytest==8.3.5 pytest-timeout==2.3.1
+      - name: Accounting and migration regressions
+        run: python -m pytest tests/test_uid_accounting.py tests/test_uid_client.py tests/test_uid_gui.py tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py tests/test_uid_migration.py --timeout=45 --junitxml=output/uid-windows-exe/pytest.xml -q
+      - name: Build one-file windowed EXE
+        run: python -m PyInstaller --clean --noconfirm packaging/TrackerUidGuiWindows.spec
+      - name: Run EXE outside checkout with no Python paths
+        shell: pwsh
+        run: |
+          $benchDir = Join-Path $env:RUNNER_TEMP 'Tracker EXE isolated'
+          New-Item -ItemType Directory -Force $benchDir | Out-Null
+          Copy-Item dist/Tracker-2.0-Windows-Bench.exe $benchDir
+          $exe = Join-Path $benchDir 'Tracker-2.0-Windows-Bench.exe'
+          $resultDir = Join-Path $env:GITHUB_WORKSPACE 'output/uid-windows-exe'
+          Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+          Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+          $process = Start-Process -FilePath $exe -ArgumentList @('--ci-self-test','--output',('"'+$resultDir+'"')) -WorkingDirectory $benchDir -PassThru
+          if (!$process.WaitForExit(240000)) {
+            taskkill /PID $process.Id /T /F
+            throw 'Frozen GUI timed out'
+          }
+          if ($process.ExitCode -ne 0) { throw "Frozen GUI failed: $($process.ExitCode)" }
+          $result = Get-Content (Join-Path $resultDir 'result.json') -Raw | ConvertFrom-Json
+          if (!$result.success -or !$result.frozen -or !$result.accounting_replay.passed) { throw 'Frozen evidence missing' }
+          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File (Join-Path $resultDir 'sha256.txt')
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tracker-2-windows-exe-results
+          path: output/uid-windows-exe/
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Tracker-2.0-Windows-Bench
+          path: dist/Tracker-2.0-Windows-Bench.exe

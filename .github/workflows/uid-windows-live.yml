@@ -38,17 +38,17 @@ jobs:
           if ($hash -ne $expected) { throw "Rootfs checksum mismatch: $hash vs $expected" }
           wsl --import TrackerBench (Join-Path $env:RUNNER_TEMP 'tracker-wsl') $archive --version 1
           if ($LASTEXITCODE) { throw 'WSL import failed' }
-          $repo = (wsl -d TrackerBench -- wslpath -u $env:GITHUB_WORKSPACE).Trim()
-          wsl -d TrackerBench -- bash -c "tr -d '\r' < '$repo/dev/labs/uid_windows_live_bench/prepare.sh' | bash"
+          $repo = (wsl -d TrackerBench --exec wslpath -u $env:GITHUB_WORKSPACE).Trim()
+          wsl -d TrackerBench --exec bash -c "tr -d '\r' < '$repo/dev/labs/uid_windows_live_bench/prepare.sh' | bash"
           if ($LASTEXITCODE) { throw 'Linux preparation failed' }
       - name: Run packaged GUI against four real Linux processes
         shell: pwsh
         run: |
           $out = Join-Path $env:GITHUB_WORKSPACE 'output/uid-windows-live'
           New-Item -ItemType Directory -Force $out | Out-Null
-          $repo = (wsl -d TrackerBench -- wslpath -u $env:GITHUB_WORKSPACE).Trim()
-          $linuxOut = (wsl -d TrackerBench -- wslpath -u $out).Trim()
-          $args = @('-d','TrackerBench','--','/tmp/tracker-live-source/env/bin/python',"$repo/dev/labs/uid_windows_live_bench/supervisor.py",'--output',$linuxOut)
+          $repo = (wsl -d TrackerBench --exec wslpath -u $env:GITHUB_WORKSPACE).Trim()
+          $linuxOut = (wsl -d TrackerBench --exec wslpath -u $out).Trim()
+          $args = @('-d','TrackerBench','--exec','/tmp/tracker-live-source/env/bin/python',"$repo/dev/labs/uid_windows_live_bench/supervisor.py",'--output',$linuxOut)
           $supervisor = Start-Process wsl.exe -ArgumentList $args -PassThru -RedirectStandardOutput "$out/supervisor.out" -RedirectStandardError "$out/supervisor.err"
           $manifest = Join-Path $out 'manifest.json'
           try {

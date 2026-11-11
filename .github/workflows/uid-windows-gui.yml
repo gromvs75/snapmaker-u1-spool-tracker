@@ -16,9 +16,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install pywebview==6.2.1 Pillow==11.3.0 filelock==3.16.1 pytest==8.3.5
+      - run: python -m pip install pywebview==6.2.1 Pillow==11.3.0 filelock==3.16.1 pytest==8.3.5 pytest-timeout==2.3.1
       - name: Accounting, replay, history and reconnect regressions
-        run: python -m pytest tests/test_uid_accounting.py tests/test_uid_client.py tests/test_uid_gui.py tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py --junitxml=output/uid-windows-gui/pytest.xml -q
+        run: python -m pytest tests/test_uid_accounting.py tests/test_uid_client.py tests/test_uid_gui.py tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py --timeout=45 --junitxml=output/uid-windows-gui/pytest.xml -q
       - name: Native WebView2 window
         run: python dev/labs/uid_windows_bench/run.py
       - uses: actions/upload-artifact@v4

@@ -29,7 +29,7 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     window = webview.create_window('Tracker 2.0 Windows CI', f'http://127.0.0.1:{server.server_port}', width=1375, height=1000)
     result = {'platform': platform.platform(), 'checks': [], 'success': False,
-              'interaction': 'DOM events inside native WebView2; desktop screenshots'}
+              'interaction': 'Win32 mouse clicks and drag in native WebView2; DOM assertions'}
 
     def js(code):
         return window.evaluate_js(code)
@@ -47,8 +47,32 @@ def main():
         assert js(expr), name
         result['checks'].append(name)
 
+    def point(selector):
+        from System import Func
+        from System.Drawing import Point
+        rect = js(f'(()=>{{const e=document.querySelector({json.dumps(selector)});e.scrollIntoView({{block:"center"}});const r=e.getBoundingClientRect();return {{x:r.x+r.width/2,y:r.y+r.height/2,scale:devicePixelRatio}}}})()')
+        origin = window.native.Invoke(Func[Point](lambda: window.native.webview.PointToScreen(Point(0, 0))))
+        return int(origin.X+rect['x']*rect['scale']), int(origin.Y+rect['y']*rect['scale'])
+
     def click(selector):
-        js(f'document.querySelector({json.dumps(selector)}).click()')
+        import ctypes
+        x,y=point(selector)
+        ctypes.windll.user32.SetCursorPos(x,y)
+        ctypes.windll.user32.mouse_event(2,0,0,0,0)
+        ctypes.windll.user32.mouse_event(4,0,0,0,0)
+        time.sleep(.2)
+
+    def drag(source, target):
+        import ctypes
+        x,y=point(source); tx,ty=point(target)
+        ctypes.windll.user32.SetCursorPos(x,y)
+        ctypes.windll.user32.mouse_event(2,0,0,0,0)
+        try:
+            for i in range(1,21):
+                ctypes.windll.user32.SetCursorPos(x+(tx-x)*i//20,y+(ty-y)*i//20)
+                time.sleep(.03)
+        finally:
+            ctypes.windll.user32.mouse_event(4,0,0,0,0)
 
     def shot(name):
         ImageGrab.grab().save(out / (name+'.png'))
@@ -58,7 +82,7 @@ def main():
         time.sleep(.7)
 
     def open_resolve():
-        js('openResolution(state.jobs.find(j=>j.printer_id==="a"))')
+        click('[data-printer=a] > button')
 
     def resolve():
         click('#stoppedAck'); click('#lossAck'); click('#resolveSubmit')
@@ -97,8 +121,7 @@ def main():
             check('$("submit").disabled', 'assignment confirmation required')
             click('#ack');click('#submit');wait('!$("dialog").open');refresh()
             check('state.jobs[0].unlock.completed', 'assignment completes unlock')
-            # Exercise pointer drag handlers inside the real WebView2 DOM.
-            js('''(()=>{const c=document.querySelector('[data-printer=a] [data-spool=manual-black]'),t=document.querySelector('[data-printer=b]'),r=c.getBoundingClientRect(),s=t.getBoundingClientRect(); const opts={bubbles:true,pointerId:1,button:0,buttons:1,clientX:r.x+30,clientY:r.y+30};c.dispatchEvent(new PointerEvent('pointerdown',opts));c.dispatchEvent(new PointerEvent('pointermove',{...opts,clientX:s.x+40,clientY:s.y+40}));c.dispatchEvent(new PointerEvent('pointerup',{...opts,buttons:0,clientX:s.x+40,clientY:s.y+40}));})()''')
+            drag('[data-printer=a] [data-spool=manual-black] h3', '[data-printer=b] h3')
             wait('$("dialog").open')
             check('selection.mode==="transfer"&&$("printer").value==="b"', 'drag opens correct transfer destination')
             check('$("head").querySelector("option[value=\\"1\\"]").disabled', 'occupied head disabled')

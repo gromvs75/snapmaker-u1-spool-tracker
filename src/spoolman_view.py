@@ -26,11 +26,13 @@ PANEL = '''
 #sm-selection {border-top:1px solid #394255;margin-top:24px;padding-top:16px}
 #sm-attach {display:grid;grid-template-columns:minmax(0,1fr) 85px auto;gap:12px}
 #sm-attach select {width:100%;min-width:0}
+#sm-picker {min-width:0} #sm-search {width:100%;margin:6px 0 8px} #sm-search-status {font-size:12px;color:var(--muted);margin:6px 0} #sm-spool {min-height:138px} #sm-attach {align-items:end}
 #sm-history {border-top:1px solid #394255;margin-top:20px;padding-top:18px}
 #sm-history summary {cursor:pointer;font-weight:600}
 #sm-queue button,#sm-linked button {margin:4px}
 #sm-refresh,#sm-linked button,#sm-queue button {background:#222c3e;color:#e1e8f4}
 #sm-error:empty {display:none}
+#sm-assign:disabled {background:#222c3e;color:var(--muted);cursor:default}
 @media(max-width:650px){#sm-server,#sm-send-row{grid-template-columns:1fr}#sm-summary{align-items:flex-start;flex-direction:column}#sm-attach{grid-template-columns:1fr 85px}#sm-assign{grid-column:1/-1}#spoolman-panel{padding:20px}}
 </style>
 <div class="card" id="spoolman-panel">
@@ -53,7 +55,7 @@ PANEL = '''
  <p id="sm-status" role="status" aria-live="polite"></p>
  <div id="sm-selection"><h3 id="sm-selection-title"></h3>
  <form id="sm-attach" class="form-inline">
-  <select id="sm-spool" aria-label="Spoolman spool"></select>
+  <div id="sm-picker"><label for="sm-search" id="sm-search-label"></label><input type="search" id="sm-search" autocomplete="off" aria-controls="sm-spool"><select id="sm-spool" size="5" aria-label="Spoolman spool" required></select><p id="sm-search-status" role="status" aria-live="polite"></p></div>
   <select id="sm-head" aria-label="Toolhead"><option value="0">T0</option><option value="1">T1</option><option value="2">T2</option><option value="3">T3</option></select>
   <button id="sm-assign" type="submit">Assign</button>
  </form>
@@ -67,7 +69,7 @@ SCRIPT = r'''
 <script>
 (() => {
  const $ = id => document.getElementById('sm-' + id);
- let loaded = false, busy = false, savedMode = "off";
+ let loaded = false, busy = false, savedMode = "off", catalog = [];
  const ru = () => currentLang === 'ru';
  const t = (r,e) => ru() ? r : e;
  async function call(action, body) {
@@ -94,15 +96,16 @@ SCRIPT = r'''
   $('selection-title').textContent=t('Катушки для T0–T3','Spools for T0–T3');
   $('sole-text').textContent=t('Подтверждаю: только этот Tracker отправляет расход данного U1.','I confirm: only this Tracker sends usage for this U1.');
   $('save').textContent=t('Сохранить настройки','Save settings'); $('refresh').textContent=t('Обновить каталог','Refresh catalog'); $('assign').textContent=t('Назначить','Assign');
-  $('detach-help').textContent=t('Отвязка удаляет только локальную ссылку; катушка в Spoolman остаётся. Для автономного учёта создайте локальную катушку с проверенным остатком.','Detach removes only the local link. The Spoolman spool is retained. For standalone use, create a local spool with a verified balance.');
+  $('detach-help').textContent=t('Выберите запись Spoolman и головку T0–T3, затем нажмите «Назначить». Это не объединяет её с отдельно созданной локальной катушкой. Совпадение названий не означает одну физическую катушку. Отвязка сохраняет запись Spoolman.','Select a Spoolman record and a T0–T3 toolhead, then click Assign. This does not merge it with a separately created local spool. Matching names do not identify the same physical spool. Detaching keeps the Spoolman record.');
   $('queue-title').textContent=t('Передача расхода','Usage delivery');
   $('status').textContent=s.mode==='off' ? t('Подключение выключено','Connection off') : (s.error || (s.checked_at ? t('Каталог обновлён: ','Catalog refreshed: ')+new Date(s.checked_at*1000).toLocaleString(ru()?'ru-RU':'en-GB') : t('Данные ещё не получены','No data yet')));
   savedMode=s.mode;
   if(!loaded){$('url').value=s.url; $('read').checked=s.mode!=='off'; $('send').checked=s.mode==='send'; $('sole').checked=s.mode==='send'; loaded=true;}
   updateControls();
-  const selected=$('spool').value; $('spool').replaceChildren();
-  for(const item of Object.values(s.catalog)) {if(item.archived||item.remaining_g===null)continue;const o=document.createElement('option');o.value=item.id;o.textContent='#'+item.id+' · '+item.name+' · '+item.material+' · '+item.remaining_g+t(' г',' g');$('spool').append(o);}
-  if([...$('spool').options].some(o=>o.value===selected))$('spool').value=selected;
+  catalog=Object.values(s.catalog).filter(item=>!item.archived&&item.remaining_g!==null);
+  $('search-label').textContent=t('Найти катушку Spoolman','Find a Spoolman spool');
+  $('search').placeholder=t('Название, производитель, материал или ID','Name, manufacturer, material or ID');
+  renderCatalog();
   updateControls();
   $('linked').replaceChildren();
   for(const item of data.linked){const line=document.createElement('p');line.append(document.createTextNode(item.name+' '));line.append(button(t('Отвязать','Detach'),async()=>{if(confirm(t('Отвязать катушку? Данные Spoolman не удаляются.','Detach this spool? Spoolman data is kept.')))await call('detach',{id:item.id});}));$('linked').append(line);}
@@ -119,6 +122,17 @@ SCRIPT = r'''
   }
   if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet');
  }
+ function renderCatalog() {
+  const selected=$('spool').value,terms=$('search').value.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const matches=catalog.filter(item=>{const text=[item.id,'#'+item.id,item.name,item.manufacturer,item.material].join(' ').toLocaleLowerCase();return terms.every(term=>text.includes(term));});
+  $('spool').replaceChildren();
+  for(const item of matches){const o=document.createElement('option');o.value=String(item.id);o.textContent='#'+item.id+' · '+item.name+' · '+item.material+' · '+item.remaining_g+t(' г',' g');$('spool').append(o);}
+  $('spool').value=matches.some(item=>String(item.id)===selected)?selected:'';
+  $('search-status').textContent=matches.length?t('Найдено: ','Found: ')+matches.length+t('. Выберите катушку из списка.','. Select a spool from the list.'):t('Ничего не найдено. Измените запрос.','No matches. Change your search.');
+  updateControls();
+ }
+ $('search').oninput=renderCatalog;
+ $('spool').onchange=updateControls;
  function updateControls() {
   const read=$('read').checked, send=read&&$('send').checked;
   $('send').disabled=!read;
@@ -126,13 +140,13 @@ SCRIPT = r'''
   $('url').required=read;
   $('selection').hidden=savedMode==='off';
   $('refresh').disabled=savedMode==='off';
-  $('assign').disabled=savedMode==='off'||!$('spool').options.length;
+  $('assign').disabled=savedMode==='off'||!$('spool').value;
  }
  $('read').onchange=()=>{if(!$('read').checked){$('send').checked=false;$('sole').checked=false;}updateControls();};
  $('send').onchange=()=>{$('sole').checked=false;updateControls();};
  $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:!$('read').checked?'off':$('send').checked?'send':'read',sole_sender:$('sole').checked});loaded=false;});};
  $('refresh').onclick=()=>actSM(()=>call('refresh',{}));
- $('attach').onsubmit=e=>{e.preventDefault();actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
+ $('attach').onsubmit=e=>{e.preventDefault();if(!$('spool').value)return;actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
  window.refreshSpoolmanAfterRestore=async()=>{loaded=false;await refresh(true);};
  document.getElementById('nav-settings').addEventListener('click',()=>refresh(true).catch(e=>$('error').textContent=e.message));
  setInterval(()=>{if(!busy)refresh().catch(e=>$('error').textContent=e.message);},3000);

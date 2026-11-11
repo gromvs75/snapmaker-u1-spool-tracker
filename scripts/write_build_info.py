@@ -17,7 +17,7 @@ def main():
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     info = {
-        'version': '1.3.3rc4',
+        'version': '1.3.3rc5',
         'commit': git('rev-parse', 'HEAD'),
         'tree': git('rev-parse', 'HEAD^{tree}'),
         'dirty': bool(git('status', '--porcelain', '--untracked-files=no')),

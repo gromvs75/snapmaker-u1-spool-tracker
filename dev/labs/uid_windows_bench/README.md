@@ -16,7 +16,7 @@ The real native WebView2 window receives Win32 mouse clicks and a drag. DOM
 assertions verify consent, expiry, reconnect, renewal, assignment and transfer;
 Pillow captures the Windows desktop. Results and screenshots are written to
 `output/uid-windows-gui/`. Run on an otherwise unused desktop: mouse automation
-moves the pointer. The Actions runner is disposable and dedicated to this check.
+sets the desktop to 1920×1080 and moves the pointer. The Actions runner is disposable and dedicated to this check.
 
 The dedicated workflow `.github/workflows/uid-windows-gui.yml` also runs accounting,
 collector/history, replay and migration tests. A failed assertion fails the job;

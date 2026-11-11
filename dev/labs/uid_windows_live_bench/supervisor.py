@@ -1,0 +1,63 @@
+"""Loopback-only controller of four disposable NO-HARDWARE Linux processes."""
+from pathlib import Path
+import argparse,json,sys,tempfile,shutil,threading,secrets,time
+from http.server import HTTPServer,BaseHTTPRequestHandler
+REPO=Path(__file__).resolve().parents[3]
+sys.path[:0]=[str(REPO/'src'),str(REPO/'dev/labs/uid_multi_bench')]
+import run as multi
+
+
+def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
+    out=args.output;out.mkdir(parents=True,exist_ok=True)
+    multi.ROOT=Path(tempfile.mkdtemp(prefix='uid-windows-live-'))
+    multi.SOURCE=Path('/tmp/tracker-live-source')
+    # Reuse the previously validated, pinned hardware-free process configuration.
+    shutil.copy2(Path(__file__).with_name('fm175xx_reader.py'),multi.SOURCE/'klipper/klippy/extras/fm175xx_reader.py')
+    commands=['emergency_stop','get_config','allocate_oids count=%c','finalize_config crc=%u','get_clock']
+    (multi.SOURCE/'mcu.dict').write_text(json.dumps({'commands':{c:i+2 for i,c in enumerate(commands)},'responses':{'config is_config=%c crc=%u is_shutdown=%c move_count=%hu':10,'clock clock=%u':11},'config':{'CLOCK_FREQ':1000000,'STATS_SUMSQ_BASE':256,'MCU':'uid-bench'},'version':'synthetic-no-hardware'}))
+    printers={};events=[];token=secrets.token_urlsafe(32);server=None
+    try:
+        for pid,port in [('a',18781),('b',18782)]:
+            p=multi.Printer(pid,port);printers[pid]=p
+            shutil.copy2(REPO/'dev/labs/uid_runtime_live_bench/bench_motion.py',p.root/'klipper/klippy/extras/bench_motion.py')
+            with (p.data/'config/printer.cfg').open('a') as f:f.write('\n[bench_motion]\n')
+            p.start()
+            multi.wait(lambda:p.http('/printer/objects/query?print_stats')['result']['status']['print_stats'],timeout=60)
+            # Manual spool channels must be positively empty, not unknown.
+            for ch in range(4):p.clear(ch)
+            events.append({'event':'started','printer':pid,'klipper_pid':p.k.pid,'moonraker_pid':p.m.pid})
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if self.headers.get('X-Bench-Token')!=token:self.send_error(403);return
+                try:
+                    data=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                    action=data['action'];pid=data.get('printer');p=printers.get(pid)
+                    if action=='stop':
+                        old=p.m.pid;p.stop_m();events.append({'event':'stopped','printer':pid,'moonraker_pid':old})
+                    elif action=='start':
+                        p.start_m();multi.wait(lambda:p.http('/server/info')['result']['klippy_connected'],timeout=45)
+                        events.append({'event':'restarted','printer':pid,'moonraker_pid':p.m.pid})
+                    elif action=='shutdown':threading.Thread(target=server.shutdown,daemon=True).start()
+                    else:raise ValueError('Unknown action')
+                    raw=json.dumps({'ok':True,'events':events}).encode();self.send_response(200);self.end_headers();self.wfile.write(raw)
+                except Exception as exc:self.send_error(500,str(exc))
+        server=HTTPServer(('127.0.0.1',18780),Handler)
+        (out/'manifest.json').write_text(json.dumps({'kind':'tracker-process-bench','control_port':18780,'token':token,'printers':{'a':18781,'b':18782}}))
+        server.serve_forever()
+    finally:
+        if server:server.server_close()
+        errors=[]
+        for pid,p in printers.items():
+            try:
+                p.stop_m();p.stop_k()
+                cfg=p.data/'config/printer.cfg';cfg.write_text(cfg.read_text().replace('\n[bench_motion]\n',''));p.close()
+            except Exception as exc:errors.append(str(exc))
+            for name in ['klippy','moonraker','klippy-console','moonraker-console']:
+                log=p.data/f'logs/{name}.log'
+                if log.exists():shutil.copy2(log,out/f'{pid}-{name}.log')
+        shutil.copy2(multi.SOURCE/'dependencies.txt',out/'linux-dependencies.txt')
+        (out/'processes.json').write_text(json.dumps({'events':events,'cleanup_errors':errors,'stopped':all((p.k is None or p.k.poll() is not None) and (p.m is None or p.m.poll() is not None) for p in printers.values())},indent=2))
+        if errors:raise RuntimeError(str(errors))
+
+if __name__=='__main__':main()

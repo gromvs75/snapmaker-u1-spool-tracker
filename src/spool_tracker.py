@@ -1411,6 +1411,8 @@ HTML_PAGE = install_forecast_view(HTML_PAGE.replace('1.1.0-beta.1', APP_VERSION)
 
 from spoolman_view import install as install_spoolman_view
 HTML_PAGE = install_spoolman_view(HTML_PAGE)
+from spoolman_compare_view import install as install_spoolman_compare_view
+HTML_PAGE = install_spoolman_compare_view(HTML_PAGE)
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -1444,6 +1446,9 @@ class WebHandler(BaseHTTPRequestHandler):
         if self.isolated and self.path not in ('/', '/index.html', '/api/data', '/api/statistics', '/api/forecast', '/api/sender/status'):
             return self._response(403, {'error': 'Printer access disabled in isolated mode'})
         try:
+            if self.path == '/api/spoolman/compare':
+                from spoolman_bridge import label_comparison
+                return self._response(200, label_comparison(self.store.read()))
             if self.path == '/api/spoolman/status':
                 from spoolman_bridge import blank
                 db = self.store.read()
@@ -1529,6 +1534,10 @@ class WebHandler(BaseHTTPRequestHandler):
                     bridge.resolve(body.get('id'), body.get('action'), body.get('note'))
                 elif action == 'detach':
                     bridge.detach(body.get('id'))
+                elif action == 'refresh-labels':
+                    bridge.refresh_label_catalog()
+                elif action == 'sync-label':
+                    bridge.sync_label(body.get('id'), body.get('revision'))
                 else:
                     raise ValueError('Unknown Spoolman action')
                 return self._response(200, {'status': 'ok'})

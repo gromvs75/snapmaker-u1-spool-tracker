@@ -93,6 +93,7 @@ def catalog_item(row):
     color = f.get('color_hex', '')
     remaining = row.get('remaining_weight')
     return {'id': row['id'], 'name': name[:100],
+            'manufacturer': brand[:100], 'filament_name': str(f.get('name') or 'Spool')[:100],
             'material': str(f.get('material') or 'Unknown')[:100],
             'remaining_g': None if remaining is None else number(remaining),
             'archived': bool(row.get('archived', False)),
@@ -123,6 +124,8 @@ def validate(state):
             number(item['remaining_g'])
         if not isinstance(item['name'], str) or not isinstance(item['material'], str) or type(item['archived']) is not bool:
             raise ValueError('Invalid cached spool')
+        if any(field in item and not isinstance(item[field], str) for field in ('manufacturer', 'filament_name')):
+            raise ValueError('Invalid cached filament label')
     for key, op in state['outbox'].items():
         if (not isinstance(key, str) or not isinstance(op, dict)
                 or op.get('state') not in ('pending', 'sending', 'uncertain', 'sent', 'external', 'resolved')
@@ -180,6 +183,31 @@ class WorkerLockUnavailable(RuntimeError):
     """Another process owns the inventory worker lock."""
 
 
+def label_comparison(db):
+    state = db.get('spoolman', blank())
+    fresh = (state['mode'] != 'off' and not state['error']
+             and 0 <= time.time() - state['checked_at'] <= 60)
+    rows = []
+    for sid, spool in db['spools'].items():
+        ref = spool.get('spoolman')
+        if not ref:
+            continue
+        item = state['catalog'].get(str(ref['id'])) if ref['url'] == state['url'] else None
+        canonical = '[Spoolman #%d] %s' % (ref['id'], item['name']) if item else ''
+        revision = hashlib.sha256(json.dumps([sid, ref, state['epoch'], spool['name'], canonical],
+                                              sort_keys=True).encode()).hexdigest()
+        rows.append({'id': sid, 'spoolman_id': ref['id'], 'tracker_name': spool['name'],
+                     'canonical_name': canonical, 'manufacturer': item.get('manufacturer', '') if item else '',
+                     'filament_name': item.get('filament_name', item['name']) if item else '',
+                     'material': spool['material'], 'canonical_material': item['material'] if item else '',
+                     'color': spool.get('color'), 'canonical_color': item['color'] if item else None,
+                     'remaining_g': spool['remaining_g'],
+                     'available': bool(fresh and item and not item['archived']),
+                     'matches': bool(canonical and spool['name'] == canonical), 'revision': revision})
+    return {'rows': rows, 'checked_at': state['checked_at'], 'mode': state['mode'],
+            'error': state['error'], 'fresh': fresh}
+
+
 class Bridge:
     def __init__(self, store, client_factory=Client):
         self.store, self.client_factory = store, client_factory
@@ -187,6 +215,40 @@ class Bridge:
         self.mutex = threading.RLock()
         self.thread = None
         self.process_lock = FileLock(str(store.directory / 'spoolman-worker.lock'), timeout=0)
+
+    def label_comparison(self):
+        """Read-only cached comparison. No balance or printer operations."""
+        return label_comparison(self.store.read())
+
+    def refresh_label_catalog(self):
+        """Fetch comparison metadata without silently applying the proposed label."""
+        with self.mutex:
+            before = self.store.read().get('spoolman', blank())
+            if before['mode'] == 'off':
+                raise ValueError('Spoolman is disabled')
+            try:
+                catalog = self.client_factory(before['url']).catalog()
+            except Exception:
+                self.store.update(lambda db: db['spoolman'].update(error='Spoolman unavailable'))
+                raise ValueError('Spoolman unavailable; comparison not refreshed') from None
+            def apply(db):
+                state = db['spoolman']
+                if state['epoch'] != before['epoch']:
+                    raise ValueError('Spoolman connection changed; reload comparison')
+                state.update(catalog=catalog, checked_at=time.time(), error='')
+            self.store.update(apply)
+
+    def sync_label(self, local_id, revision):
+        """Apply a reviewed canonical label only; never write to Spoolman."""
+        with self.mutex:
+            def change(db):
+                row = next((r for r in label_comparison(db)['rows'] if r['id'] == local_id), None)
+                if not row or not row['available']:
+                    raise ValueError('Fresh available Spoolman data required; refresh comparison')
+                if not isinstance(revision, str) or row['revision'] != revision:
+                    raise ValueError('Spool name or catalog changed; reload comparison before syncing')
+                db['spools'][local_id]['name'] = row['canonical_name']
+            self.store.update(change)
 
     def configure(self, url, mode, sole_sender=False):
         if mode not in ('off', 'read', 'send'):

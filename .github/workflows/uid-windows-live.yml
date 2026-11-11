@@ -1,0 +1,21 @@
+name: Tracker 2 Windows process bench
+on:
+  push:
+    branches: ['test/uid-windows-live']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect isolated runner Linux support
+        shell: pwsh
+        run: |
+          Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
+          Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+          wsl --version
+          wsl --list --verbose
+          $global:LASTEXITCODE = 0

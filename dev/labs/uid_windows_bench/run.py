@@ -20,6 +20,12 @@ def main():
     if sys.platform != 'win32':
         raise SystemExit('This check requires actual Windows')
     import webview
+    import win32api, win32con
+    display = win32api.EnumDisplaySettings(None, win32con.ENUM_CURRENT_SETTINGS)
+    display.PelsWidth, display.PelsHeight = 1920, 1080
+    status = win32api.ChangeDisplaySettings(display, 0)
+    if status != win32con.DISP_CHANGE_SUCCESSFUL:
+        raise RuntimeError(f'Cannot configure dedicated CI desktop: {status}')
     from PIL import ImageGrab
     out = ROOT / 'output/uid-windows-gui'
     out.mkdir(parents=True, exist_ok=True)
@@ -27,7 +33,7 @@ def main():
     owner, fleet = fixture.setup(root, resolution=True)
     server = fixture.serve(owner, fleet, 0, status_reader=lambda pid: (root/'print-state.txt').read_text())
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    window = webview.create_window('Tracker 2.0 Windows CI', f'http://127.0.0.1:{server.server_port}', width=1375, height=1000)
+    window = webview.create_window('Tracker 2.0 Windows CI', f'http://127.0.0.1:{server.server_port}', width=1375, height=1000, x=20, y=20)
     result = {'platform': platform.platform(), 'checks': [], 'success': False,
               'interaction': 'Win32 mouse clicks and drag in native WebView2; DOM assertions'}
 
@@ -99,7 +105,7 @@ def main():
             click('#stoppedAck')
             check('$("resolveSubmit").disabled', 'one acknowledgement insufficient')
             shot('dialog')
-            click('#resolveCancel'); open_resolve()
+            click('#resolveCancel'); wait('!$("resolveDialog").open'); open_resolve(); wait('$("resolveDialog").open')
             check('!$("stoppedAck").checked&&!$("lossAck").checked', 'cancel resets consent')
             resolve()
             check('state.jobs[0].unlock.mode==="15_minutes"&&!state.jobs[0].unlock.completed', '15-minute window opens')

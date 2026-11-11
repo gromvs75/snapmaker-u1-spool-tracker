@@ -81,9 +81,18 @@ def catalog_item(row):
     if not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0:
         raise ValueError('Invalid Spoolman spool ID')
     f = row.get('filament', {})
+    name = str(f.get('name') or 'Spool').strip() or 'Spool'
+    vendor = f.get('vendor')
+    brand = vendor.get('name') if isinstance(vendor, dict) else None
+    brand = brand.strip() if isinstance(brand, str) else ''
+    # Spoolman stores the manufacturer separately from the filament name.
+    # Some catalogs already include it; preserve those names without repetition.
+    if brand and not (name.casefold() == brand.casefold()
+                      or name.casefold().startswith(brand.casefold() + ' ')):
+        name = brand + ' ' + name
     color = f.get('color_hex', '')
     remaining = row.get('remaining_weight')
-    return {'id': row['id'], 'name': str(f.get('name') or 'Spool')[:100],
+    return {'id': row['id'], 'name': name[:100],
             'material': str(f.get('material') or 'Unknown')[:100],
             'remaining_g': None if remaining is None else number(remaining),
             'archived': bool(row.get('archived', False)),

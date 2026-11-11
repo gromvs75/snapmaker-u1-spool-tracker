@@ -58,6 +58,64 @@ def complete(store, tmp_path, start=1000):
 def ops(store): return store.read()['spoolman']['outbox']
 
 
+@pytest.mark.parametrize('vendor,name,expected', [
+    ({'name': 'ELEGOO'}, 'RAPID PETG Green', 'ELEGOO RAPID PETG Green'),
+    ({'name': ' ELEGOO '}, 'elegoo RAPID PETG', 'elegoo RAPID PETG'),
+    ({'name': 'НИТ'}, 'PETG дымчатый', 'НИТ PETG дымчатый'),
+    (None, 'White', 'White'),
+    ({}, 'White', 'White'),
+    ({'name': None}, 'White', 'White'),
+    ({'name': '   '}, 'White', 'White'),
+    ('invalid', 'White', 'White'),
+    ({'name': 'ACME'}, 'ACMExtra', 'ACME ACMExtra'),
+    ({'name': 'ELEGOO'}, None, 'ELEGOO Spool'),
+])
+def test_catalog_manufacturer(vendor, name, expected):
+    from spoolman_bridge import catalog_item
+    row = Fake().row()
+    row['filament'].update(vendor=vendor, name=name)
+    assert catalog_item(row)['name'] == expected
+
+
+def test_vendor_refresh_preserves_identity_and_pending_usage(tmp_path):
+    store, fake, bridge, sid = setup(tmp_path)
+    complete(store, tmp_path)
+    before = store.read()
+    original_row = fake.row
+    def branded_row():
+        row = original_row()
+        row['filament']['vendor'] = {'name': 'ELEGOO'}
+        return row
+    fake.row = branded_row
+    bridge.refresh()
+    after = store.read()
+    assert after['spools'][sid]['name'] == '[Spoolman #1] ELEGOO White'
+    assert after['spoolman']['catalog']['1']['name'] == 'ELEGOO White'
+    assert after['slots'] == before['slots']
+    assert after['runs'] == before['runs']
+    assert after['spoolman']['outbox'] == before['spoolman']['outbox']
+    assert after['spoolman']['epoch'] == before['spoolman']['epoch']
+    assert after['spools'][sid]['remaining_g'] == 1000
+    assert fake.writes == 0
+    bridge.send_one()
+    bridge.send_one()
+    assert fake.writes == 1 and fake.used == 20
+    assert store.read()['spools'][sid]['name'] == '[Spoolman #1] ELEGOO White'
+
+
+def test_new_attachment_uses_manufacturer(tmp_path):
+    store = Store(tmp_path / 'inventory')
+    fake = Fake()
+    row = fake.row()
+    row['filament']['vendor'] = {'name': 'ELEGOO'}
+    fake.row = lambda: row
+    bridge = Bridge(store, lambda url: fake)
+    bridge.configure(URL, 'read', True)
+    bridge.attach(1, 0)
+    assert store.read()['spools'][remote_id(URL, 1)]['name'] == '[Spoolman #1] ELEGOO White'
+    assert fake.writes == 0
+
+
 def test_completed_print_queues_exact_amount_without_local_debit(tmp_path):
     store, fake, bridge, sid = setup(tmp_path)
     printer, job = complete(store, tmp_path)

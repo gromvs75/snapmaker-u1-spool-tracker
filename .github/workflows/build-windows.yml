@@ -1,7 +1,7 @@
 name: Windows build
 on:
   push:
-    branches: [fix/windows-startup-lock, release-1.3.2, release-1.3.1, release-1.3.0, spoolman-integration, release-1.2.1, main, fix/stable-release-hardening, v1.1-beta-prep, v1.2-beta-integration-build]
+    branches: [fix/spoolman-vendor-label, fix/windows-startup-lock, release-1.3.2, release-1.3.1, release-1.3.0, spoolman-integration, release-1.2.1, main, fix/stable-release-hardening, v1.1-beta-prep, v1.2-beta-integration-build]
   pull_request:
   workflow_dispatch:
 
@@ -31,20 +31,20 @@ jobs:
         timeout-minutes: 2
         run: python dev/windows_tray_probe.py
       - name: Package executable
-        run: python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.3.3rc2-Windows src/spool_tracker.py
+        run: python -m PyInstaller --noconfirm --clean --paths . --paths src --windowed --onefile --name SnapmakerSpoolTracker-1.3.3rc3-Windows src/spool_tracker.py
       - name: Smoke-test packaged application
         shell: pwsh
         run: |
-          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-1.3.3rc2-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
+          $app = Start-Process -FilePath 'dist/SnapmakerSpoolTracker-1.3.3rc3-Windows.exe' -ArgumentList '--self-test' -Wait -PassThru
           if ($app.ExitCode -ne 0) { throw "Packaged self-test failed: $($app.ExitCode)" }
       - name: Assemble distribution
-        run: python scripts/package_release.py Windows dist/SnapmakerSpoolTracker-1.3.3rc2-Windows.exe
+        run: python scripts/package_release.py Windows dist/SnapmakerSpoolTracker-1.3.3rc3-Windows.exe
       - name: Build provenance
-        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-1.3.3rc2-Windows.zip dist/BUILD-INFO-Windows.json
+        run: python scripts/write_build_info.py dist/SnapmakerSpoolTracker-1.3.3rc3-Windows.zip dist/BUILD-INFO-Windows.json
       - uses: actions/upload-artifact@v4
         with:
-          name: SnapmakerSpoolTracker-1.3.3rc2-Windows
+          name: SnapmakerSpoolTracker-1.3.3rc3-Windows
           path: |
-            dist/SnapmakerSpoolTracker-1.3.3rc2-Windows.zip*
+            dist/SnapmakerSpoolTracker-1.3.3rc3-Windows.zip*
             dist/BUILD-INFO-Windows.json
           if-no-files-found: error

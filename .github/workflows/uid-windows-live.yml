@@ -29,9 +29,13 @@ jobs:
           $archive = Join-Path $env:RUNNER_TEMP $name
           curl.exe --fail --location --retry 3 ($base+$name) --output $archive
           if ($LASTEXITCODE) { throw 'Rootfs download failed' }
-          $sums = (Invoke-WebRequest ($base+'SHA256SUMS')).Content
+          $sumFile = Join-Path $env:RUNNER_TEMP 'ubuntu-SHA256SUMS'
+          curl.exe --fail --location ($base+'SHA256SUMS') --output $sumFile
+          if ($LASTEXITCODE) { throw 'Checksum download failed' }
+          $sums = Get-Content $sumFile -Raw
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
-          if ($sums -notmatch $hash) { throw 'Rootfs checksum mismatch' }
+          $expected = (($sums -split "`n" | Where-Object { $_.EndsWith($name) }) -split '\s+')[0]
+          if ($hash -ne $expected) { throw "Rootfs checksum mismatch: $hash vs $expected" }
           wsl --import TrackerBench (Join-Path $env:RUNNER_TEMP 'tracker-wsl') $archive --version 1
           if ($LASTEXITCODE) { throw 'WSL import failed' }
           $repo = (wsl -d TrackerBench -- wslpath -u $env:GITHUB_WORKSPACE).Trim()

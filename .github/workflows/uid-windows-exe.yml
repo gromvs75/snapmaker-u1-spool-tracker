@@ -41,6 +41,11 @@ jobs:
           $result = Get-Content (Join-Path $resultDir 'result.json') -Raw | ConvertFrom-Json
           if (!$result.success -or !$result.frozen -or !$result.accounting_replay.passed) { throw 'Frozen evidence missing' }
           Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File (Join-Path $resultDir 'sha256.txt')
+      - name: Verify ordinary EXE launch and clean exit
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:RUNNER_TEMP 'Tracker EXE isolated/Tracker-2.0-Windows-Bench.exe'
+          python dev/labs/uid_windows_bench/normal_launch.py --exe "$exe" --output output/uid-windows-exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -81,6 +81,8 @@ def main():
             ctypes.windll.user32.mouse_event(4,0,0,0,0)
 
     def shot(name):
+        # DOM changes precede the Windows compositor's painted frame.
+        time.sleep(1)
         ImageGrab.grab().save(out / (name+'.png'))
 
     def refresh():

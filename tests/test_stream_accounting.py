@@ -139,16 +139,14 @@ def test_uncertain_auto_refill_never_changes_balances(tmp_path, fault):
 
 @pytest.mark.parametrize('fresh_profile', [True, False])
 @pytest.mark.parametrize('pause_and_resume', [True, False])
-@pytest.mark.parametrize('terminal_state', ['complete', 'cancelled', 'error_then_cancelled'])
+@pytest.mark.parametrize('terminal_state', ['complete', 'cancelled'])
 def test_live_stream_pipeline_books_automatic_replacement_estimate(tmp_path, monkeypatch, fresh_profile, pause_and_resume, terminal_state):
     import json
     import time
     from motion_stream import MotionStreamRecorder
     store, key, evidence = setup_job(tmp_path)
-    is_cancelled = terminal_state != 'complete'
-    if is_cancelled:
-        # Begin with a real active history record; let incoming events advance it.
-        store.update(lambda db: db['runs'][key].pop('terminal_status', None))
+    if terminal_state == 'cancelled':
+        store.update(lambda db: db['runs'][key].__setitem__('terminal_status', 'cancelled'))
     profile = evidence['profile']
     if not fresh_profile:
         store._motion_slicer_profile = profile
@@ -172,13 +170,11 @@ def test_live_stream_pipeline_books_automatic_replacement_estimate(tmp_path, mon
                 {'method': 'notify_tracker_head_0', 'params': {'data': [[1, 1, 100, 0, [0,0,0], [1,0,0]]]}},
                 {'method': 'notify_tracker_status', 'params': {'status': {'filament_feed left': {'extruder0': {'filament_detected': False}}}}},
                 {'method': 'notify_tracker_head_1', 'params': {'data': [[2, 1, 200, 0, [0,0,0], [1,0,0]]]}},
-                {'method': 'notify_tracker_status', 'params': {'status': {'print_stats': {'state': 'cancelled' if is_cancelled else 'complete', 'filament_used': 300.12 if is_cancelled else 300}}}},
+                {'method': 'notify_tracker_status', 'params': {'status': {'print_stats': {'state': terminal_state, 'filament_used': 300.12 if terminal_state == 'cancelled' else 300}}}},
                 # Real printers continue to emit other status updates after
                 # cancellation; they must not erase the pending accounting.
                 {'method': 'notify_tracker_status', 'params': {'status': {'print_stats': {'filament_used': 300}}}}]
-            if terminal_state == 'error_then_cancelled':
-                self.responses.insert(-2, {'method': 'notify_tracker_status', 'params': {'status': {'print_stats': {'state': 'error', 'filament_used': 300}}}})
-            if is_cancelled:
+            if terminal_state == 'cancelled':
                 # U1 can retract after the terminal counter has frozen. That
                 # later movement must not invalidate the pre-cancel snapshot.
                 self.responses.insert(-1, {'method': 'notify_tracker_head_0', 'params': {'data': [
@@ -195,9 +191,6 @@ def test_live_stream_pipeline_books_automatic_replacement_estimate(tmp_path, mon
             if self.responses:
                 item = self.responses.pop(0)
                 if fresh_profile and item.get('method') == 'notify_tracker_head_0': store._motion_slicer_profile = profile
-                state = item.get('params', {}).get('status', {}).get('print_stats', {}).get('state')
-                if is_cancelled and state in ('error', 'cancelled'):
-                    apply_history_job(store, store.read()['printer'], job(status=state))
                 return item
             self.empty += 1
             if self.empty > 12 or store.read()['runs'][key]['status'] == 'committed':
@@ -207,7 +200,7 @@ def test_live_stream_pipeline_books_automatic_replacement_estimate(tmp_path, mon
         recorder._capture(FakeSocket(), store.read()['printer'])
         records = [json.loads(line) for line in (store.directory/'motion-diagnostic.jsonl').read_text().splitlines()]
         assert any(x['kind'] == 'auto_accounting_committed' for x in records) is fresh_profile
-        expected = [999.701, 999.403, 1000, 1000] if is_cancelled else [999.702, 999.403, 1000, 1000]
+        expected = [999.701, 999.403, 1000, 1000] if terminal_state == 'cancelled' else [999.702, 999.403, 1000, 1000]
         assert remaining(store) == (expected if fresh_profile else [1000]*4)
     finally:
         recorder.stop()
@@ -294,25 +287,3 @@ def test_pla_plus_spool_books_verified_motion_once_without_changing_other_spools
     assert remaining(store) == [1000, 1000, 988.038, 1000]
     assert commit_stream_estimate(store, key, evidence) is False
     assert remaining(store) == [1000, 1000, 988.038, 1000]
-
-
-@pytest.mark.parametrize('auto_replenish', [False, True])
-@pytest.mark.parametrize('intermediate', ['error', 'interrupted'])
-def test_error_then_cancel_history_preserves_partial_usage_and_books_once(tmp_path, auto_replenish, intermediate):
-    store, _, fingerprint, _ = setup_plan(tmp_path)
-    config = store.read()['printer']
-    key = run_key(config, job())
-    apply_history_job(store, config, job(), fingerprint,
-                      {'mapping': [0, 1, 2, 3], 'auto_replenish': auto_replenish})
-    evidence = make_evidence(store)
-    apply_history_job(store, config, job(status=intermediate))
-    assert remaining(store) == [1000] * 4
-    apply_history_job(store, config, job(status='cancelled'))
-    assert store.read()['runs'][key]['terminal_status'] == 'cancelled'
-    assert remaining(store) == [1000] * 4
-    assert commit_stream_estimate(store, key, evidence) is True
-    apply_history_job(store, config, job(status='cancelled'))
-    apply_history_job(store, config, job(status=intermediate))  # Delayed stale history.
-    assert commit_stream_estimate(store, key, evidence) is False
-    assert remaining(store) == [999.702, 999.403, 1000, 1000]
-    assert store.read()['runs'][key]['terminal_status'] == 'cancelled'

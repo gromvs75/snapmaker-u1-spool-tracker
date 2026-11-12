@@ -43,3 +43,11 @@ Full regression run: **501 passed, 5 skipped** (`PYTHONPATH=src:. /private/tmp/t
 The Spools page now has four task tabs: Library, T0–T3 assignments, Add spool and Parameters. Library search filters in place without rebuilding forms; its list scrolls within a bounded panel. Colored front-view spool icons reuse the Spoolman renderer. External Spoolman balances are read-only and unavailable delete/color actions are not presented. Existing API validation is unchanged.
 
 Browser checks: multiword search and empty results; adding a local 123 g PLA spool and retaining it after reload; saving manual identification, 1.75 mm diameter and 1.24 g/cm³ density through the existing confirmation; assigning that spool to T3; no external-spool delete controls; all four tabs; no page overflow at 700 px; no console errors. Temporary test records were removed afterwards. Calibration is now allowed on this lab's disposable database; printer tag-reading remains blocked. Regression: 501 passed, 5 skipped.
+
+## Two-section sidebar and combined creation
+
+The Spools navigation now uses a left sidebar matching Settings: Library and Toolheads T0–T3. Add spool opens a modal from the library; each row has a Parameters action. Toolheads offers Add and assign, using the same creation modal with a head selector and replacement confirmation.
+
+Creation with assignment is a single Store update via `/api/spools/add` with optional `assign_slot` and `expected_slot`. It validates the head, rejects stale assignment and printing/paused/active-run states before adding a spool, then creates the record and assigns it atomically. Plain creation retains its existing behavior. Six focused backend tests cover success, invalid head, stale assignment, null head, printing and plain creation.
+
+Browser checks: ordinary creation leaves all heads unchanged; combined creation assigns the selected T3; parameters opens the selected record; reload preserves data; at 700 px no horizontal page overflow. Only disposable fixture records were used and cleaned up afterwards. Builds, installed app data, printer access and 2.0.0 are outside this change.

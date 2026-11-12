@@ -1279,7 +1279,9 @@ async function loadData() {
       button.style.background='var(--danger)'; button.style.padding='5px 10px';
       button.addEventListener('click', () => act(async () => { if (confirm(`${x.delete}: ${spool.name}?`)) { await api('/api/spools/delete', {id}); await loadData(); } }));
       if(spool.spoolman) actionCell.append(node('span',currentLang==='ru'?'Управляется в Spoolman':'Managed in Spoolman','inventory-external'));
-      else actionCell.append(button); row.append(actionCell); table.append(row);
+      else actionCell.append(button);
+      const params=node('button',currentLang==='ru'?'Параметры':'Parameters','inventory-param-button');params.type='button';params.onclick=()=>window.inventoryParameters?.(id);actionCell.append(params);
+      row.append(actionCell); table.append(row);
     }
     renderPreflight(data, true);
     renderGuard(data, true);
@@ -1309,8 +1311,10 @@ el('slots-form').addEventListener('submit', event => act(async () => {
 }));
 el('add-spool-form').addEventListener('submit', event => act(async () => {
   event.preventDefault();
-  await api('/api/spools/add', {name:el('new-name').value, material:el('new-mat').value, remaining_g:el('new-weight').value, color:el('new-color').value});
-  event.target.reset(); el('new-color').value = ''; await loadData(); window.inventorySaved?.();
+  const createOptions=window.inventoryCreateOptions ? await window.inventoryCreateOptions() : {};
+  if(createOptions===null)return;
+  await api('/api/spools/add', {...createOptions,name:el('new-name').value, material:el('new-mat').value, remaining_g:el('new-weight').value, color:el('new-color').value});
+  event.target.reset(); el('new-color').value = ''; await loadData(); window.inventoryCreated?.();
 }));
 el('reserve-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData(); window.reportSettingsSaved?.();
@@ -1380,7 +1384,7 @@ el('cal-form').addEventListener('submit', event => { event.preventDefault(); act
   if (mode === 'manual_confirmed' && !confirm(currentLang === 'ru' ? 'Подтвердите: катушка без метки определена вручную. Если её заменят, точность нельзя гарантировать. Автоматический учёт пока не включён.' : 'Confirm this untagged spool is identified manually. A replacement cannot be guaranteed to be detected. Automatic accounting is not enabled yet.')) return;
   const nullable = id => el(id).value.trim() === '' ? null : el(id).value;
   await api('/api/spools/calibration', {id, calibration: {uid, identity_mode: mode, diameter_mm: nullable('cal-diameter'), density_g_cm3: nullable('cal-density')}});
-  await loadData();
+  await loadData(); window.inventoryParametersSaved?.();
 }); });
 let backupBusy = false;
 async function withBackupDialog(action) {
@@ -1614,6 +1618,14 @@ class WebHandler(BaseHTTPRequestHandler):
                 raise ValueError('One Spoolman spool cannot feed multiple heads')
             db["slots"] = body
         elif self.path == "/api/spools/add":
+            assign_slot = body.get("assign_slot")
+            if "assign_slot" in body:
+                if not isinstance(assign_slot, str) or assign_slot not in db["slots"]:
+                    raise ValidationError("Choose a valid toolhead")
+                if body.get("expected_slot") != db["slots"][assign_slot]:
+                    raise ValidationError("Toolhead assignment changed. Reopen the form and try again")
+                if db["monitor"]["state"] in ("printing", "paused") or any(r["status"] == "active" for r in db["runs"].values()):
+                    raise ValidationError("Wait until printing ends before assigning a spool")
             spool_id = f"spool_{uuid.uuid4().hex}"
             db["spools"][spool_id] = {"name": label(body.get("name"), "Name"),
                 "material": label(body.get("material"), "Material"),
@@ -1621,6 +1633,8 @@ class WebHandler(BaseHTTPRequestHandler):
             color = spool_color(body.get("color"))
             if color:
                 db["spools"][spool_id]["color"] = color
+            if assign_slot is not None:
+                db["slots"][assign_slot] = spool_id
             return spool_id
         elif self.path == "/api/spools/color":
             spool_id = body.get("id")

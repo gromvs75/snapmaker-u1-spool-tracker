@@ -136,7 +136,7 @@ SCRIPT = r'''
  function spoolArt(color) {
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 64 64');svg.setAttribute('class','sm-art');svg.setAttribute('aria-hidden','true');
   const fill=/^#[0-9a-f]{6}$/i.test(color||'')?color:'#8290a5';
-  svg.innerHTML='<ellipse cx="44" cy="30" rx="13" ry="23" fill="#29384d" stroke="#94a3b8"/><path d="M19 14L43 9v43l-24 6z" fill="'+fill+'"/><path d="m22 20 19-5m-19 11 19-5m-19 11 19-5m-19 11 19-5m-19 11 19-5" stroke="#111827" opacity=".3"/><ellipse cx="20" cy="35" rx="14" ry="23" fill="#35455b" stroke="#94a3b8"/><ellipse cx="20" cy="35" rx="10" ry="18" fill="'+fill+'"/><ellipse cx="20" cy="35" rx="5" ry="9" fill="#111827" stroke="#bdc8d5" stroke-width="2"/>';
+  svg.innerHTML='<circle cx="32" cy="33" r="28" fill="#080e18" opacity=".35"/><circle cx="32" cy="31" r="27" fill="#344155" stroke="#8795a9" stroke-width="1.5"/><circle cx="32" cy="31" r="22.5" fill="'+fill+'" stroke="#111a28" stroke-width="1"/><g fill="none" stroke="#0b1220" stroke-opacity=".18" stroke-width=".8"><circle cx="32" cy="31" r="19.5"/><circle cx="32" cy="31" r="16.5"/><circle cx="32" cy="31" r="13.5"/></g><g fill="#344155" stroke="#8795a9" stroke-width=".7" stroke-linejoin="round"><path d="M29 7h6l1 16h-8z"/><path d="m29 7h6l1 16h-8z" transform="rotate(120 32 31)"/><path d="m29 7h6l1 16h-8z" transform="rotate(240 32 31)"/></g><circle cx="32" cy="31" r="10" fill="#344155" stroke="#8795a9" stroke-width="1"/><circle cx="32" cy="31" r="5.5" fill="#101722" stroke="#a8b4c5" stroke-width="1.5"/><path d="M10 23a23 23 0 0 1 14-14" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="1.5" stroke-linecap="round"/>';
   return svg;
  }
  function visualCatalog(matches) {

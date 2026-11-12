@@ -69,7 +69,7 @@ SCRIPT = r'''
 <script>
 (() => {
  const $ = id => document.getElementById('sm-' + id);
- let loaded = false, busy = false, savedMode = "off", catalog = [];
+ let loaded = false, busy = false, savedMode = "off", catalog = [], linked = [];
  const ru = () => currentLang === 'ru';
  const t = (r,e) => ru() ? r : e;
  async function call(action, body) {
@@ -102,6 +102,7 @@ SCRIPT = r'''
   savedMode=s.mode;
   if(!loaded){$('url').value=s.url; $('read').checked=s.mode!=='off'; $('send').checked=s.mode==='send'; $('sole').checked=s.mode==='send'; loaded=true;}
   updateControls();
+  linked=data.linked;
   catalog=Object.values(s.catalog).filter(item=>!item.archived&&item.remaining_g!==null);
   $('search-label').textContent=t('Найти катушку Spoolman','Find a Spoolman spool');
   $('search').placeholder=t('Название, производитель, материал или ID','Name, manufacturer, material or ID');
@@ -130,7 +131,27 @@ SCRIPT = r'''
   $('spool').value=matches.some(item=>String(item.id)===selected)?selected:'';
   $('search-status').textContent=matches.length?t('Найдено: ','Found: ')+matches.length+t('. Выберите катушку из списка.','. Select a spool from the list.'):t('Ничего не найдено. Измените запрос.','No matches. Change your search.');
   updateControls();
+  visualCatalog(matches);
  }
+ function spoolArt(color) {
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 64 64');svg.setAttribute('class','sm-art');svg.setAttribute('aria-hidden','true');
+  const fill=/^#[0-9a-f]{6}$/i.test(color||'')?color:'#8290a5';
+  svg.innerHTML='<ellipse cx="44" cy="30" rx="13" ry="23" fill="#29384d" stroke="#94a3b8"/><path d="M19 14L43 9v43l-24 6z" fill="'+fill+'"/><path d="m22 20 19-5m-19 11 19-5m-19 11 19-5m-19 11 19-5m-19 11 19-5" stroke="#111827" opacity=".3"/><ellipse cx="20" cy="35" rx="14" ry="23" fill="#35455b" stroke="#94a3b8"/><ellipse cx="20" cy="35" rx="10" ry="18" fill="'+fill+'"/><ellipse cx="20" cy="35" rx="5" ry="9" fill="#111827" stroke="#bdc8d5" stroke-width="2"/>';
+  return svg;
+ }
+ function visualCatalog(matches) {
+  const list=$('visual-list');if(!list)return;const focusId=list.contains(document.activeElement)?document.activeElement.dataset.spoolId:null;list.replaceChildren();
+  const make=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};
+  for(const item of matches){const b=make('button');b.type='button';b.className='sm-spool-row';b.dataset.spoolId=item.id;b.setAttribute('aria-pressed',String($('spool').value===String(item.id)));const label=make('span');label.append(make('strong',item.name),make('small',item.material+' · #'+item.id));const weight=make('span',item.remaining_g+t(' г',' g'));weight.className='sm-weight';b.append(spoolArt(item.color),label,weight);b.onclick=()=>{$('spool').value=String(item.id);const link=linked.find(x=>x.remote_id===item.id);if(link?.slots.length)$('head').value=String(link.slots[0]);renderCatalog();};list.append(b);}
+  if(focusId){const target=[...list.children].find(e=>e.dataset.spoolId===focusId);target?.focus({preventScroll:true});}
+  if(!matches.length)list.append(make('p',t('Катушки не найдены','No spools found')));
+  const item=catalog.find(x=>String(x.id)===$('spool').value), details=$('selected-details');details.replaceChildren();
+  const link=linked.find(x=>x.remote_id===item?.id),detach=$('detach-selected');detach.disabled=!link||busy;
+  if(item){details.append(spoolArt(item.color),make('p',item.name),make('small',item.material+' · #'+item.id+' · '+item.remaining_g+t(' г',' g')),make('p',link?.slots.length?t('Назначена: ','Assigned: ')+link.slots.map(x=>'T'+x).join(', '):t('Не назначена','Unassigned')));}else details.append(make('p',t('Выберите катушку из списка','Select a spool')));
+  detach.onclick=()=>{if(!link)return;actSM(async()=>{if(confirm(t('Отвязать катушку? Данные Spoolman не удаляются.','Detach this spool? Spoolman data is kept.')))await call('detach',{id:link.id});});};
+  $('refresh-selected').disabled=savedMode==='off'||busy;
+ }
+
  $('search').oninput=renderCatalog;
  $('spool').onchange=updateControls;
  function updateControls() {
@@ -144,9 +165,9 @@ SCRIPT = r'''
  }
  $('read').onchange=()=>{if(!$('read').checked){$('send').checked=false;$('sole').checked=false;}updateControls();};
  $('send').onchange=()=>{$('sole').checked=false;updateControls();};
- $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:!$('read').checked?'off':$('send').checked?'send':'read',sole_sender:$('sole').checked});loaded=false;});};
+ $('connect').onsubmit=e=>{e.preventDefault();actSM(async()=>{await call('configure',{url:$('url').value,mode:!$('read').checked?'off':$('send').checked?'send':'read',sole_sender:$('sole').checked});loaded=false;window.reportSettingsSaved?.();});};
  $('refresh').onclick=()=>actSM(()=>call('refresh',{}));
- $('attach').onsubmit=e=>{e.preventDefault();if(!$('spool').value)return;actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
+ $('attach').onsubmit=e=>{e.preventDefault();if(!$('spool').value)return;if(!confirm(t('Назначить выбранную катушку на ','Assign selected spool to ')+'T'+$('head').value+'?'))return;actSM(()=>call('attach',{id:Number($('spool').value),slot:Number($('head').value)}));};
  window.refreshSpoolmanAfterRestore=async()=>{loaded=false;await refresh(true);};
  document.getElementById('nav-settings').addEventListener('click',()=>refresh(true).catch(e=>$('error').textContent=e.message));
  setInterval(()=>{if(!busy)refresh().catch(e=>$('error').textContent=e.message);},3000);

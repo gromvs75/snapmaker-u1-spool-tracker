@@ -1307,7 +1307,7 @@ el('add-spool-form').addEventListener('submit', event => act(async () => {
   event.target.reset(); el('new-color').value = ''; await loadData();
 }));
 el('reserve-form').addEventListener('submit', event => act(async () => {
-  event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData();
+  event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData(); window.reportSettingsSaved?.();
 }));
 for (const id of ['printer-host','printer-port']) el(id).addEventListener('input',()=>{el('printer-test-result').textContent='';});
 function printerFields() {
@@ -1317,7 +1317,7 @@ el('printer-form').addEventListener('submit', event => act(async () => {
   event.preventDefault();
   const fields = printerFields();
   if (fields.guard_mode === 'strict' && !confirm((guardText[currentLang] || guardText.en).confirm)) return;
-  await api('/api/printer/config', fields); await loadData();
+  await api('/api/printer/config', fields); await loadData(); window.reportSettingsSaved?.();
 }));
 el('printer-test').addEventListener('click', () => act(async () => {
   const fields = printerFields(), key = `${fields.host}:${fields.port}`;
@@ -1413,6 +1413,8 @@ from spoolman_view import install as install_spoolman_view
 HTML_PAGE = install_spoolman_view(HTML_PAGE)
 from spoolman_compare_view import install as install_spoolman_compare_view
 HTML_PAGE = install_spoolman_compare_view(HTML_PAGE)
+from settings_view import install as install_settings_view
+HTML_PAGE = install_settings_view(HTML_PAGE)
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -1453,7 +1455,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 from spoolman_bridge import blank
                 db = self.store.read()
                 return self._response(200, {'state': db.get('spoolman', blank()),
-                    'linked': [dict(id=k, name=v['name']) for k, v in db['spools'].items() if v.get('spoolman')]})
+                    'linked': [dict(id=k, name=v['name'], remote_id=v['spoolman']['id'], slots=[int(slot)-1 for slot, sid in db['slots'].items() if sid == k]) for k, v in db['spools'].items() if v.get('spoolman')]})
             if self.path == '/api/forecast':
                 return self._response(200, self.forecast_service.snapshot() if self.forecast_service else {'entries': [], 'revision': 0, 'safety_margin_g': 0, 'error': ''})
             if self.path in ("/", "/index.html"):

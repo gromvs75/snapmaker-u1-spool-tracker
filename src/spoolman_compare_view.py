@@ -66,7 +66,7 @@ SCRIPT = r'''
  async function open(){if(!dialog.open)dialog.showModal();loading=true;controls();message(t('loading'));try{await load();$('search').focus();}catch(e){comparison=null;message(e.message,true);}finally{loading=false;controls();}}
  window.openSpoolmanComparison=open;
  $('close').onclick=()=>dialog.close();
- $('settings').onclick=()=>{dialog.close();document.getElementById('nav-settings').click();document.getElementById('spoolman-panel').scrollIntoView({block:'start'});};
+ $('settings').onclick=()=>{dialog.close();document.getElementById('nav-settings').click();window.showTrackerSpoolmanSettings?.();document.getElementById('spoolman-panel').scrollIntoView({block:'start'});};
  $('search').oninput=()=>{if(!busy)render();};
  dialog.querySelectorAll('[data-sc-filter]').forEach(b=>b.onclick=()=>{if(busy)return;filter=b.dataset.scFilter;dialog.querySelectorAll('[data-sc-filter]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));render();});
  $('refresh').onclick=async()=>{if(busy||loading)return;busy=true;controls();try{await request('refresh-labels',{});await load();}catch(e){comparison=null;message(e.message,true);}finally{busy=false;controls();}};

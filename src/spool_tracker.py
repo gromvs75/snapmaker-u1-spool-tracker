@@ -1256,24 +1256,30 @@ async function loadData() {
     for (const [id, spool] of Object.entries(data.spools)) {
       const row = node('tr');
       row.dataset.spoolId = id;
+      row.dataset.search = [spool.name, spool.material, id].join(' ');
       const nameCell = node('td'); nameCell.title = id;
-      if (spool.color) nameCell.append(colorDot(spool.color));
-      nameCell.append(node('strong', spool.name));
+      const identity = node('div', undefined, 'inventory-name');
+      if (window.trackerSpoolArt) identity.append(window.trackerSpoolArt(spool.color));
+      const title = node('span');title.append(node('strong', spool.name.replace(/^\[Spoolman #\d+\]\s*/, '')));
+      title.append(node('small', spool.spoolman ? 'Spoolman #' + spool.spoolman.id : (currentLang === 'ru' ? 'Локальная катушка' : 'Local spool')));
+      identity.append(title);nameCell.append(identity);
       const picker = node('details', undefined, 'color-picker');
       picker.append(node('summary', currentLang === 'ru' ? 'Цвет' : 'Color'));
       picker.append(makePalette(spool.color, color => act(async () => { await api('/api/spools/color', {id, color}); await loadData(); })));
-      nameCell.append(picker); row.append(nameCell);
+      if (!spool.spoolman) nameCell.append(picker); row.append(nameCell);
       row.append(node('td', spool.material));
       const weightCell = node('td');
       const input = node('input'); input.type='number'; input.min='0'; input.step='any'; input.value=spool.remaining_g;
       input.style.width='115px'; input.style.maxWidth='100%';
       input.addEventListener('input', () => { input.dataset.dirty = '1'; });
       input.addEventListener('change', () => act(async () => { await api('/api/spools/update', {id, remaining_g:input.value}); await loadData(); }));
-      weightCell.append(input, document.createTextNode(` ${gramUnit()}`)); row.append(weightCell);
+      if(spool.spoolman) weightCell.append(document.createTextNode(`${spool.remaining_g} ${gramUnit()}`));
+      else weightCell.append(input, document.createTextNode(` ${gramUnit()}`)); row.append(weightCell);
       const actionCell = node('td'); const button = node('button', t.deleteBtn, 'delete-spool');
       button.style.background='var(--danger)'; button.style.padding='5px 10px';
       button.addEventListener('click', () => act(async () => { if (confirm(`${x.delete}: ${spool.name}?`)) { await api('/api/spools/delete', {id}); await loadData(); } }));
-      actionCell.append(button); row.append(actionCell); table.append(row);
+      if(spool.spoolman) actionCell.append(node('span',currentLang==='ru'?'Управляется в Spoolman':'Managed in Spoolman','inventory-external'));
+      else actionCell.append(button); row.append(actionCell); table.append(row);
     }
     renderPreflight(data, true);
     renderGuard(data, true);
@@ -1299,12 +1305,12 @@ for (const button of document.querySelectorAll('.top-nav [data-view]')) {
 el('slots-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); const form = new FormData(event.target); const slots = {};
   for (let i=1; i<=4; i++) slots[i] = form.get(`slot_${i}`);
-  await api('/api/slots', slots); await loadData();
+  await api('/api/slots', slots); await loadData(); window.inventorySaved?.();
 }));
 el('add-spool-form').addEventListener('submit', event => act(async () => {
   event.preventDefault();
   await api('/api/spools/add', {name:el('new-name').value, material:el('new-mat').value, remaining_g:el('new-weight').value, color:el('new-color').value});
-  event.target.reset(); el('new-color').value = ''; await loadData();
+  event.target.reset(); el('new-color').value = ''; await loadData(); window.inventorySaved?.();
 }));
 el('reserve-form').addEventListener('submit', event => act(async () => {
   event.preventDefault(); await api('/api/settings', {safety_margin_g:el('reserve-input').value}); await loadData(); window.reportSettingsSaved?.();
@@ -1415,6 +1421,8 @@ from spoolman_compare_view import install as install_spoolman_compare_view
 HTML_PAGE = install_spoolman_compare_view(HTML_PAGE)
 from settings_view import install as install_settings_view
 HTML_PAGE = install_settings_view(HTML_PAGE)
+from inventory_view import install as install_inventory_view
+HTML_PAGE = install_inventory_view(HTML_PAGE)
 
 
 class WebHandler(BaseHTTPRequestHandler):

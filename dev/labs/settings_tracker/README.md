@@ -37,3 +37,9 @@ The approved settings prototype remains in `dev/labs/settings_preview/`. This in
 Native Windows/Mac GUI and real printer communication have not been tested in this change. No application build or CI build was requested or produced.
 
 Full regression run: **501 passed, 5 skipped** (`PYTHONPATH=src:. /private/tmp/tracker-cancel-test-env/bin/python -m pytest -q`). The project's older `venv` lacked `websockets`; it was not modified. The complete run used an existing separate test environment.
+
+## Compact Spools section
+
+The Spools page now has four task tabs: Library, T0–T3 assignments, Add spool and Parameters. Library search filters in place without rebuilding forms; its list scrolls within a bounded panel. Colored front-view spool icons reuse the Spoolman renderer. External Spoolman balances are read-only and unavailable delete/color actions are not presented. Existing API validation is unchanged.
+
+Browser checks: multiword search and empty results; adding a local 123 g PLA spool and retaining it after reload; saving manual identification, 1.75 mm diameter and 1.24 g/cm³ density through the existing confirmation; assigning that spool to T3; no external-spool delete controls; all four tabs; no page overflow at 700 px; no console errors. Temporary test records were removed afterwards. Calibration is now allowed on this lab's disposable database; printer tag-reading remains blocked. Regression: 501 passed, 5 skipped.

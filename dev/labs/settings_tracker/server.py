@@ -51,7 +51,7 @@ class Lab:
                     return self._response(403,{'error':'Стенд: подключение к принтеру и внешние действия отключены'})
                 return super().do_GET()
             def do_POST(self):
-                if self.path not in ('/api/lang','/api/settings','/api/printer/config','/api/slots','/api/spools/add','/api/spools/update','/api/spools/delete','/api/spools/color','/api/spoolman/configure','/api/spoolman/refresh','/api/spoolman/attach','/api/spoolman/detach','/api/spoolman/sync-label','/api/spoolman/refresh-labels'):
+                if self.path not in ('/api/lang','/api/settings','/api/printer/config','/api/slots','/api/spools/add','/api/spools/update','/api/spools/delete','/api/spools/color','/api/spools/calibration','/api/spoolman/configure','/api/spoolman/refresh','/api/spoolman/attach','/api/spoolman/detach','/api/spoolman/sync-label','/api/spoolman/refresh-labels'):
                     return self._response(403,{'error':'Стенд: подключение к принтеру и внешние действия отключены'})
                 return super().do_POST()
         Handler.store=self.store

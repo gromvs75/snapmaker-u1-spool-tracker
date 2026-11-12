@@ -139,6 +139,7 @@ SCRIPT = r'''
   svg.innerHTML='<circle cx="32" cy="33" r="28" fill="#080e18" opacity=".35"/><circle cx="32" cy="31" r="27" fill="#344155" stroke="#8795a9" stroke-width="1.5"/><circle cx="32" cy="31" r="22.5" fill="'+fill+'" stroke="#111a28" stroke-width="1"/><g fill="none" stroke="#0b1220" stroke-opacity=".18" stroke-width=".8"><circle cx="32" cy="31" r="19.5"/><circle cx="32" cy="31" r="16.5"/><circle cx="32" cy="31" r="13.5"/></g><g fill="#344155" stroke="#8795a9" stroke-width=".7" stroke-linejoin="round"><path d="M29 7h6l1 16h-8z"/><path d="m29 7h6l1 16h-8z" transform="rotate(120 32 31)"/><path d="m29 7h6l1 16h-8z" transform="rotate(240 32 31)"/></g><circle cx="32" cy="31" r="10" fill="#344155" stroke="#8795a9" stroke-width="1"/><circle cx="32" cy="31" r="5.5" fill="#101722" stroke="#a8b4c5" stroke-width="1.5"/><path d="M10 23a23 23 0 0 1 14-14" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="1.5" stroke-linecap="round"/>';
   return svg;
  }
+ window.trackerSpoolArt = spoolArt;
  function visualCatalog(matches) {
   const list=$('visual-list');if(!list)return;const focusId=list.contains(document.activeElement)?document.activeElement.dataset.spoolId:null;list.replaceChildren();
   const make=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e;};

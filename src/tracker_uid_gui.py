@@ -7,7 +7,7 @@ import time
 from tracker_uid_catalog import UidCatalog
 
 
-def serve(owner, fleet, port=0, *, status_reader=None):
+def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
     token=secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -32,6 +32,7 @@ def serve(owner, fleet, port=0, *, status_reader=None):
             locations=owner.call('refresh');state=owner.call('inspect')
             from tracker_uid_presentation import history_presentation
             state.update(owner.call('library_snapshot'))
+            state['delivery']=owner.call('delivery_list')
             for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
             state['active_spools']=owner.call('active_spools')
             state['occupied']=[r for r in locations if r.get('identity_mode')!='manual']
@@ -58,7 +59,11 @@ def serve(owner, fleet, port=0, *, status_reader=None):
                     observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call('resolve_interrupted',**data,observation=observation))
-                commands={'/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
+                if self.path=='/api/delivery_send':
+                    if sender is None:raise ValueError('Spoolman sender is not enabled for this session.')
+                    if data!={'confirmed':True}:raise ValueError('Explicit send confirmation required')
+                    return self.reply(200,{'status':sender.send_one()})
+                commands={'/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
                           '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
                           '/api/backup':'export_backup'}
                 if self.path in commands:

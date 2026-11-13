@@ -1,7 +1,7 @@
 """Catalog commands executed only by AccountingOwner's SQLite thread.
 
 External identity is (server URL, spool ID), never a display name. External
-consumption is held for reconciliation; this integration has no remote sender.
+consumption starts held; explicit delivery approval is handled by Delivery.
 """
 import hashlib
 import json

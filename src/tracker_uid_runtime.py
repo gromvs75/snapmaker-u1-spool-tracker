@@ -59,6 +59,8 @@ class AccountingOwner:
             lifecycle = MotionLifecycle(UidMotionAdapter(service))
             from tracker_uid_library import Library
             library = Library(service.accounting)
+            from tracker_uid_delivery import Delivery
+            delivery = Delivery(service.accounting)
             self.ready.set_result(threading.get_ident())
             while True:
                 item = self.queue.get()
@@ -71,7 +73,9 @@ class AccountingOwner:
                 operation, (args, kwargs), snapshot, future = item
                 try:
                     fleet.value = snapshot
-                    if operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
+                    if operation in ('delivery_list','delivery_audit','delivery_decide','delivery_claim','delivery_finish'):
+                        result=getattr(delivery,operation.removeprefix('delivery_'))(*args,**kwargs)
+                    elif operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
                         result = getattr(library, 'snapshot' if operation=='library_snapshot' else operation)(*args, **kwargs)
                     elif operation in ('create_spool','detach_spool'):
                         result = getattr(library, 'create' if operation=='create_spool' else 'detach')(*args, fleet=fleet.snapshot(), **kwargs)

@@ -33,6 +33,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
             from tracker_uid_presentation import history_presentation
             state.update(owner.call('library_snapshot'))
             state['delivery']=owner.call('delivery_list')
+            state['connections']=owner.call('connection_state') if hasattr(owner,'connected') else None
             for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
             state['active_spools']=owner.call('active_spools')
             state['occupied']=[r for r in locations if r.get('identity_mode')!='manual']
@@ -46,8 +47,10 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
             if not self.authorized():return self.reply(403,{'error':'Forbidden'})
             try:
                 size=int(self.headers.get('Content-Length','0'))
-                if not 0<size<8192:raise ValueError('Invalid request size')
+                if not 0<size<(46*1024*1024 if self.path in ('/api/validate_backup','/api/restore_backup') else 16384):raise ValueError('Invalid request size')
                 data=json.loads(self.rfile.read(size))
+                if self.path in ('/api/connections_start','/api/connections_stop','/api/validate_backup','/api/restore_backup') and not hasattr(owner,'connected'):
+                    raise ValueError('Managed session required')
                 if self.path=='/api/resolve':
                     if not {'job_key','expected_version','confirmed','accept_unaccounted'}<=set(data) or set(data)-{'job_key','expected_version','confirmed','accept_unaccounted','mode'}:
                         raise ValueError('Неверные параметры разрешения задания.')
@@ -63,7 +66,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                     if sender is None:raise ValueError('Spoolman sender is not enabled for this session.')
                     if data!={'confirmed':True}:raise ValueError('Explicit send confirmation required')
                     return self.reply(200,{'status':sender.send_one()})
-                commands={'/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
+                commands={'/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
                           '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
                           '/api/backup':'export_backup'}
                 if self.path in commands:

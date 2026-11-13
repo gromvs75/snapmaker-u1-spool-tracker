@@ -43,8 +43,11 @@ class Library:
         return {'values':data, 'revision':revision(data)}
 
     def save_settings(self, values, expected_revision):
-        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url'}:
+        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers'}:
             raise ValueError('Неверные настройки.')
+        if 'printers' in values:
+            from tracker_uid_settings import validate_printers
+            values=dict(values,printers=validate_printers(values['printers']))
         names=values.get('printer_names',{})
         if not isinstance(names,dict) or any(not isinstance(k,str) or not isinstance(v,str) or not v.strip() or len(v)>100 for k,v in names.items()):
             raise ValueError('Неверное имя принтера.')

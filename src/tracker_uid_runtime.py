@@ -86,6 +86,19 @@ class AccountingOwner:
                     elif operation == 'transfer_manual': result = service.accounting.transfer_manual(*args, fleet=fleet.snapshot(), **kwargs)
                     elif operation == 'resolve_interrupted': result = service.accounting.resolve_interrupted(*args,fleet=fleet.snapshot(),**kwargs)
                     elif operation == 'release_manual': result = service.accounting.release_manual(*args, **kwargs)
+                    elif operation == 'backup_package':
+                        from tracker_uid_backup import export
+                        result=export(catalog.db)
+                    elif operation == 'validate_backup':
+                        from tracker_uid_backup import validate
+                        result=validate(kwargs['package'],catalog.db)
+                    elif operation == 'restore_backup':
+                        from tracker_uid_backup import restore
+                        result=restore(kwargs['package'],catalog.db,kwargs['expected_revision'])
+                        service=TrackerUidService(fleet,catalog)
+                        lifecycle=MotionLifecycle(UidMotionAdapter(service))
+                        library=Library(service.accounting)
+                        delivery=Delivery(service.accounting)
                     elif operation == 'export_backup':
                         import sqlite3, tempfile, base64
                         from pathlib import Path

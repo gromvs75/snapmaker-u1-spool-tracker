@@ -30,9 +30,13 @@ def serve(owner, fleet, port=0, *, status_reader=None):
             if self.path!='/api/state':return self.reply(404,{'error':'Not found'})
             if not self.authorized():return self.reply(403,{'error':'Forbidden'})
             locations=owner.call('refresh');state=owner.call('inspect')
+            from tracker_uid_presentation import history_presentation
+            state.update(owner.call('library_snapshot'))
+            for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
             state['active_spools']=owner.call('active_spools')
             state['occupied']=[r for r in locations if r.get('identity_mode')!='manual']
             state['printers']=[{'id':pid,'name':s.get('name',{'a':'U1_1','b':'U1_2'}.get(pid,pid)),'ready':s['state']=='ready'} for pid,s in fleet.snapshot().items()]
+            for p in state['printers']:p['name']=state['settings']['values'].get('printer_names',{}).get(p['id'],p['name'])
             self.reply(200,state)
         def do_POST(self):
             if not self.authorized():return self.reply(403,{'error':'Forbidden'})
@@ -51,6 +55,20 @@ def serve(owner, fleet, port=0, *, status_reader=None):
                     observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call('resolve_interrupted',**data,observation=observation))
+                commands={'/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
+                          '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
+                          '/api/backup':'export_backup'}
+                if self.path in commands:
+                    return self.reply(200,owner.call(commands[self.path],**data))
+                if self.path=='/api/refresh_catalog':
+                    from tracker_uid_spoolman import Client
+                    settings=owner.call('settings')
+                    url=settings['values'].get('spoolman_url','')
+                    try: items=Client(url).catalog()
+                    except Exception:
+                        if url:owner.call('cache_catalog',url,None)
+                        raise ValueError('Spoolman недоступен. Каталог не обновлён.')
+                    return self.reply(200,owner.call('cache_catalog',url,items))
                 command={'/api/assign' :'assign_manual','/api/transfer':'transfer_manual'}.get(self.path)
                 if not command:return self.reply(404,{'error':'Not found'})
                 if 'expected_version' not in data or data.get('confirmed') is not True:raise ValueError('Подтвердите физическое назначение.')

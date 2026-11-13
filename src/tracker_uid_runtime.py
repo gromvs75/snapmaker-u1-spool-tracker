@@ -82,6 +82,15 @@ class AccountingOwner:
                     elif operation == 'transfer_manual': result = service.accounting.transfer_manual(*args, fleet=fleet.snapshot(), **kwargs)
                     elif operation == 'resolve_interrupted': result = service.accounting.resolve_interrupted(*args,fleet=fleet.snapshot(),**kwargs)
                     elif operation == 'release_manual': result = service.accounting.release_manual(*args, **kwargs)
+                    elif operation == 'export_backup':
+                        import sqlite3, tempfile, base64
+                        from pathlib import Path
+                        with tempfile.TemporaryDirectory(prefix='uid-backup-') as folder:
+                            target=Path(folder)/'tracker.sqlite'
+                            backup=sqlite3.connect(target)
+                            try: catalog.db.backup(backup)
+                            finally: backup.close()
+                            result={'filename':'tracker-2.0-backup.sqlite','base64':base64.b64encode(target.read_bytes()).decode()}
                     elif operation == 'active_spools': result = [r[0] for r in catalog.db.execute("SELECT t.spool_id FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active'")]
                     elif operation == 'inspect':
                         result = {'thread_id': threading.get_ident(),

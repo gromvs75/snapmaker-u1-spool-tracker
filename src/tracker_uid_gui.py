@@ -71,7 +71,7 @@ def serve(owner, fleet, port=0, *, status_reader=None):
                     return self.reply(200,owner.call('cache_catalog',url,items))
                 command={'/api/assign' :'assign_manual','/api/transfer':'transfer_manual'}.get(self.path)
                 if not command:return self.reply(404,{'error':'Not found'})
-                if 'expected_version' not in data or data.get('confirmed') is not True:raise ValueError('Подтвердите физическое назначение.')
+                if not isinstance(data.get('expected_version'),str) or data.get('confirmed') is not True:raise ValueError('Подтвердите физическое назначение.')
                 result=owner.call(command,**data)
                 self.reply(200,result)
             except (ValueError,TypeError,KeyError,OSError,TimeoutError) as exc:self.reply(409,{'error':str(exc)})

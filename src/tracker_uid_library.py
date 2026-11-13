@@ -114,7 +114,7 @@ class Library:
             if remote:self.db.execute('INSERT INTO uid_remote_links VALUES(?,?,?)',(sid,remote['url'],remote['id']))
             result={'spool_id':sid}
             if assignment:
-                if set(assignment)!={'printer_id','channel','expected_version','confirmed'} or assignment['confirmed'] is not True or assignment['channel'] not in ('0','1','2','3'):
+                if set(assignment)!={'printer_id','channel','expected_version','confirmed'} or not isinstance(assignment['expected_version'],str) or assignment['confirmed'] is not True or assignment['channel'] not in ('0','1','2','3'):
                     raise ValueError('Подтвердите физическое назначение.')
                 result.update(self.accounting._assign_manual(assignment['printer_id'],assignment['channel'],sid,fleet,assignment['expected_version']))
         return result

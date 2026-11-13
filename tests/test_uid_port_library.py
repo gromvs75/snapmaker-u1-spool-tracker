@@ -88,3 +88,27 @@ def test_preferences_revision_and_reopen(lib):
     l.save_settings({'printer_names':{'a':'Bench A'},'spoolman_url':'http://127.0.0.1:18899/'},old['revision'])
     assert l.settings()['values']['spoolman_url']=='http://127.0.0.1:18899'
     with pytest.raises(ValueError):l.save_settings({},old['revision'])
+
+def test_migrate_133_external_identity_and_history_preserved(tmp_path):
+    import json
+    from test_uid_migration import fixed_storage as storage
+    from tracker_uid_migration import BenchMigration
+    (tmp_path/'.tracker-migration-bench').write_text('synthetic-only')
+    (tmp_path/'legacy').mkdir()
+    data=storage.empty_db();data['printer'].update(host='bench.local',enabled=True)
+    import spoolman_bridge as bridge
+    sid=bridge.remote_id('http://127.0.0.1:18899',42)
+    data['spoolman']=bridge.blank()
+    data['spoolman'].update(url='http://127.0.0.1:18899',mode='read',epoch='bench')
+    data['spools']={sid:dict(name='Old external',material='PLA',remaining_g=123.456,spoolman={'url':'http://127.0.0.1:18899','id':42})}
+    data['slots']['1']=sid
+    (tmp_path/'legacy/spools_u1.json').write_text(json.dumps(data))
+    m=BenchMigration(tmp_path,validator=storage.validate_db);m.migrate({'bench.local:7125':'a'}, {})
+    c=UidCatalog(m.target);l=Library(UidAccounting(c))
+    try:
+        row=l.snapshot()['spools'][0]
+        assert row['spool_id']==sid and row['remaining_mg']==123456
+        assert row['remote']=={'url':'http://127.0.0.1:18899','remote_id':42}
+        assert c.db.execute('SELECT confirmed FROM manual_assignments').fetchone()[0]==0
+    finally:c.close()
+    assert m.restore_legacy()['mode']=='restored'

@@ -100,7 +100,7 @@ class BenchMigration:
                 key = history_identity(pid,run['job_id'],run['start_time'])
                 runs.append((key,pid,run['job_id'],str(run['start_time']),old_key,run['status'],encode(run).decode()))
             if len({r[0] for r in runs}) != len(runs): raise ValueError('Duplicate canonical history identity')
-            manual_slots={ch:sid for ch,sid in data.get('slots',{}).items() if sid and sid not in bindings and not data['spools'][sid].get('spoolman')}
+            manual_slots={ch:sid for ch,sid in data.get('slots',{}).items() if sid and sid not in bindings }
             manual_pid=None
             if manual_slots:
                 cfg=data['printer'];manual_pid=printer_ids[cfg['host'].casefold()+':'+str(cfg['port'])]
@@ -111,6 +111,8 @@ class BenchMigration:
             cat=UidCatalog(self.stage)
             try:
                 accounting=UidAccounting(cat)
+                from tracker_uid_library import Library
+                Library(accounting)
                 cat.db.executescript('''
                     CREATE TABLE migration_source (payload BLOB NOT NULL, sha TEXT NOT NULL);
                     CREATE TABLE legacy_spools (spool_id TEXT PRIMARY KEY, payload TEXT NOT NULL, automatic INTEGER NOT NULL);
@@ -120,12 +122,14 @@ class BenchMigration:
                 with accounting.transaction():
                     cat.db.execute('INSERT INTO migration_source VALUES(?,?)',(raw,digest(raw)))
                     for sid, spool in data['spools'].items():
-                        # Remote balances cannot be treated as a local debit ledger.
+                        # Preserve external identity; new remote operations remain held.
                         automatic = sid in bindings and not spool.get('spoolman')
                         cat.db.execute('INSERT INTO legacy_spools VALUES(?,?,?)',(sid,encode(spool).decode(),automatic))
-                        if not spool.get('spoolman'):
-                            cat.db.execute('INSERT INTO uid_spools VALUES(?,?,?,?)',(sid,bindings.get(sid),spool['name'],mg(spool['remaining_g'])))
-                            cat.db.execute('INSERT INTO spool_details VALUES(?,?)',(sid,encode(spool).decode()))
+                        cat.db.execute('INSERT INTO uid_spools VALUES(?,?,?,?)',(sid,bindings.get(sid) if automatic else None,spool['name'],mg(spool['remaining_g'])))
+                        cat.db.execute('INSERT INTO spool_details VALUES(?,?)',(sid,encode(spool).decode()))
+                        if spool.get('spoolman'):
+                            ref=spool['spoolman']
+                            cat.db.execute('INSERT INTO uid_remote_links VALUES(?,?,?)',(sid,ref['url'],ref['id']))
                     for slot,sid in manual_slots.items():
                         channel=str(int(slot)-1)
                         ambiguous=list(manual_slots.values()).count(sid)>1

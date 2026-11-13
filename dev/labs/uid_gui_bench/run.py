@@ -53,8 +53,8 @@ def main():
         if args.window:
             import threading,webview
             thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-            webview.create_window('Tracker 2.0 · стенд',f'http://127.0.0.1:{server.server_port}',width=1375 if args.resolution else 1202,height=1000 if args.resolution else 950)
-            webview.start(gui='edgechromium' if sys.platform=='win32' else None,private_mode=True,storage_path=str(root/'webview'))
+            from tracker_uid_window import UidWindow
+            UidWindow(f'http://127.0.0.1:{server.server_port}', root/'webview').run()
             run_info['native_event_loop_returned']=True
             run_info['renderer']=getattr(webview,'renderer',None)
         else:server.serve_forever()

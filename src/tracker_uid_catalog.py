@@ -6,7 +6,7 @@ Not a replacement for the application's accounting engine or inventory schema.
 import sqlite3
 import json
 from pathlib import Path
-from filelock import FileLock
+from filelock import FileLock, Timeout
 import uuid
 from collections import Counter
 from tracker_uid_client import canonical_uid
@@ -15,15 +15,25 @@ from tracker_uid_client import canonical_uid
 class UidCatalog:
     def __init__(self, path):
         self._migration_lock = None
+        self._writer_lock = FileLock(str(Path(path).resolve())+".writer.lock", timeout=0)
+        try:
+            self._writer_lock.acquire()
+        except Timeout as exc:
+            raise ValueError("База занята другим Tracker. Закройте второй экземпляр.") from exc
         state = Path(str(path)+'.migration-state.json')
         if state.exists():
             lock = FileLock(str(path)+'.migration.lock', timeout=0)
-            lock.acquire()
+            try:
+                lock.acquire()
+            except BaseException:
+                self._writer_lock.release()
+                raise
             try:
                 if json.loads(state.read_bytes())['mode'] != 'active':
                     raise ValueError('Migrated database is not active')
             except BaseException:
                 lock.release()
+                self._writer_lock.release()
                 raise
             self._migration_lock = lock
         try:
@@ -31,6 +41,7 @@ class UidCatalog:
         except BaseException:
             if hasattr(self, 'db'): self.db.close()
             if self._migration_lock is not None: self._migration_lock.release()
+            self._writer_lock.release()
             raise
 
     def _open(self, path):
@@ -79,6 +90,7 @@ class UidCatalog:
 
     def close(self):
         self.db.close()
+        self._writer_lock.release()
         if self._migration_lock is not None:
             self._migration_lock.release()
             self._migration_lock = None

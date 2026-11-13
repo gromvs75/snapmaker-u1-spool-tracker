@@ -17,10 +17,14 @@ def main():
     def launch():
         nonlocal token
         log=(out/'launcher.log').open('ab')
-        proc=subprocess.Popen([sys.executable,str(ROOT/'dev/labs/uid_settings_bench/run.py'),'--data',str(multi.ROOT/'app'),'--port','18783','--allow-url',printers[0].url,'--allow-url',printers[1].url],cwd=ROOT,stdout=log,stderr=log);log.close()
+        command=[sys.argv[sys.argv.index('--app')+1]] if '--app' in sys.argv else [sys.executable,str(ROOT/'dev/labs/uid_settings_bench/run.py')]
+        proc=subprocess.Popen([*command,'--data',str(multi.ROOT/'app'),'--port','18783','--allow-url',printers[0].url,'--allow-url',printers[1].url],cwd=ROOT,stdout=log,stderr=log);log.close()
         def ready():
             with urllib.request.urlopen('http://127.0.0.1:18783',timeout=2) as r:return r.read().decode()
-        html=multi.wait(ready);token=json.loads(re.search(r'const TOKEN=("[^"]+");',html).group(1));return proc
+        try:html=multi.wait(ready,timeout=90)
+        except BaseException:
+            proc.terminate();proc.wait(15);raise
+        token=json.loads(re.search(r'const TOKEN=("[^"]+");',html).group(1));return proc
     try:
         for pid,port in [('a',18781),('b',18782)]:
             p=multi.Printer(pid,port);printers.append(p)
@@ -122,6 +126,15 @@ def main():
         check('restart preserves settings UID identities and ledger',len(state['settings']['values']['printers'])==2 and len(state['debits'])==3 and not state['connections']['connected'])
         api('connections_start',{'confirmed':True});multi.wait(lambda:all(p['ready'] for p in api('state')['printers']));time.sleep(2)
         final=api('state');check('restarted collectors replay history without double debit',len(final['debits'])==3)
+        # Restore through the ordinary GUI bridge with all producers stopped.
+        api('connections_stop',{'confirmed':True})
+        package=api('backup_package',{})
+        checked=api('validate_backup',{'package':package})
+        restored=api('restore_backup',{'package':package,'expected_revision':checked['current_revision'],'confirmed':True})
+        check('restore verifies integrity and preserves rollback copy',not restored['connected'] and (multi.ROOT/'app'/restored['rollback_file']).is_file())
+        api('connections_start',{'confirmed':True});multi.wait(lambda:all(p['ready'] for p in api('state')['printers']));time.sleep(3)
+        final=api('state')
+        check('restored unified collectors replay history without extra debit',len(final['debits'])==3 and sorted(s['remaining_mg'] for s in final['spools'])==[299404,499702])
         (out/'results.json').write_text(json.dumps(dict(checks=checks,state=final,root=str(multi.ROOT)),indent=2))
     finally:
         if app and app.poll() is None:

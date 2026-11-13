@@ -1,0 +1,36 @@
+name: Tracker 2 current unified Windows build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  current-exe:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated build dependencies
+        run: python -m pip install pystray==0.19.5 pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1
+      - name: Current UID delivery settings and shell regressions
+        run: python -m pytest tests/test_uid_tags.py tests/test_uid_delivery.py tests/test_uid_settings_backup.py tests/test_uid_port_shell.py tests/test_uid_collectors.py tests/test_uid_runtime.py tests/test_uid_autorefill_boundaries.py --timeout=45 --junitxml=output/unified-windows/tests.xml -q
+      - name: Build current unified entrypoint
+        run: python -m PyInstaller --clean --noconfirm packaging/TrackerUidSettings.spec
+      - name: Verify packaged API settings restore and second process
+        run: python dev/labs/uid_unified_bench/packaged_smoke.py --exe dist/Tracker-2.0-Settings-Bench/Tracker-2.0-Settings-Bench.exe --output output/unified-windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: current-unified-windows-results
+          path: output/unified-windows/
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: current-unified-windows-app
+          path: dist/Tracker-2.0-Settings-Bench/
+# This workflow is preparation only. Native Windows tray/menu and two-server
+# EXE verification remain explicit follow-up checks; do not label them passed.

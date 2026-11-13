@@ -54,3 +54,5 @@ The following are archived preparation texts for 1.2 beta; they are not instruct
 [Back to the project](../README.md)
 
 - [Регистрация новой RFID-метки и привязка катушки: GUI и два процессных стенда](development/tag-registration-gui-2026-11-13.md)
+
+- [Очередь регистрации RFID, сверка Spoolman и итоговые проверки 2.0](development/drawer-spoolman-unified-2026-11-13.md)

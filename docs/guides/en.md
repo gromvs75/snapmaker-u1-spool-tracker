@@ -1,16 +1,16 @@
-# Tracker 1.3.2 — user guide
+# Tracker 1.3.3 — user guide
 
-## Changes in 1.3.2
+## Changes in 1.3.3
 
-Fixes partial accounting when an observed print enters an error state before cancellation. The verified capture up to cancellation is used, with duplicate-booking protection. Missing capture, mismatched counters or uncertain spool assignment still require review. The 1.3.1 fix for clearing an accounted print’s forecast remains included. Existing unaccounted jobs are not automatically reconstructed by upgrading. See [release notes](../releases/1.3.2.md).
+Fixes Windows startup and tray behavior; reorganizes settings and spools. Adds Spoolman manufacturer labels, search and name comparison. Retains prior accounting fixes. See [release notes](../releases/1.3.3.md).
 
 **Works with the original Snapmaker U1 firmware. No custom firmware or printer-side installation is required.**
 
-**[Download 1.3.2](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.2). Windows GUI and real Snorca slicing on Windows remain unverified.** See the [1.3.2 release notes](../releases/1.3.2.md).
+**[Download 1.3.3](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.3). On Windows, a user verified rc5 startup, exit, spool search/assignment and settings persistence. Other configurations require separate validation.** See the [1.3.3 release notes](../releases/1.3.3.md).
 
 ## Installation and Snorca post-processing
 
-1. [Download 1.3.2](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.2), unzip it and move `SnapmakerSpoolTracker-1.3.2.app` to `/Applications`. You may rename it to `SnapmakerSpoolTracker.app` for a version-independent path. Before replacing an older installation, export its JSON backup and quit it.
+1. [Download 1.3.3](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.3), unzip it and move `SnapmakerSpoolTracker-1.3.3.app` to `/Applications`. You may rename it to `SnapmakerSpoolTracker.app` for a version-independent path. Before replacing an older installation, export its JSON backup and quit it.
 2. Open Tracker. From its menu-bar icon, choose **Configure Spools & Slots**, add your spools and assign T0–T3. Spoolman is optional; start with read-only mode if connecting it.
 3. **For automatic accounting, configure Snorca:** open **Process / Print Settings → Others → Post-processing scripts**, paste the command below and save the process preset. If the field is hidden, enable advanced/expert settings. Replace an old Tracker command rather than adding a second one.
 
@@ -20,10 +20,10 @@ If you renamed the app to `SnapmakerSpoolTracker.app`:
 /Applications/SnapmakerSpoolTracker.app/Contents/MacOS/SnapmakerSpoolTracker;
 ```
 
-If you kept the name from the 1.3.2 archive:
+If you kept the name from the 1.3.3 archive:
 
 ```text
-/Applications/SnapmakerSpoolTracker-1.3.2.app/Contents/MacOS/SnapmakerSpoolTracker;
+/Applications/SnapmakerSpoolTracker-1.3.3.app/Contents/MacOS/SnapmakerSpoolTracker;
 ```
 
 Use **one** command matching the installed app name. Keep the trailing semicolon; quote paths containing spaces. Do not paste this into printer Start G-code or Terminal. Check the saved preset for each print process you use.
@@ -36,10 +36,10 @@ Use **one** command matching the installed app name. Keep the trailing semicolon
 **Windows:** extract the ZIP to a permanent directory such as `C:\Tools\SnapmakerSpoolTracker`. Install Microsoft Edge WebView2 Runtime if required for the dashboard. Use the actual executable path in the same Snorca post-processing field, for example:
 
 ```text
-C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.2-Windows.exe;
+C:\Tools\SnapmakerSpoolTracker\SnapmakerSpoolTracker-1.3.3-Windows.exe;
 ```
 
-Save the process preset. Windows GUI and real Snorca slicing remain unverified.
+Save the process preset. On Windows, a user verified rc5 startup, exit, spool search/assignment and settings persistence. Other configurations require separate validation.
 
 ## The new workflow
 
@@ -57,13 +57,13 @@ A green ✓ means the estimated requirement plus reserve fits the recorded balan
 
 ## Packages
 
-macOS: `SnapmakerSpoolTracker-1.3.2-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.3.2-Windows.zip` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. Downloads are attached to the release linked above. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
+macOS: `SnapmakerSpoolTracker-1.3.3-macOS.zip` (Apple Silicon arm64, ad-hoc signed, not notarized). Windows: `SnapmakerSpoolTracker-1.3.3-Windows.zip` (x64; WebView2 required). SHA256 and BUILD-INFO accompany prepared artifacts. Downloads are attached to the release linked above. The previous release is [1.2 beta](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.2.0-beta).
 
-Keep packages separate from installed applications while reviewing. Use `--isolated-root` and artificial data for offline validation; ordinary launch is not isolated. Windows GUI remains unverified.
+Keep packages separate from installed applications while reviewing. Use `--isolated-root` and artificial data for offline validation; ordinary launch is not isolated. On Windows, a user verified rc5 startup, exit, spool search/assignment and settings persistence. Other configurations require separate validation.
 
 ## Separate data and backup
 
-1.3.2 keeps the 1.2 beta database and port for continuity. If that database does not exist, it starts empty. It does not automatically import older stable or Menu Test inventories:
+1.3.3 keeps the 1.2 beta database and port for continuity. If that database does not exist, it starts empty. It does not automatically import older stable or Menu Test inventories:
 
 - macOS: `~/Library/Application Support/SnapmakerSpoolTracker-Beta12/`
 - Windows: `%LOCALAPPDATA%\SnapmakerSpoolTracker-Beta12\`
@@ -96,3 +96,9 @@ For actual Snorca slicing, both applications must share the isolated temporary d
 ## Reporting a result
 
 Include OS/architecture, Tracker and Snorca versions, whether the window was hidden or minimized, which plate was sliced, whether the forecast changed, and whether the window actually appeared. State whether you used artificial inventory and confirm that slicing alone did not alter balances. Remove personal paths, filenames, printer addresses and backup contents before sharing logs. Screenshots of the result are more useful than a claim that the executable merely launched.
+
+## Navigation in 1.3.3
+
+Spools has a left menu: Library and Toolheads T0–T3. Add and assign creates a local spool and assigns it after replacement confirmation. Settings is divided into Printer, Spoolman, Accounting and Backup.
+
+Automatic replenishment and manual replacement during a print remain experimental: usage may remain unaccounted when evidence is incomplete or counters disagree. A green forecast does not guarantee accounting. Computer sleep or lost connectivity can interrupt observation.

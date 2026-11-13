@@ -1,6 +1,6 @@
-# Spoolman — Tracker 1.3.0
+# Spoolman — Tracker 1.3.3
 
-Tracker 1.3.0 with Spoolman integration. Supports **stock U1 firmware** and Spoolman **0.27.1**. Export a Tracker JSON backup before upgrading.
+Tracker 1.3.3 with Spoolman integration. Supports **stock U1 firmware** and Spoolman **0.27.1**. Export a Tracker JSON backup before upgrading.
 No changes to Snorca or printer firmware. Keeps the existing 1.2 beta / 1.2.1 inventory. Preview data is not imported automatically.
 Data lives in `SnapmakerSpoolTracker-Beta12`; local UI port is 8766.
 Printer monitoring starts disabled. Do not run two usage senders for the same U1.
@@ -32,9 +32,8 @@ coordinates instances sharing the same data directory.
 Limits: new settings text is RU/EN (English fallback for other languages), catalog
 up to 10000 spools, 60-second freshness bound, no reverse-proxy authentication or
 redirects. HTTPS retains certificate verification. macOS build is ad-hoc signed,
-not notarized. **Windows GUI and real Snorca slicing on Windows remain unverified.**
-Real U1 printing and long-running usage still need user validation. Scale-based
-corrections v1.4 are deferred.
+not notarized. **On Windows, a user verified rc5 startup, exit, spool search/assignment and settings persistence. Other configurations require separate validation.**
+A user confirmed ordinary completed-print usage delivery to Spoolman. Automatic replenishment and manual replacement remain experimental and may require review.
 
 [Spoolman](https://github.com/Donkie/Spoolman), by Daniel Hultgren, is an independent
 MIT-licensed project. This integration uses its API; its source is not bundled.
@@ -57,7 +56,7 @@ monitoring off. U1 connectivity is not required to browse the catalog. Spoolman
 read-only mode does not disable accounting for local Tracker spools. Restoring a
 backup disables the Spoolman integration separately; reconnect it explicitly.
 
-The macOS menu-bar disappearance and window foreground issues were fixed in the previews and verified by the user. These fixes are retained in 1.3.0.
+The macOS menu-bar disappearance and window foreground issues were fixed in the previews and verified by the user. These fixes are retained in 1.3.3.
 
 ## Detailed setup and attribution
 
@@ -78,6 +77,14 @@ before allowing retries. Never run two independent senders for the same printer.
 
 The distribution includes the upstream MIT license and author attribution in licenses/.
 Spoolman copyright (c) 2023 Daniel Hultgren; independent API integration, no endorsement.
-Spoolman server/client code is not bundled. Windows GUI remains unverified.
+Spoolman server/client code is not bundled. On Windows, a user verified rc5 startup, exit, spool search/assignment and settings persistence. Other configurations require separate validation.
 
 For artificial-data testing, use a separate OS user account and test Spoolman server. Normal 1.3.0 startup uses the existing installed inventory; a separate archive is not an isolated database. The offline `--isolated-root` mode does not permit Spoolman connections.
+
+## Spools and names in 1.3.3
+
+Settings → Spoolman → Spools supports search by name, manufacturer, material and ID. Select a spool and head, then Assign. Detaching keeps the remote record. Edit external balances in Spoolman.
+
+Check names compares existing linked records. Select differing names and apply the update in Tracker; balances, history and assignments are preserved. Matching names need no update. This does not merge separately created local and Spoolman spools.
+
+Automatic replenishment and manual replacement during printing do not yet guarantee automatic accounting. Unaccounted jobs do not send consumption to Spoolman.

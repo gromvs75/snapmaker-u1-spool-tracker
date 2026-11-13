@@ -17,7 +17,7 @@ def main():
     parser.add_argument('output', type=Path)
     args = parser.parse_args()
     info = {
-        'version': '1.3.3rc5',
+        'version': '1.3.3',
         'commit': git('rev-parse', 'HEAD'),
         'tree': git('rev-parse', 'HEAD^{tree}'),
         'dirty': bool(git('status', '--porcelain', '--untracked-files=no')),
@@ -26,7 +26,8 @@ def main():
         'python': platform.python_version(),
         'artifact': args.artifact.name,
         'sha256': hashlib.sha256(args.artifact.read_bytes()).hexdigest(),
-        'windows_gui_verified': False,
+        'windows_gui_verified': True,
+        'windows_gui_verification_scope': 'rc5 user-tested startup, exit, search, assignment and settings persistence; stable artifact checked by CI',
     }
     args.output.write_text(json.dumps(info, indent=2) + '\n', encoding='utf-8')
 

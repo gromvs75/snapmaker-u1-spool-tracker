@@ -17,6 +17,8 @@
 
 ## Tracker 2.0 development
 
+- [Единый launcher, чтение UID и учёт на двух принтерах](development/unified-launcher-rfid-2026-11-13.md)
+
 - [Настройки, восстановление, автодозаправка и macOS: результаты этапов](development/settings-recovery-native-2026-11-13.md)
 
 - [Безопасная отправка Spoolman: реализация, тесты и ограничения](development/spoolman-delivery-2.0-2026-11-13.md)

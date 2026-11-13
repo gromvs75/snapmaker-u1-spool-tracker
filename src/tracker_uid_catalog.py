@@ -12,6 +12,10 @@ from collections import Counter
 from tracker_uid_client import canonical_uid
 
 
+class CatalogBusyError(ValueError):
+    """A second writer was rejected before opening SQLite."""
+
+
 class UidCatalog:
     def __init__(self, path):
         self._migration_lock = None
@@ -19,7 +23,7 @@ class UidCatalog:
         try:
             self._writer_lock.acquire()
         except Timeout as exc:
-            raise ValueError("База занята другим Tracker. Закройте второй экземпляр.") from exc
+            raise CatalogBusyError("База занята другим Tracker. Закройте второй экземпляр.") from exc
         state = Path(str(path)+'.migration-state.json')
         if state.exists():
             lock = FileLock(str(path)+'.migration.lock', timeout=0)

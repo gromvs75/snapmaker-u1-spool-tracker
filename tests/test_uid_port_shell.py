@@ -55,3 +55,14 @@ def test_close_hides_and_quit_destroys_without_js_native_references(tmp_path):
     shell.show();shell.quit()
     assert window.events.closing.handler() is True
     assert calls[-1]=='destroy'
+
+
+def test_launcher_second_instance_uses_controlled_exit(tmp_path, monkeypatch):
+    import tracker_uid_launcher as launcher
+    from tracker_uid_catalog import CatalogBusyError
+    def busy(*args, **kwargs):
+        raise CatalogBusyError('База занята')
+    monkeypatch.setattr(launcher, 'Session', busy)
+    with pytest.raises(SystemExit) as exc:
+        launcher.main(['--data', str(tmp_path)])
+    assert exc.value.code == 2

@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 import threading
 from tracker_uid_session import Session
+from tracker_uid_catalog import CatalogBusyError
 from tracker_uid_gui import serve
 from tracker_uid_collectors import create_workers,ReadOnlyMoonraker
 
@@ -13,7 +14,12 @@ def main(argv=None):
     parser.add_argument('--allow-url',action='append',default=[])
     parser.add_argument('--allow-spoolman-url',action='append',default=[])
     args=parser.parse_args(argv)
-    session=Session(args.data,allowed_urls=args.allow_url,worker_factory=create_workers)
+    try:
+        session=Session(args.data,allowed_urls=args.allow_url,worker_factory=create_workers)
+    except CatalogBusyError as exc:
+        # An unhandled exception in a windowed PyInstaller EXE opens a blocking
+        # bootloader dialog. Expected second-instance rejection must terminate.
+        parser.exit(2, str(exc)+"\n")
     def status_reader(pid):
         printer=next(p for p in session.call('settings')['values']['printers'] if p['id']==pid)
         if printer['url'] not in args.allow_url:raise ValueError('Endpoint not permitted')

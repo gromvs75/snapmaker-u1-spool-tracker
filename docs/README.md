@@ -52,3 +52,5 @@ The following are archived preparation texts for 1.2 beta; they are not instruct
 - [GitHub release copy](release-1.2-beta/GITHUB_RELEASE_EN.md)
 
 [Back to the project](../README.md)
+
+- [Регистрация новой RFID-метки и привязка катушки: GUI и два процессных стенда](development/tag-registration-gui-2026-11-13.md)

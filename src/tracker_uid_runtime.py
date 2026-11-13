@@ -61,6 +61,8 @@ class AccountingOwner:
             library = Library(service.accounting)
             from tracker_uid_delivery import Delivery
             delivery = Delivery(service.accounting)
+            from tracker_uid_tags import Tags
+            tags = Tags(service.accounting)
             self.ready.set_result(threading.get_ident())
             while True:
                 item = self.queue.get()
@@ -73,7 +75,10 @@ class AccountingOwner:
                 operation, (args, kwargs), snapshot, future = item
                 try:
                     fleet.value = snapshot
-                    if operation in ('delivery_list','delivery_audit','delivery_decide','delivery_claim','delivery_finish'):
+                    if operation in ('tag_preview','tag_register'):
+                        # Registration commits against current observations, not a queued stale scan.
+                        result=getattr(tags,operation.removeprefix('tag_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation in ('delivery_list','delivery_audit','delivery_decide','delivery_claim','delivery_finish'):
                         result=getattr(delivery,operation.removeprefix('delivery_'))(*args,**kwargs)
                     elif operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
                         result = getattr(library, 'snapshot' if operation=='library_snapshot' else operation)(*args, **kwargs)
@@ -99,6 +104,7 @@ class AccountingOwner:
                         lifecycle=MotionLifecycle(UidMotionAdapter(service))
                         library=Library(service.accounting)
                         delivery=Delivery(service.accounting)
+                        tags=Tags(service.accounting)
                     elif operation == 'export_backup':
                         import sqlite3, tempfile, base64
                         from pathlib import Path

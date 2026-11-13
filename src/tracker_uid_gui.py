@@ -51,6 +51,15 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                 data=json.loads(self.rfile.read(size))
                 if self.path in ('/api/connections_start','/api/connections_stop','/api/validate_backup','/api/restore_backup') and not hasattr(owner,'connected'):
                     raise ValueError('Managed session required')
+                if self.path in ('/api/tag_preview','/api/tag_register'):
+                    if status_reader is None:raise ValueError('Проверка принтера недоступна.')
+                    if 'observation' in data or 'fleet' in data:raise ValueError('Неверные параметры регистрации.')
+                    snapshot=fleet.snapshot().get(data['printer_id'],{})
+                    if snapshot.get('state')!='ready':raise ValueError('Нет связи с принтером.')
+                    checked=time.monotonic()
+                    observation={'state':status_reader(data['printer_id']), 'checked_at':checked,
+                                 'connection_token':UidCatalog.connection_token(snapshot)}
+                    return self.reply(200,owner.call(self.path.removeprefix('/api/'),**data,observation=observation))
                 if self.path=='/api/resolve':
                     if not {'job_key','expected_version','confirmed','accept_unaccounted'}<=set(data) or set(data)-{'job_key','expected_version','confirmed','accept_unaccounted','mode'}:
                         raise ValueError('Неверные параметры разрешения задания.')

@@ -35,6 +35,9 @@ def serve(owner, fleet, port=0, *, status_reader=None):
             for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
             state['active_spools']=owner.call('active_spools')
             state['occupied']=[r for r in locations if r.get('identity_mode')!='manual']
+            for assignment in state['manual_assignments']:
+                tagged=next((r for r in state['occupied'] if r['printer_id']==assignment['printer_id'] and r['channel']==assignment['channel']),None)
+                assignment['state']='conflict' if tagged else ('manual_confirmed' if assignment['confirmed'] else 'manual_unconfirmed')
             state['printers']=[{'id':pid,'name':s.get('name',{'a':'U1_1','b':'U1_2'}.get(pid,pid)),'ready':s['state']=='ready'} for pid,s in fleet.snapshot().items()]
             for p in state['printers']:p['name']=state['settings']['values'].get('printer_names',{}).get(p['id'],p['name'])
             self.reply(200,state)

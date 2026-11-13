@@ -121,6 +121,8 @@ class BenchMigration:
                 ''')
                 with accounting.transaction():
                     cat.db.execute('INSERT INTO migration_source VALUES(?,?)',(raw,digest(raw)))
+                    if data.get('spoolman',{}).get('url'):
+                        cat.db.execute('INSERT INTO uid_preferences VALUES(?,?)',('spoolman_url',json.dumps(data['spoolman']['url'])))
                     for sid, spool in data['spools'].items():
                         # Preserve external identity; new remote operations remain held.
                         automatic = sid in bindings and not spool.get('spoolman')

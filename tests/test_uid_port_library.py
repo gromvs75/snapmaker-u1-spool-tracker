@@ -106,6 +106,7 @@ def test_migrate_133_external_identity_and_history_preserved(tmp_path):
     m=BenchMigration(tmp_path,validator=storage.validate_db);m.migrate({'bench.local:7125':'a'}, {})
     c=UidCatalog(m.target);l=Library(UidAccounting(c))
     try:
+        assert l.settings()['values']['spoolman_url']=='http://127.0.0.1:18899'
         row=l.snapshot()['spools'][0]
         assert row['spool_id']==sid and row['remaining_mg']==123456
         assert row['remote']=={'url':'http://127.0.0.1:18899','remote_id':42}

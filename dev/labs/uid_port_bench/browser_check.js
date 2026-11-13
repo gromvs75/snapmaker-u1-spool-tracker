@@ -1,0 +1,30 @@
+async page => {
+ const assert=(v,m)=>{if(!v)throw Error(m)};
+ await page.goto('http://127.0.0.1:18752');
+ await page.setViewportSize({width:700,height:900});
+ await page.locator('#navLibrary').click();
+ await page.getByRole('button',{name:'Добавить катушку',exact:true}).click();
+ await page.locator('#newName').fill('Port test PLA');await page.locator('#newMass').fill('99.456');
+ await page.locator('#newPrinter').selectOption('b');await page.locator('#newHead').selectOption('2');await page.locator('#newAck').check();
+ await page.getByRole('button',{name:'Добавить и сохранить'}).click();
+ await page.locator('#libraryList .library-row').filter({hasText:'Port test PLA'}).waitFor();
+ assert((await page.locator('#spoolDetail').innerText()).includes('99,5 г'),'display precision');
+ await page.locator('#navSettings').click();await page.locator('#printerName_a').fill('Bench A');
+ await page.getByRole('button',{name:'Сохранить имена принтеров'}).click();
+ await page.locator('#workspaceNav').getByRole('button',{name:'Spoolman',exact:true}).click();
+ await page.locator('#spoolmanUrl').fill('http://127.0.0.1:18899');await page.getByRole('button',{name:'Сохранить адрес',exact:true}).click();
+ await page.getByRole('button',{name:'Обновить каталог',exact:true}).click();await page.locator('#remoteSearch').fill('maker pla 42');
+ assert(await page.locator('#remoteCatalog .library-row').count()===1,'multiword search');
+ await page.locator('#remoteCatalog .library-row').click();await page.locator('#newPrinter').selectOption('b');await page.locator('#newHead').selectOption('3');await page.locator('#newAck').check();
+ await page.getByRole('button',{name:'Добавить и сохранить'}).click();await page.getByRole('button',{name:'Обновить каталог',exact:true}).click();
+ await page.locator('#remoteSearch').fill('maker pla 42');
+ await page.locator('#remoteCatalog .library-row').click();await page.getByRole('button',{name:'Сравнить имя Spoolman'}).click();await page.locator('#compareDialog').waitFor({state:'visible'});
+ assert((await page.locator('#compareNotice').innerText()).includes('Различий нет'),'no changes');assert(await page.locator('#compareApply').isDisabled(),'no-change write blocked');
+ await page.screenshot({path:'/Users/viktor/snapmaker-tracker/output/integration-2.0.0-1.3.3/output/port-compare-700.png'});
+ await page.locator('#compareClose').click();
+ assert((await page.locator('#remoteCatalog .library-row').innerText()).includes('U1_2 · T3'),'assignment marker');
+ assert(!await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),'horizontal overflow');
+ await page.locator('#remoteSearch').fill('not found');assert(await page.locator('#remoteCatalog .library-row').count()===0,'empty search');
+ await page.reload();await page.locator('#navSettings').click();assert(await page.locator('#printerName_a').inputValue()==='Bench A','saved settings');
+ return {success:true,checks:['atomic create/assign','one decimal display','multiword remote search','explicit remote selection','printer/head marker','no-change comparison','700px overflow','empty search','settings reload']};
+}

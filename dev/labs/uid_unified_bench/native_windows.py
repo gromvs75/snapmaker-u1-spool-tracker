@@ -28,7 +28,7 @@ def main():
             for w in desktop.windows():
                 if w.element_info.class_name in ('NotifyIconOverflowWindow','TopLevelWindowForOverflowXamlIsland'):
                     candidates+=w.descendants(control_type='Button')
-            return next((b for b in candidates if 'Tracker 2.0' in b.window_text()),None)
+            return next((b for b in candidates if b.window_text()=='Tracker 2.0 · стенд' and b.is_visible()),None)
         button=icon()
         if not button:
             bar=desktop.window(class_name='Shell_TrayWnd')

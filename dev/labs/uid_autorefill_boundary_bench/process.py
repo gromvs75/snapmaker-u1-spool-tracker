@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[3];sys.path[:0]=[str(ROOT/'src'),str(ROOT)
 import run as multi
 from tracker_uid_client import UidFleet,PrinterEndpoint
 from tracker_uid_runtime import AccountingOwner,PrinterWorkers
-from dev.labs.uid_autorefill_boundary_bench.model import Checkpoint,automatic_boundary,printing_interval
+from dev.labs.uid_autorefill_boundary_bench.model import Checkpoint,automatic_boundary,printing_interval,partition_motion
 spec=importlib.util.spec_from_file_location('rt',ROOT/'dev/labs/uid_runtime_live_bench/run.py');rt=importlib.util.module_from_spec(spec);spec.loader.exec_module(rt)
 
 
@@ -50,6 +50,9 @@ def main():
         service=[x for x in trace if x['kind']=='command' and 10<=x['stamp']<20]
         naive=sum(x['length'] for x in trace if x['kind']=='delivery' and x['state']=='paused')
         check('arrival-state filter misattributes two millimetres',naive==27 and sum(x['length'] for x in service)==25)
+        packets=[dict(id=str(x['stamp'])+':'+str(x['head']),head=x['head'],start=x['stamp'],end=x['stamp']+1,length=x['length'],clock='synthetic-command-clock',epoch='fixture') for x in trace if x['kind']=='delivery']
+        partition=partition_motion(list(reversed(packets))+packets,pause_fence=10,resume_fence=20,clock='synthetic-command-clock',epoch='fixture')
+        check('event-time partition survives late delivery and exact replay',partition['fully_partitioned'] and sum(x['length'] for x in partition['groups']['service'])==25 and not partition['authorizes_debit'])
         def point(heads,total,fence):return Checkpoint(tuple(heads),total,'synthetic-command-clock',fence,True,('s0','s1','s2','s3'),'fixture')
         before=point([0,0,0,102],102,10);resume=point([0,20,0,107],114.84003,20);end=point([0,120,0,107],214.84003,30)
         unknown=automatic_boundary(before,resume,source_head=3,target_head=1,runout=True,mapping=[0,1,2,1])
@@ -64,7 +67,7 @@ def main():
         multi.wait(lambda:fleet.snapshot()[p.pid]['connections']>generation and fleet.snapshot()[p.pid]['state']=='ready')
         for _ in range(3):owner.call('history',p.pid,read_history())
         check('reconnect does not unblock research consumption',not owner.call('inspect')['debits'])
-        (out/'results.json').write_text(json.dumps(dict(checks=checks,trace=trace,unproven=unknown,synthetic_only=known,state=owner.call('inspect'),root=str(multi.ROOT)),indent=2))
+        (out/'results.json').write_text(json.dumps(dict(checks=checks,trace=trace,partition=partition,unproven=unknown,synthetic_only=known,state=owner.call('inspect'),root=str(multi.ROOT)),indent=2))
     finally:
         if worker:worker.stop()
         if owner:owner.close()

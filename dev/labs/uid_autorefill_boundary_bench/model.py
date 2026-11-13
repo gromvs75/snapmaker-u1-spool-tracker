@@ -74,3 +74,30 @@ def reported_drift():
             'post_resume_counter_delta_mm':11716.630119980022-6179.313040012552,
             'source':'reported aggregates; not a replay of private raw logs',
             'authorizes_debit':False,'boundary_proven':False}
+
+
+def partition_motion(packets, *, pause_fence, resume_fence, clock, epoch):
+    """Research only: classify whole event-time intervals, never arrival state.
+
+    A packet crossing a fence cannot be apportioned by duration without a
+    proven velocity profile. Even a complete partition does not explain which
+    service commands entered the printer's filament counter.
+    """
+    if not clock or not epoch or not math.isfinite(pause_fence) or not math.isfinite(resume_fence) or pause_fence>=resume_fence:
+        raise ValueError('Unproven boundary clock')
+    groups={k:[] for k in ('before','service','after','ambiguous')};seen={};intervals={}
+    for p in packets:
+        if p.get('clock')!=clock or p.get('epoch')!=epoch:raise ValueError('Clock or epoch mismatch')
+        head=p.get('head');start=p.get('start');end=p.get('end');length=p.get('length');key=p.get('id')
+        if type(head) is not int or head not in range(4) or not isinstance(key,str) or not key or any(type(v) not in (int,float) or not math.isfinite(v) for v in (start,end,length)) or end<=start:
+            raise ValueError('Invalid interval')
+        canonical=(head,start,end,length)
+        if key in seen:
+            if seen[key]!=canonical:raise ValueError('Conflicting replay')
+            continue
+        if any(start<b and end>a for a,b in intervals.get(head,[])):raise ValueError('Overlapping packets')
+        seen[key]=canonical;intervals.setdefault(head,[]).append((start,end))
+        phase='before' if end<=pause_fence else 'after' if start>=resume_fence else 'service' if start>=pause_fence and end<=resume_fence else 'ambiguous'
+        groups[phase].append(dict(p))
+    return dict(groups=groups,fully_partitioned=not groups['ambiguous'],authorizes_debit=False,
+                reason='Counter inclusion of service commands remains unproven')

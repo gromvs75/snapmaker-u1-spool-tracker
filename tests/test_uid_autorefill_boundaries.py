@@ -93,3 +93,22 @@ def test_reported_offset_never_debits_local_or_remote_and_replay_is_safe(tmp_pat
         owner.call('history','a',history)
         assert not owner.call('inspect')['debits'] and not owner.call('library_snapshot')['remote_outbox']
     finally:owner.close()
+
+
+def test_event_time_partition_is_order_invariant_but_not_debit_evidence():
+    from itertools import permutations
+    from dev.labs.uid_autorefill_boundary_bench.model import partition_motion
+    packets=[dict(id=str(i),head=h,start=t,end=t+1,length=n,clock='motion',epoch='same') for i,(h,t,n) in enumerate([(3,2,2),(3,10,5),(1,11,20),(1,21,100)])]
+    for order in permutations(packets):
+        r=partition_motion([*order,order[0]],pause_fence=10,resume_fence=20,clock='motion',epoch='same')
+        assert sum(p['length'] for p in r['groups']['service'])==25
+        assert r['fully_partitioned'] and not r['authorizes_debit']
+
+
+def test_fence_crossing_cannot_be_split_proportionally_or_replayed_conflictingly():
+    from dev.labs.uid_autorefill_boundary_bench.model import partition_motion
+    p=dict(id='crossing',head=3,start=9,end=11,length=10,clock='motion',epoch='same')
+    kw=dict(pause_fence=10,resume_fence=20,clock='motion',epoch='same')
+    assert not partition_motion([p],**kw)['fully_partitioned']
+    for other in [dict(p,length=11),dict(p,id='overlap',start=10,end=12),dict(p,epoch='reconnected')]:
+        with pytest.raises(ValueError):partition_motion([p,other],**kw)

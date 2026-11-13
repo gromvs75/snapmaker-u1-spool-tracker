@@ -11,13 +11,18 @@ def main(argv=None):
     parser=argparse.ArgumentParser();parser.add_argument('--data',type=Path,required=True)
     parser.add_argument('--port',type=int,default=0);parser.add_argument('--window',action='store_true')
     parser.add_argument('--allow-url',action='append',default=[])
+    parser.add_argument('--allow-spoolman-url',action='append',default=[])
     args=parser.parse_args(argv)
     session=Session(args.data,allowed_urls=args.allow_url,worker_factory=create_workers)
     def status_reader(pid):
         printer=next(p for p in session.call('settings')['values']['printers'] if p['id']==pid)
         if printer['url'] not in args.allow_url:raise ValueError('Endpoint not permitted')
         return ReadOnlyMoonraker(printer['url']).status()['print_stats']['state']
-    try:server=serve(session,session.fleet,args.port,status_reader=status_reader)
+    from tracker_uid_sender import Sender
+    sender=None
+    try:
+        sender=Sender(session,args.allow_spoolman_url) if args.allow_spoolman_url else None
+        server=serve(session,session.fleet,args.port,status_reader=status_reader,sender=sender)
     except BaseException:
         session.close();raise
     thread=threading.Thread(target=server.serve_forever);thread.start()
@@ -29,6 +34,8 @@ def main(argv=None):
         else:thread.join()
     except KeyboardInterrupt:pass
     finally:
-        server.shutdown();thread.join();server.server_close();session.close()
+        server.shutdown();thread.join();server.server_close();
+        if sender:sender.stop()
+        session.close()
 
 if __name__=='__main__':main()

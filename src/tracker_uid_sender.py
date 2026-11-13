@@ -16,11 +16,11 @@ class Sender:
         self._stop=threading.Event();self._mutex=threading.Lock();self._thread=None
         self.last_error=None
 
-    def send_one(self):
+    def send_one(self, operation_id=None, expected_revision=None):
         with self._mutex:
             rows=self.owner.call('delivery_list')
             if any(r['state'] in ('sending','uncertain') for r in rows):return 'blocked'
-            row=next((r for r in rows if r['state']=='pending' and r['url'] in self.allowed_urls),None)
+            row=next((r for r in rows if r['state']=='pending' and r['url'] in self.allowed_urls and (operation_id is None or (r['operation_id']==operation_id and r['revision']==expected_revision))),None)
             if row is None:return 'idle'
             # Reads are safe to retry. No SQL transaction is held during network I/O.
             try:
@@ -45,6 +45,20 @@ class Sender:
             # A failed DB acknowledgement leaves durable 'sending', never pending.
             result=self.owner.call('delivery_finish',claim['operation_id'],claim['attempt'],sent)
             return result['state']
+
+    def review(self, operation_id, expected_revision):
+        row=next((r for r in self.owner.call('delivery_list') if r['operation_id']==operation_id),None)
+        if not row or row['revision']!=expected_revision:raise ValueError('Операция изменилась. Обновите список.')
+        if row['url'] not in self.allowed_urls:raise ValueError('Сервер не разрешён для этого сеанса.')
+        client=self.client_factory(row['url'])
+        info,_=client.request('GET','/info')
+        if info.get('version')!='0.27.1':raise ValueError('Непроверенная версия Spoolman.')
+        raw,_=client.request('GET',f"/spool/{row['remote_id']}")
+        item=catalog_item(raw)
+        if item['id']!=row['remote_id']:raise ValueError('Spoolman вернул другую катушку.')
+        import time
+        return dict(operation_id=operation_id,revision=expected_revision,remote=item,checked_at=time.time(),
+                    audit=[r for r in self.owner.call('delivery_audit') if r['operation_id']==operation_id])
 
     def start(self):
         if self._thread is not None:raise RuntimeError('Sender already started')

@@ -168,3 +168,27 @@ def test_allowlist_prevents_writes_to_unapproved_server(bench):
     o,f,*_=bench;decision(o)
     assert Sender(o,['http://127.0.0.1:19999'],client_factory=lambda _:f).send_one()=='idle'
     assert not f.writes
+
+
+def test_gui_targeted_send_never_sends_another_pending_operation(bench):
+    o,f,s,usage,_,_=bench
+    first=decision(o);usage(run=1)
+    second=decision(o,row=o.call('delivery_list')[-1],request_id='second')
+    assert s.send_one(second['operation_id'],'stale')=='idle'
+    assert not f.writes
+    assert s.send_one(second['operation_id'],second['revision'])=='sent'
+    rows=o.call('delivery_list')
+    assert rows[0]['state']=='pending' and rows[1]['state']=='sent'
+    assert s.send_one(second['operation_id'],second['revision'])=='idle'
+    assert len(f.writes)==1
+
+
+def test_review_is_read_only_revision_checked_and_allowlisted(bench):
+    o,f,s,usage,_,_=bench;r=o.call('delivery_list')[0]
+    result=s.review(r['operation_id'],r['revision'])
+    assert result['remote']['remaining_g']==500 and not f.writes
+    assert o.call('delivery_list')[0]['state']=='held'
+    with pytest.raises(ValueError):s.review(r['operation_id'],'stale')
+    other=Sender(o,['http://127.0.0.1:1'],client_factory=lambda url:f)
+    with pytest.raises(ValueError):other.review(r['operation_id'],r['revision'])
+    assert not f.writes

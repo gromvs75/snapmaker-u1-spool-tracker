@@ -33,6 +33,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
             from tracker_uid_presentation import history_presentation
             state.update(owner.call('library_snapshot'))
             state['delivery']=owner.call('delivery_list')
+            state['delivery_enabled']=sender is not None
             state['connections']=owner.call('connection_state') if hasattr(owner,'connected') else None
             for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
             state['active_spools']=owner.call('active_spools')
@@ -71,13 +72,20 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                     observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call('resolve_interrupted',**data,observation=observation))
+                if self.path=='/api/delivery_review':
+                    if sender is None:raise ValueError('Отправка и сверка недоступны в этом сеансе.')
+                    return self.reply(200,sender.review(**data))
                 if self.path=='/api/delivery_send':
                     if sender is None:raise ValueError('Spoolman sender is not enabled for this session.')
-                    if data!={'confirmed':True}:raise ValueError('Explicit send confirmation required')
-                    return self.reply(200,{'status':sender.send_one()})
+                    if data.get('confirmed') is not True or set(data)-{'confirmed','operation_id','expected_revision'}:raise ValueError('Explicit send confirmation required')
+                    if ('operation_id' in data)!=('expected_revision' in data):raise ValueError('Operation and revision required together')
+                    return self.reply(200,{'status':sender.send_one(data.get('operation_id'),data.get('expected_revision'))})
                 commands={'/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
                           '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
                           '/api/backup':'export_backup'}
+                if self.path=='/api/restore_backup' and sender is not None:
+                    with sender._mutex:
+                        return self.reply(200,owner.call('restore_backup',**data))
                 if self.path in commands:
                     return self.reply(200,owner.call(commands[self.path],**data))
                 if self.path=='/api/refresh_catalog':

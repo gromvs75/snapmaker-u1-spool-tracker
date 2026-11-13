@@ -57,6 +57,8 @@ class AccountingOwner:
             fleet = _SnapshotFleet()
             service = TrackerUidService(fleet, catalog)
             lifecycle = MotionLifecycle(UidMotionAdapter(service))
+            from tracker_uid_library import Library
+            library = Library(service.accounting)
             self.ready.set_result(threading.get_ident())
             while True:
                 item = self.queue.get()
@@ -69,7 +71,11 @@ class AccountingOwner:
                 operation, (args, kwargs), snapshot, future = item
                 try:
                     fleet.value = snapshot
-                    if operation == 'register': result = catalog.register(*args, **kwargs)
+                    if operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
+                        result = getattr(library, 'snapshot' if operation=='library_snapshot' else operation)(*args, **kwargs)
+                    elif operation in ('create_spool','detach_spool'):
+                        result = getattr(library, 'create' if operation=='create_spool' else 'detach')(*args, fleet=fleet.snapshot(), **kwargs)
+                    elif operation == 'register': result = catalog.register(*args, **kwargs)
                     elif operation == 'inventory_snapshot': result = catalog.inventory_snapshot(*args, fleet=fleet.snapshot(), **kwargs)
                     elif operation == 'register_manual': result = catalog.register_manual(*args, **kwargs)
                     elif operation == 'assign_manual': result = service.accounting.assign_manual(*args, fleet=fleet.snapshot(), **kwargs)

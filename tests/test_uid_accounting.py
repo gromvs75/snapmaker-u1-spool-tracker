@@ -112,14 +112,15 @@ def test_legacy_import_preserves_id_and_is_idempotent(tmp_path):
     assert original['spools']['old-id']['remaining_g']==583.217
     c.close()
 
-def test_restart_concurrent_duplicate_and_persistent_journal(tmp_path):
+def test_restart_duplicate_and_persistent_journal(tmp_path):
     path=tmp_path/'db';c=UidCatalog(path);a=UidAccounting(c);c.register('04112233','Red',500000)
     k=a.begin('a','j','s',['0'],'capture',{'a':snapshot('a',{'0':'04112233'})});c.close()
     def worker():
         local=UidCatalog(path);engine=UidAccounting(local)
         try:return apply(engine,k,1,{'0':10000},'cancelled')
         finally:local.close()
-    with ThreadPoolExecutor(2) as pool:results=list(pool.map(lambda _:worker(),range(2)))
+    # One writer owns SQLite; concurrent producers are covered through AccountingOwner.
+    results=[worker(),worker()]
     assert sorted(results)==['applied','duplicate']
     c=UidCatalog(path);assert c.spool('04112233')['remaining_mg']==490000;c.close()
 

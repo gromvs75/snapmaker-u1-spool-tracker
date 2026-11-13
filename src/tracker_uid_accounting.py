@@ -137,30 +137,35 @@ class UidAccounting:
         if confirmed is not True or not isinstance(printer_id,str) or not printer_id or channel not in ('0','1','2','3'):
             raise ValueError('Explicit physical assignment confirmation required')
         with self.transaction():
-            self._unlock_guard(printer_id,spool_id)
-            rows=self.catalog._reconcile(fleet)
-            current=self.db.execute('SELECT * FROM manual_assignments WHERE printer_id=? AND channel=?',(printer_id,channel)).fetchone()
-            if expected_version is not None and (current['version'] if current else '')!=expected_version:
-                raise AccountingConflict('Назначение изменилось. Обновите экран.')
-            spool=self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?',(spool_id,)).fetchone()
-            if not spool or spool['uid'] is not None: raise AccountingConflict('Manual assignment requires a local untagged spool')
-            snapshot=fleet.get(printer_id,{})
-            obs=snapshot.get('channels',{}).get(channel,{})
-            if snapshot.get('state')!='ready' or obs.get('state') not in ('absent','unreadable','unknown'):
-                raise AccountingConflict('Connection or tag evidence conflicts with manual assignment')
-            if any(r['printer_id']==printer_id and r['channel']==channel and r.get('identity_mode')!='manual' for r in rows):
-                raise AccountingConflict('Unresolved UID location on this channel')
-            if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND (t.spool_id=? OR (j.printer_id=? AND t.channel=?))",(spool_id,printer_id,channel)).fetchone():
-                raise AccountingConflict('Spool or channel reserved by active job')
-            other=self.db.execute('SELECT * FROM manual_assignments WHERE spool_id=?',(spool_id,)).fetchone()
-            if other and (other['printer_id'],other['channel'])!=(printer_id,channel):
-                raise AccountingConflict('Explicitly release the previous manual location first')
-            import uuid
-            version=uuid.uuid4().hex
-            self.db.execute('INSERT INTO manual_assignments VALUES(?,?,?,?,?,1) ON CONFLICT(printer_id,channel) DO UPDATE SET spool_id=excluded.spool_id,version=excluded.version,token=excluded.token,confirmed=1',
-                            (printer_id,channel,spool_id,version,self.catalog.connection_token(snapshot)))
-            self._complete_unlocks()
-            return {'spool_id':spool_id,'version':version,'identity_mode':'manual'}
+            return self._assign_manual(printer_id, channel, spool_id, fleet, expected_version)
+
+    def _assign_manual(self, printer_id, channel, spool_id, fleet, expected_version):
+        if self.db.execute("SELECT 1 FROM uid_jobs WHERE state='active' AND printer_id=?",(printer_id,)).fetchone():
+            raise AccountingConflict("Печать активна — назначение недоступно.")
+        self._unlock_guard(printer_id,spool_id)
+        rows=self.catalog._reconcile(fleet)
+        current=self.db.execute('SELECT * FROM manual_assignments WHERE printer_id=? AND channel=?',(printer_id,channel)).fetchone()
+        if expected_version is not None and (current['version'] if current else '')!=expected_version:
+            raise AccountingConflict('Назначение изменилось. Обновите экран.')
+        spool=self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?',(spool_id,)).fetchone()
+        if not spool or spool['uid'] is not None: raise AccountingConflict('Manual assignment requires a local untagged spool')
+        snapshot=fleet.get(printer_id,{})
+        obs=snapshot.get('channels',{}).get(channel,{})
+        if snapshot.get('state')!='ready' or obs.get('state') not in ('absent','unreadable','unknown'):
+            raise AccountingConflict('Connection or tag evidence conflicts with manual assignment')
+        if any(r['printer_id']==printer_id and r['channel']==channel and r.get('identity_mode')!='manual' for r in rows):
+            raise AccountingConflict('Unresolved UID location on this channel')
+        if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND (t.spool_id=? OR (j.printer_id=? AND t.channel=?))",(spool_id,printer_id,channel)).fetchone():
+            raise AccountingConflict('Spool or channel reserved by active job')
+        other=self.db.execute('SELECT * FROM manual_assignments WHERE spool_id=?',(spool_id,)).fetchone()
+        if other and (other['printer_id'],other['channel'])!=(printer_id,channel):
+            raise AccountingConflict('Explicitly release the previous manual location first')
+        import uuid
+        version=uuid.uuid4().hex
+        self.db.execute('INSERT INTO manual_assignments VALUES(?,?,?,?,?,1) ON CONFLICT(printer_id,channel) DO UPDATE SET spool_id=excluded.spool_id,version=excluded.version,token=excluded.token,confirmed=1',
+                        (printer_id,channel,spool_id,version,self.catalog.connection_token(snapshot)))
+        self._complete_unlocks()
+        return {'spool_id':spool_id,'version':version,'identity_mode':'manual'}
 
     def transfer_manual(self, spool_id, source_printer, source_channel, target_printer, target_channel,
                         expected_version, request_id, fleet, *, confirmed=False):
@@ -350,6 +355,10 @@ class UidAccounting:
                 cur=self.db.execute('UPDATE uid_spools SET remaining_mg=remaining_mg-? WHERE spool_id=? AND remaining_mg>=?',(amount,sid,amount))
                 if cur.rowcount!=1:raise AccountingConflict('Insufficient spool balance')
                 self.db.execute('INSERT INTO uid_debits VALUES(?,?,?,?)',(key,sequence,sid,amount))
+                if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_remote_links'").fetchone():
+                    link=self.db.execute('SELECT * FROM uid_remote_links WHERE spool_id=?',(sid,)).fetchone()
+                    if link and amount:
+                        self.db.execute("INSERT INTO uid_remote_outbox VALUES(?,?,?,?,?,?,'held')",(key,sequence,sid,link['url'],link['remote_id'],amount))
             for t in tools:
                 self.db.execute('UPDATE uid_job_tools SET used_mg=? WHERE job_key=? AND channel=?',(totals_mg[t['channel']],key,t['channel']))
             self.db.execute('INSERT INTO uid_usage_events VALUES(?,?,?)',(key,sequence,payload))

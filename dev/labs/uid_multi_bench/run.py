@@ -33,7 +33,9 @@ def stop(p):
 class Printer:
     def __init__(self,pid,port):
         self.pid=pid;self.port=port;self.root=ROOT/pid;self.data=self.root/'printer_data';self.k=None;self.m=None
-        with socket.socket() as s:s.bind(('127.0.0.1',port))
+        with socket.socket() as s:
+            s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            s.bind(('127.0.0.1',port))
         if not self.root.exists():
             self.root.mkdir(parents=True)
             (self.root/'.tracker-uid-simulator.json').write_text(json.dumps(MARKER))

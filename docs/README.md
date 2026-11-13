@@ -15,6 +15,10 @@
 - [Development, tests and desktop builds](development.md)
 - [Windows offline testing](../dev/windows_slice_check/README_RU.md) — **Windows GUI and real Snorca slicing remain untested**.
 
+## Tracker 2.0 development
+
+- [Безопасная отправка Spoolman: реализация, тесты и ограничения](development/spoolman-delivery-2.0-2026-11-13.md)
+
 ## Spoolman test builds
 
 - [Spoolman Preview: настройка и ограничения](guides/spoolman-preview-ru.md)

@@ -16,6 +16,7 @@ class UidWindow:
         self._quitting = False
         self._pending_show = False
         width, height = 1202, 950
+        position = {}
         if sys.platform == 'win32':
             import ctypes
             from ctypes.wintypes import RECT
@@ -23,9 +24,10 @@ class UidWindow:
             if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(work), 0):
                 width = min(width, work.right-work.left-32)
                 height = min(height, work.bottom-work.top-32)
+                position = dict(x=work.left+16, y=work.top+16)
         self._window = webview_module.create_window(
             'Snapmaker U1 Spool Tracker 2.0 · стенд', url,
-            width=width, height=height, min_size=(min(700,width), min(560,height)))
+            width=width, height=height, min_size=(min(700,width), min(560,height)), **position)
         self._window.events.shown += self._shown
         self._window.events.closing += self._closing
 

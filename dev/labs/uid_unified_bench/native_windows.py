@@ -3,7 +3,7 @@ import argparse,json,subprocess,tempfile,time,socket,urllib.request,re
 from pathlib import Path
 
 def main():
-    import win32gui,win32con
+    import win32gui,win32con,win32api
     from pywinauto import Desktop
     from PIL import ImageGrab
     p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
@@ -29,12 +29,15 @@ def main():
                 if w.element_info.class_name in ('NotifyIconOverflowWindow','TopLevelWindowForOverflowXamlIsland'):
                     candidates+=w.descendants(control_type='Button')
             return next((b for b in candidates if b.window_text()=='Tracker 2.0 · стенд' and b.is_visible()),None)
-        button=icon()
-        if not button:
-            bar=desktop.window(class_name='Shell_TrayWnd')
-            expand=next((b for b in bar.descendants(control_type='Button') if 'hidden icons' in b.window_text().lower()),None)
-            if expand:expand.click_input()
-            button=wait(icon,15)
+        # The overflow UIA subtree can outlive its visible popup after Open.
+        # Dismiss it and explicitly reopen hidden icons for every menu action.
+        from pywinauto.keyboard import send_keys
+        send_keys('{ESC}');time.sleep(.7)
+        bar=desktop.window(class_name='Shell_TrayWnd')
+        expand=next((b for b in bar.descendants(control_type='Button') if 'hidden icons' in b.window_text().lower()),None)
+        if expand:expand.click_input();time.sleep(.7)
+        button=wait(icon,15)
+        (a.output/('tray-target-'+('open' if label.startswith('Открыть') else 'exit')+'.txt')).write_text(str(button.element_info)+' '+str(button.rectangle()),encoding='utf-8')
         button.click_input(button='right')
         def item():
             for w in desktop.windows():
@@ -45,6 +48,8 @@ def main():
     try:
         handle=wait(lambda:win32gui.FindWindow(None,'Snapmaker U1 Spool Tracker 2.0 · стенд'))
         wait(lambda:win32gui.IsWindowVisible(handle));checks.append('ordinary native window visible')
+        rect=win32gui.GetWindowRect(handle)
+        assert rect[0]>=0 and rect[1]>=0 and rect[2]<=win32api.GetSystemMetrics(0) and rect[3]<=win32api.GetSystemMetrics(1),rect
         ImageGrab.grab().save(a.output/'native-open.png')
         win32gui.PostMessage(handle,win32con.WM_CLOSE,0,0)
         wait(lambda:not win32gui.IsWindowVisible(handle));assert proc.poll() is None;checks.append('close hides without exiting')

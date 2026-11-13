@@ -1,3 +1,4 @@
+import ipaddress
 """Persistent, process-safe inventory storage."""
 
 import copy
@@ -16,7 +17,7 @@ from filelock import FileLock, Timeout
 from tool_mapping import MappingError, validate_mapping
 from spool_identity import calibration
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 APP_NAME = "SnapmakerSpoolTracker"
 LOGGER = logging.getLogger("snapmaker_tracker")
 
@@ -67,6 +68,11 @@ def printer_config(value):
     guard_mode = value.get("guard_mode", "warn")
     if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.\-]{0,252}", host):
         raise ValidationError("Enter a hostname or IPv4 address without a URL scheme")
+    if re.fullmatch(r"[0-9.]+", host):
+        try:
+            ipaddress.IPv4Address(host)
+        except ValueError as exc:
+            raise ValidationError("Invalid IPv4 address: use four numbers from 0 to 255") from exc
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValidationError("Port must be between 1 and 65535")
     if not isinstance(enabled, bool):
@@ -113,6 +119,10 @@ def _validated_jobs(data, result):
             "start_time": weight(run.get("start_time")), "status": run["status"],
             "filename": str(run.get("filename", ""))[:1024],
         }
+        if 'spoolman_epoch' in run:
+            if not isinstance(run['spoolman_epoch'], str):
+                raise StorageError('Invalid Spoolman print context')
+            validated_run['spoolman_epoch'] = run['spoolman_epoch']
         if "review_reason" in run:
             if not isinstance(run["review_reason"], str):
                 raise StorageError("Invalid review reason")
@@ -214,13 +224,19 @@ def validate_db(data):
     if not isinstance(data, dict):
         raise StorageError("Database root must be an object")
     version = data.get("schema_version", 0)
-    if version not in (0, 1, 2, 3, SCHEMA_VERSION):
+    if version not in (0, 1, 2, 3, 4, SCHEMA_VERSION):
         raise StorageError(f"Unsupported database schema version: {version}")
     result = empty_db()
     language = data.get("language", "en")
     if language not in ("en", "ru", "de", "uk", "es"):
         raise StorageError("Invalid database language")
     result["language"] = language
+    if 'spoolman' in data:
+        from spoolman_bridge import validate
+        try:
+            result['spoolman'] = validate(data['spoolman'])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise StorageError('Invalid Spoolman state') from exc
     try:
         result["printer"] = printer_config(data.get("printer", result["printer"]))
     except ValidationError as exc:
@@ -276,6 +292,15 @@ def validate_db(data):
                 "material": label(spool.get("material"), "Material"),
                 "remaining_g": weight(spool.get("remaining_g")),
             }
+            if 'spoolman' in spool:
+                from spoolman_bridge import endpoint, remote_id
+                ref = spool['spoolman']
+                if (not isinstance(ref, dict) or set(ref) != {'url', 'id'}
+                        or type(ref['id']) is not int or ref['id'] <= 0
+                        or endpoint(ref['url']) != ref['url']
+                        or remote_id(ref['url'], ref['id']) != spool_id or 'spoolman' not in result):
+                    raise StorageError('Invalid external spool reference')
+                result['spools'][spool_id]['spoolman'] = dict(ref)
             if spool.get("color") is not None:
                 result["spools"][spool_id]["color"] = spool_color(spool["color"])
             if "calibration" in spool:
@@ -393,10 +418,20 @@ class Store:
     def replace_snapshot(self, snapshot):
         """Save the old database, then atomically replace it under one lock."""
         validated = validate_db(snapshot)
+        if 'spoolman' in validated:
+            # Never replay an imported outbox, even if its old snapshot says pending.
+            state = validated['spoolman']
+            state.update(mode='off', epoch='', checked_at=0, error='Restored: reconnect and review operations')
+            for op in state['outbox'].values():
+                if op['state'] in ('pending', 'sending'):
+                    op['state'] = 'uncertain'
         self.directory.mkdir(parents=True, exist_ok=True)
         try:
             with self.lock:
                 old = self._read_locked()
+                if any(op['state'] in ('pending', 'sending', 'uncertain')
+                       for op in old.get('spoolman', {}).get('outbox', {}).values()):
+                    raise StorageError('Resolve Spoolman operations before restoring a backup')
                 backup_dir = self.directory / "backups"
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 name = f"pre-import-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}.json"

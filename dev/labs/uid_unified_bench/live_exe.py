@@ -57,6 +57,20 @@ def main():
         check('second printer accounts during first disconnect',True)
         control('start');wait(connected);wait(subscribed);event('a','cancel');time.sleep(3)
         check('reconnect leaves interrupted evidence blocked',len(api('state')['debits'])==3)
+        interrupted=next(j for j in api('state')['jobs'] if j['printer_id']=='a' and not j['mapping_valid'] and j['state']=='active')
+        request=dict(job_key=interrupted['job_key'],expected_version=interrupted['resolution_version'],confirmed=True,accept_unaccounted=True,mode='15_minutes')
+        api('resolve',request)
+        unlocked=next(j for j in api('state')['jobs'] if j['job_key']==interrupted['job_key'])['unlock']
+        api('resolve',request)
+        check('temporary unlock replay preserves deadline without debit',unlocked['deadline'] is not None and next(j for j in api('state')['jobs'] if j['job_key']==interrupted['job_key'])['unlock']==unlocked and len(api('state')['debits'])==3)
+        assignment=next(m for m in api('state')['manual_assignments'] if m['printer_id']=='a')
+        sid=assignment['spool_id']
+        api('assign',dict(printer_id='a',channel='0',spool_id=sid,expected_version=assignment['version'],confirmed=True))
+        balances={s['spool_id']:s['remaining_mg'] for s in api('state')['spools']}
+        for src,channel,dst,target in [('a','0','b','1'),('b','1','a','0')]:
+            assignment=next(m for m in api('state')['manual_assignments'] if m['spool_id']==sid)
+            api('transfer',dict(spool_id=sid,source_printer=src,source_channel=channel,target_printer=dst,target_channel=target,expected_version=assignment['version'],request_id='roundtrip-'+src,confirmed=True))
+        check('confirmed roundtrip transfer preserves balances and debit count',balances=={s['spool_id']:s['remaining_mg'] for s in api('state')['spools']} and len(api('state')['debits'])==3)
         api('connections_stop',{'confirmed':True});package=api('backup_package',{});v=api('validate_backup',{'package':package})
         api('restore_backup',dict(package=package,expected_revision=v['current_revision'],confirmed=True));api('connections_start',{'confirmed':True});wait(connected);time.sleep(3)
         check('restore and repeated process history do not duplicate debit',len(api('state')['debits'])==3)

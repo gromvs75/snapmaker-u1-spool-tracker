@@ -20,6 +20,9 @@ class Transition(BenchMotion):
             for sample in self.pending:self.emit(sample)
             self.pending=[]
         elif action=='service_pause':
+            right=self.printer.lookup_object('filament_feed right').value
+            right['extruder3']=dict(right['extruder3'],filament_detected=False)
+            self.trace.append(dict(kind='runout',head=3,fence=10))
             self.stats.note_pause()
             task=self.printer.lookup_object('print_task_config').value
             task['extruder_map_table']=[0,1,2,1];task['extruders_replenished']=[0,1,2,1]

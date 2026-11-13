@@ -108,3 +108,41 @@ def test_restore_quarantines_old_pending_and_removes_unlock(app,tmp_path):
     class NoNetwork:
         def __init__(self,*a):raise AssertionError('No retry allowed')
     assert Sender(app,['http://127.0.0.1:18899'],client_factory=NoNetwork).send_one()=='blocked'
+
+# Reuse real accounting evidence, rather than manufacturing a completed ledger.
+from test_uid_delivery import bench, decision
+
+
+def test_real_usage_backup_never_replays_sent_remote_write(bench,tmp_path):
+    original,remote,sender,usage,path,spool=bench
+    decision(original)
+    package=original.call('backup_package')
+    assert sender.send_one()=='sent'
+    app=Session(tmp_path/'restore-real',fleet_factory=Fleet)
+    try:
+        preview=app.call('validate_backup',package=package)
+        app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
+        restored=Sender(app,['http://127.0.0.1:18899'],client_factory=lambda url:remote)
+        for _ in range(3):
+            app.call('history','a',[dict(job_id='a-0',start_time=1010.,filename='job.gcode',status='completed')])
+            assert restored.send_one()=='blocked'
+        assert len(remote.writes)==1
+        assert len(app.call('inspect')['debits'])==1
+    finally:app.close()
+
+
+def test_restore_cannot_replace_inflight_remote_operation(bench,tmp_path):
+    original,remote,sender,*_=bench
+    decision(original);package=original.call('backup_package')
+    app=Session(tmp_path/'inflight',fleet_factory=Fleet)
+    try:
+        preview=app.call('validate_backup',package=package)
+        app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
+        row=app.call('delivery_list')[0]
+        app.call('delivery_decide',row['operation_id'],row['revision'],'not_applied','Verified fixture', 'rearm',True)
+        row=app.call('delivery_list')[0];app.call('delivery_claim',row['operation_id'],row['revision'])
+        preview=app.call('validate_backup',package=package)
+        with pytest.raises(ValueError,match='Spoolman'):
+            app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
+        assert app.call('delivery_list')[0]['state']=='sending'
+    finally:app.close()

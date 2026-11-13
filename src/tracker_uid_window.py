@@ -8,6 +8,9 @@ class UidWindow:
         if webview_module is None:
             import webview as webview_module
         self._webview = webview_module
+        # WKWebView otherwise navigates to blob: instead of showing Save As.
+        if hasattr(webview_module, 'settings'):
+            webview_module.settings['ALLOW_DOWNLOADS'] = True
         self._storage_path = str(storage_path)
         self._ready = False
         self._quitting = False
@@ -20,6 +23,8 @@ class UidWindow:
 
     def _shown(self):
         self._ready = True
+        if sys.platform == 'darwin':
+            self._route_macos_quit()
         if self._quitting:
             self._window.destroy()
         elif self._pending_show:
@@ -47,6 +52,31 @@ class UidWindow:
         self._quitting = True
         if self._ready:
             self._window.destroy()
+
+    def _route_macos_quit(self):
+        if hasattr(self, '_quit_target'):
+            return
+        # AppKit's default Quit asks every window to close, which our close-to-tray
+        # policy cancels. Route Cmd+Q through explicit quit, like the tray action.
+        try:
+            import AppKit
+            import objc
+            from PyObjCTools import AppHelper
+        except ImportError:
+            return
+        shell = self
+        class TrackerQuitTarget(AppKit.NSObject):
+            @objc.IBAction
+            def quitTracker_(self, sender):
+                threading.Thread(target=shell.quit, daemon=True).start()
+        self._quit_target = TrackerQuitTarget.alloc().init()
+        def install():
+            menu = AppKit.NSApp.mainMenu().itemAtIndex_(0).submenu()
+            for item in menu.itemArray():
+                if str(item.action()) == 'terminate:':
+                    item.setTarget_(self._quit_target)
+                    item.setAction_('quitTracker:')
+        AppHelper.callAfter(install)
 
     def run(self):
         import pystray

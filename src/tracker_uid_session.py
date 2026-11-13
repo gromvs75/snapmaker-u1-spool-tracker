@@ -79,6 +79,8 @@ class Session:
             if operation in ('validate_backup','restore_backup'):
                 if self.connected:raise ValueError('Сначала остановите подключения для восстановления.')
                 if operation=='restore_backup':
+                    if any(r['state']=='sending' for r in self.owner.call('delivery_list')):
+                        raise ValueError('Отправка Spoolman ещё выполняется. Дождитесь результата.')
                     if kwargs.pop('confirmed',False) is not True:raise ValueError('Подтвердите замену базы.')
                     # Validate before writing rollback file or touching current state.
                     preview=self.owner.call('validate_backup',package=kwargs['package'])

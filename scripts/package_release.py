@@ -32,6 +32,8 @@ def main():
     for language in ('ru', 'en'):
         shutil.copy2(ROOT / 'docs' / 'guides' / f'spoolman-{language}.md', stage / 'guides')
         shutil.copy2(ROOT / 'docs' / 'guides' / f'{language}.md', stage / 'guides')
+    for guide in (stage / 'guides').glob('*.md'):
+        guide.write_text(guide.read_text(encoding='utf-8').replace('../releases/' + VERSION + '.md', '../RELEASE-NOTES.md'), encoding='utf-8')
     notes = (ROOT / 'docs' / 'releases' / f'{VERSION}.md').read_text(encoding='utf-8')
     (stage / 'RELEASE-NOTES.md').write_text(notes.replace('../guides/', 'guides/').replace('../licenses/', 'licenses/'), encoding='utf-8')
     (stage / 'START-HERE.txt').write_text(

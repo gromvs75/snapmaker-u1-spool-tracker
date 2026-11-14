@@ -39,7 +39,7 @@ class Recovery:
         with self.db:self.db.execute('INSERT INTO uid_recovery_profiles VALUES(?,?,0)',(history_key,payload))
         return 'saved'
 
-    def preview(self,key,layer=None):
+    def preview(self,key,layer=None,*,manual=False):
         row=self.db.execute('SELECT * FROM uid_motion_captures WHERE key=?',(key,)).fetchone()
         if row is None or not row['history']:raise ValueError('No bound history')
         history=json.loads(row['history'])
@@ -60,7 +60,9 @@ class Recovery:
         bindings={t['channel']:t['spool_id'] for t in self.db.execute('SELECT * FROM uid_job_tools WHERE job_key=?',(key,))}
         if any(str(mapping[i]) not in bindings for i in used):raise ValueError('Missing original spool binding')
         reasons=[r[0] for r in self.db.execute('SELECT reason FROM uid_motion_review WHERE job_key=?',(key,))]
-        if any('automatic' in r.lower() or 'mapping' in r.lower() or 'identity' in r.lower() for r in reasons):
+        if any(any(x in r for x in ('Ambiguous history/start match','History identity changed','Terminal history changed','Conflicting history records')) for r in reasons):
+            raise ValueError('Conflicting history identity; reconciliation unavailable')
+        if not manual and any('automatic' in r.lower() or 'mapping' in r.lower() or 'identity' in r.lower() for r in reasons):
             raise ValueError('Automatic transition or ambiguous identity remains blocked')
         counter=history.get('filament_used');totals={};ranges=None
         if type(counter) in (int,float) and math.isfinite(counter) and counter>0 and len(used)==1:
@@ -155,6 +157,10 @@ class Recovery:
             obs=snapshot.get('channels',{}).get(ch,{})
             if not t['uid'] or obs.get('state')!='present' or obs.get('uid')!=t['uid']:
                 raise ValueError('Original spool identity is not confirmed; manual review required')
+            if sum(o.get('uid')==t['uid'] and o.get('state')=='present' for printer in fleet.values() for o in printer.get('channels',{}).values())!=1:
+                raise ValueError('Original UID conflicts across printers')
+            if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE t.spool_id=? AND j.state='active' AND j.job_key<>?",(t['spool_id'],key)).fetchone():
+                raise ValueError('Spool reserved by another print')
             sid=t['spool_id'];original=mg(ctx['start']['spools'][sid]['remaining_g'])
             actual=self.db.execute('SELECT remaining_mg FROM uid_spools WHERE spool_id=?',(sid,)).fetchone()[0]
             if actual!=original:raise ValueError('Spool balance changed since start')

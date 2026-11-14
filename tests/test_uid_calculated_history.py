@@ -99,3 +99,10 @@ def test_insufficient_target_rolls_back_receipt_and_all_spools(bench):
     assert c.spool('04112233')['remaining_mg']==20000
     assert not c.db.execute('SELECT * FROM uid_recovery_receipts').fetchall()
     assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+
+
+def test_duplicate_uid_across_printers_blocks_automatic_recovery(bench):
+    life,key,status,c,fleet=scenario(bench)
+    fleet.states['b']=snapshot('b',{'1':'04AABBCC'})
+    assert life.recovery_terminal('a',history('completed'),status,'a'*64)['status']=='review'
+    assert not c.db.execute('SELECT * FROM uid_debits').fetchall()

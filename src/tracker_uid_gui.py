@@ -35,7 +35,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
             state['delivery']=owner.call('delivery_list')
             state['delivery_enabled']=sender is not None
             state['connections']=owner.call('connection_state') if hasattr(owner,'connected') else None
-            for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'])
+            for job in state['jobs']: job['presentation']=history_presentation(job,state['debits'],state['reviews'],state['recovery_receipts'])
             state['active_spools']=owner.call('active_spools')
             state['occupied']=[r for r in locations if r.get('identity_mode')!='manual']
             for assignment in state['manual_assignments']:
@@ -61,6 +61,16 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                     observation={'state':status_reader(data['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call(self.path.removeprefix('/api/'),**data,observation=observation))
+                if self.path=='/api/reconcile_apply':
+                    if status_reader is None:raise ValueError('Проверка принтера недоступна.')
+                    if 'observation' in data or 'fleet' in data:raise ValueError('Неверные параметры сверки.')
+                    job=next((j for j in owner.call('inspect')['jobs'] if j['job_key']==data['job_key']),None)
+                    if job is None:raise ValueError('Задание не найдено.')
+                    snapshot=fleet.snapshot().get(job['printer_id'],{})
+                    checked=time.monotonic()
+                    observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
+                                 'connection_token':UidCatalog.connection_token(snapshot)}
+                    return self.reply(200,owner.call('reconcile_apply',**data,observation=observation))
                 if self.path=='/api/resolve':
                     if not {'job_key','expected_version','confirmed','accept_unaccounted'}<=set(data) or set(data)-{'job_key','expected_version','confirmed','accept_unaccounted','mode'}:
                         raise ValueError('Неверные параметры разрешения задания.')
@@ -80,7 +90,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                     if data.get('confirmed') is not True or set(data)-{'confirmed','operation_id','expected_revision'}:raise ValueError('Explicit send confirmation required')
                     if ('operation_id' in data)!=('expected_revision' in data):raise ValueError('Operation and revision required together')
                     return self.reply(200,{'status':sender.send_one(data.get('operation_id'),data.get('expected_revision'))})
-                commands={'/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
+                commands={'/api/reconcile_preview':'reconcile_preview','/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
                           '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
                           '/api/backup':'export_backup'}
                 if self.path=='/api/restore_backup' and sender is not None:

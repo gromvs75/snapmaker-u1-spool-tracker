@@ -1,6 +1,6 @@
 """Two real no-hardware process printers: automatic vs manual replacement."""
 from pathlib import Path
-import sys,tempfile,shutil,json,time
+import sys,tempfile,shutil,json,time,argparse,threading
 ROOT=Path(__file__).resolve().parents[3];sys.path[:0]=[str(ROOT/'src'),str(ROOT),str(ROOT/'dev/labs/uid_multi_bench')]
 import run as multi
 from tracker_uid_session import Session
@@ -8,7 +8,9 @@ from tracker_uid_collectors import create_workers
 
 
 def main():
-    out=ROOT/'output/manual-uid-replacement';out.mkdir(parents=True,exist_ok=True)
+    parser=argparse.ArgumentParser();parser.add_argument('--gui',action='store_true');args=parser.parse_args()
+    server=None;web=None
+    out=ROOT/('output/manual-uid-replacement-gui' if args.gui else 'output/manual-uid-replacement');out.mkdir(parents=True,exist_ok=True)
     multi.ROOT=Path(tempfile.mkdtemp(prefix='uid-calc-',dir='/private/tmp'));printers=[];session=None;checks=[]
     def check(name,ok):assert ok,name;checks.append(name);print('PASS '+name,flush=True)
     def event(p,action,**kw):return p.http('/printer/bench_motion/event',dict(action=action,**kw))
@@ -59,8 +61,25 @@ def main():
         session.close();session=None
         session=Session(directory,allowed_urls=allowed,worker_factory=create_workers);session.call('connect_printers',confirmed=True);time.sleep(6)
         check('second restart preserves exact same debits',len(session.call('inspect')['debits'])==2 and balances()['04CCCCDD']==97315)
+        if args.gui:
+            from tracker_uid_gui import serve
+            from tracker_uid_collectors import ReadOnlyMoonraker
+            server=serve(session,session.fleet,18750,status_reader=lambda pid:ReadOnlyMoonraker(next(p.url for p in printers if p.pid==pid)).status()['print_stats']['state'])
+            web=threading.Thread(target=server.serve_forever);web.start()
+            print('GUI READY http://127.0.0.1:18750 — reconcile B with 0.500 / 2.483 g',flush=True)
+            multi.wait(lambda:len(session.call('inspect')['debits'])==4,timeout=1200)
+            check('GUI decision debits exact reviewed distribution',balances()['04112244']==19500 and balances()['04EEEEFF']==97517)
+            time.sleep(6)
+            check('history replay after GUI decision is idempotent',len(session.call('inspect')['debits'])==4)
+            server.shutdown();web.join();server.server_close();server=None
+            session.call('disconnect_printers',confirmed=True)
+            backup=session.call('backup_package');preview=session.call('validate_backup',package=backup)
+            session.call('restore_backup',package=backup,expected_revision=preview['current_revision'],confirmed=True)
+            session.call('connect_printers',confirmed=True);time.sleep(6)
+            check('restored confirmed decision never debits again',len(session.call('inspect')['debits'])==4 and balances()['04112244']==19500 and balances()['04EEEEFF']==97517)
         (out/'results.json').write_text(json.dumps(dict(checks=checks,state=session.call('inspect'),root=str(multi.ROOT)),indent=2))
     finally:
+        if server:server.shutdown();web.join();server.server_close()
         if session:session.close()
         for p in printers:
             p.stop_m();p.stop_k();cfg=p.data/'config/printer.cfg';cfg.write_text(cfg.read_text().replace('\n[bench_transition]\n',''));p.close()

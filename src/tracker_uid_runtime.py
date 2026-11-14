@@ -61,6 +61,8 @@ class AccountingOwner:
             library = Library(service.accounting)
             from tracker_uid_delivery import Delivery
             delivery = Delivery(service.accounting)
+            from tracker_uid_reconciliation import Reconciliation
+            reconciliation = Reconciliation(lifecycle.recovery, service.accounting)
             from tracker_uid_tags import Tags
             tags = Tags(service.accounting)
             self.ready.set_result(threading.get_ident())
@@ -78,6 +80,10 @@ class AccountingOwner:
                     if operation in ('tag_preview','tag_register'):
                         # Registration commits against current observations, not a queued stale scan.
                         result=getattr(tags,operation.removeprefix('tag_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation == 'reconcile_preview':
+                        result = reconciliation.preview(*args, **kwargs)
+                    elif operation == 'reconcile_apply':
+                        result = reconciliation.apply(*args, fleet=self.fleet.snapshot(), **kwargs)
                     elif operation in ('delivery_list','delivery_audit','delivery_decide','delivery_claim','delivery_finish'):
                         result=getattr(delivery,operation.removeprefix('delivery_'))(*args,**kwargs)
                     elif operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
@@ -105,6 +111,7 @@ class AccountingOwner:
                         library=Library(service.accounting)
                         delivery=Delivery(service.accounting)
                         tags=Tags(service.accounting)
+                        reconciliation=Reconciliation(lifecycle.recovery, service.accounting)
                     elif operation == 'export_backup':
                         import sqlite3, tempfile, base64
                         from pathlib import Path
@@ -119,7 +126,7 @@ class AccountingOwner:
                         result = {'thread_id': threading.get_ident(),
                                   'spools': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_spools')],
                                   'manual_assignments': [dict(r) for r in catalog.db.execute('SELECT * FROM manual_assignments')],
-                                  'jobs': [dict(r, resolution_version=service.accounting.resolution_version(r),unlock=service.accounting.unlock_state(r['job_key']),spool_ids=[t[0] for t in catalog.db.execute('SELECT spool_id FROM uid_job_tools WHERE job_key=?',(r['job_key'],))]) for r in catalog.db.execute('SELECT j.*,c.filename FROM uid_jobs j LEFT JOIN uid_motion_captures c ON c.key=j.job_key')],
+                                  'jobs': [dict(r, history_status=__import__('json').loads(r['terminal_history'])['status'] if r['terminal_history'] else None, resolution_version=service.accounting.resolution_version(r),unlock=service.accounting.unlock_state(r['job_key']),spool_ids=[t[0] for t in catalog.db.execute('SELECT spool_id FROM uid_job_tools WHERE job_key=?',(r['job_key'],))]) for r in catalog.db.execute('SELECT j.*,c.filename,c.history AS terminal_history FROM uid_jobs j LEFT JOIN uid_motion_captures c ON c.key=j.job_key')],
                                   'replacement_events': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_replacement_events ORDER BY job_key,ordinal')],
                                   'recovery_plans': [dict(history_key=r['history_key'],quarantined=bool(r['quarantined']),auto_replenish=__import__('json').loads(r['profile']).get('auto_replenish')) for r in catalog.db.execute('SELECT * FROM uid_recovery_profiles')],
                                   'recovery_receipts': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_recovery_receipts')],

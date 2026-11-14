@@ -11,13 +11,13 @@ spec=importlib.util.spec_from_file_location('rt',ROOT/'dev/labs/uid_runtime_live
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--scenario',choices=['baseline','late-service'],default='baseline');args=parser.parse_args()
-    out=ROOT/'output/autorefill-boundaries-2026-11-14'/args.scenario;out.mkdir(parents=True,exist_ok=True)
+    out=ROOT/'output/autorefill-barriers-2026-11-14'/args.scenario;out.mkdir(parents=True,exist_ok=True)
     multi.ROOT=Path(tempfile.mkdtemp(prefix='uid-transition-',dir='/private/tmp'))
     p=None;fleet=owner=worker=None;checks=[]
     def check(name,ok):assert ok,name;checks.append(name);print('PASS '+name,flush=True)
     try:
         p=multi.Printer('transition',18763)
-        for file in [ROOT/'dev/labs/uid_runtime_live_bench/bench_motion.py',Path(__file__).with_name('bench_transition.py')]:shutil.copy2(file,p.root/'klipper/klippy/extras'/file.name)
+        for file in [ROOT/'dev/labs/uid_runtime_live_bench/bench_motion.py',Path(__file__).with_name('bench_transition.py'),Path(__file__).with_name('barrier_protocol.py')]:shutil.copy2(file,p.root/'klipper/klippy/extras'/file.name)
         with (p.data/'config/printer.cfg').open('a') as f:f.write('\n[bench_transition]\n')
         p.start();fleet=UidFleet([PrinterEndpoint(p.pid,'Transition',p.url)],poll_interval=.2,response_timeout=2)
         fleet.start();multi.wait(lambda:fleet.snapshot()[p.pid]['state']=='ready')
@@ -73,6 +73,11 @@ def main():
         for _ in range(3):owner.call('history',p.pid,read_history())
         check('reconnect does not unblock research consumption',not owner.call('inspect')['debits'])
         check('no remote debit queued',not owner.call('library_snapshot')['remote_outbox'])
+        from dev.labs.uid_autorefill_boundary_bench.barrier_checks import exercise
+        barrier_report=exercise(p,multi.wait)
+        for _ in range(3):owner.call('history',p.pid,read_history())
+        check('barrier research never changes local or remote ledger',not owner.call('inspect')['debits'] and not owner.call('library_snapshot')['remote_outbox'] and all(s['remaining_mg']==500000 for s in owner.call('inspect')['spools']))
+        (out/'barriers.json').write_text(json.dumps(barrier_report,indent=2))
         (out/'results.json').write_text(json.dumps(dict(checks=checks,scenario=args.scenario,arrival_filtered_mm=naive,ground_truth_service_mm=25,uncertain_partition=uncertain,trace=trace,partition=partition,unproven=unknown,synthetic_only=known,state=owner.call('inspect'),root=str(multi.ROOT)),indent=2))
     finally:
         if worker:worker.stop()

@@ -1,13 +1,27 @@
 """Synthetic transition controls, ONLY in marked no-hardware Klipper bench."""
 from .bench_motion import BenchMotion
+from .barrier_protocol import Source
 
 
 class Transition(BenchMotion):
     def __init__(self,config):
-        self.pending=[];self.trace=[]
+        self.pending=[];self.trace=[];self.barrier_source=Source()
         super().__init__(config)
     def event(self,req):
         action=req.get_str('action')
+        if action.startswith('barrier_'):
+            try:
+                if action=='barrier_start':
+                    self.barrier_source=Source();result={'epoch':self.barrier_source.epoch}
+                elif action=='barrier_packet':
+                    result=self.barrier_source.packet(req.get_int('head'),req.get_float('start'),req.get_float('end'),req.get_float('length'),bool(req.get_int('delayed',0)))
+                    if req.get_int('delayed',0):result={'queued':True}
+                elif action=='barrier_flush':result={'packets':self.barrier_source.flush()}
+                elif action=='barrier_seal':result=self.barrier_source.barrier(req.get_str('id'),req.get_float('fence'))
+                else:raise ValueError('Unknown barrier control')
+                req.send({'value':result})
+            except ValueError as exc:req.send({'rejected':str(exc)})
+            return
         if action in ('sample','queue_sample'):
             head=req.get_int('head');length=req.get_float('length');stamp=req.get_float('stamp')
             counter=req.get_float('counter',length)

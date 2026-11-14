@@ -94,7 +94,7 @@ class MotionSocket:
 
 
 class ProfileHistory:
-    def __init__(self,client,store,profile_sink=None,terminal_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
+    def __init__(self,client,store,profile_sink=None,terminal_sink=None,observation_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.observation_sink=observation_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
     @staticmethod
     def identity(job):return (job['job_id'],job['start_time'],job['filename'])
     @staticmethod
@@ -129,10 +129,12 @@ class ProfileHistory:
                 elif old['mapping']!=mapping:
                     raise ValueError('Tool mapping changed during capture')
                 if self.profile_sink:self.profile_sink(job,self.store._motion_slicer_profile)
+                if self.observation_sink:self.observation_sink(job,status)
             elif not (self.key and stats.get('filename')==self.key[2] and stats.get('state') in ('complete','cancelled','error')):
                 self.store._motion_slicer_profile=None;self.key=None
             if self.terminal_sink and stats.get('state')=='complete':
                 latest=sorted(jobs,key=lambda j:j.get('start_time',0),reverse=True)
+                if self.observation_sink and latest and latest[0].get('filename')==stats.get('filename') and latest[0].get('status')=='completed':self.observation_sink(latest[0],status)
                 if (latest and latest[0].get('status')=='completed' and latest[0].get('filename')==stats.get('filename')
                         and self.identity(latest[0]) not in self.terminal_done and time.monotonic()-self.terminal_checked>=5):
                     self.terminal_checked=time.monotonic()
@@ -152,7 +154,7 @@ class ProfileHistory:
 def create_workers(owner,printer,directory):
     u=urlsplit(printer['url']);config={'enabled':True,'host':u.hostname,'port':u.port or (443 if u.scheme=='https' else 80)}
     store=ModelInventoryStore(owner,printer['id'],directory/('motion-'+printer['id']),config)
-    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest))
+    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest),lambda job,status:owner.call('replacement_observe',printer['id'],job,status))
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
                           lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5)
     client.stop_event=worker.stop_event

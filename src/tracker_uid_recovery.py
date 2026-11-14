@@ -1,4 +1,4 @@
-"""Read-only recovery proposals. No mutation of balances or accounting validity.
+"""Recovery proposals and validated atomic calculated completion receipts.
 
 Persist the verified active-job plan through the SQLite owner, before a gap.
 Completion/status is supplied by Moonraker, never inferred from the slicer.
@@ -107,6 +107,8 @@ class Recovery:
         start_mode=plan.get('auto_replenish');task=status['print_task_config'];end_mode=task.get('auto_replenish_filament')
         if type(start_mode) is not bool or type(end_mode) is not bool or start_mode!=end_mode:
             raise ValueError('Automatic replacement mode unknown or changed')
+        events=[json.loads(r[0]) for r in self.db.execute('SELECT payload FROM uid_replacement_events WHERE job_key=? ORDER BY ordinal',(key,))]
+        if events:return self.manual_segments(key,plan,history,ctx,status,accounting,fleet,events,digest)
         initial=validate_mapping(plan['mapping']);final=validate_mapping(task['extruder_map_table'])
         repl=validate_mapping(task['extruders_replenished'])
         if plan['replenished']!=[0,1,2,3]:raise ValueError('Transition predates saved plan')
@@ -164,3 +166,55 @@ class Recovery:
             self.db.execute('INSERT INTO uid_recovery_receipts VALUES(?,?)',(key,receipt))
         result=accounting.apply(key,1,totals,state='completed',source=job['source'],basis='calculated_history',recovery_validator=validate)
         return dict(status=result,totals_mg=totals,estimate_source=source_label,auto_replenish=start_mode)
+
+    def manual_segments(self,key,plan,history,ctx,status,accounting,fleet,events,digest):
+        """Apply explicit paused UID segments in one transaction; never full plan on cancel."""
+        from tracker_uid_accounting import mg
+        if any(not e['proven'] for e in events):raise ValueError('Replacement boundary needs manual review')
+        used=[i for i,w in enumerate(plan['logical_weights']) if w>0]
+        if len(used)!=1:raise ValueError('Multiple tools need manual distribution')
+        logical=used[0];channel=str(plan['mapping'][logical]);parameter=plan['parameters'][logical]
+        job=accounting.job(key);original=next(t for t in job['tools'] if t['channel']==channel)
+        sid=original['spool_id'];uid=original['uid'];counter=0.;totals={};expected={sid:mg(ctx['start']['spools'][sid]['remaining_g'])}
+        for e in events:
+            if e['channel']!=channel or e['old_spool_id']!=sid or e['old_uid']!=uid or e['counter_mm']<counter:
+                raise ValueError('Replacement chain inconsistent')
+            # Cumulative rounding makes segment sums stable to a milligram.
+            amount=mass(e['counter_mm'],parameter)-mass(counter,parameter)
+            totals[sid]=totals.get(sid,0)+amount
+            sid=e['new_spool_id'];uid=e['new_uid'];counter=e['counter_mm']
+            if not sid or sid in expected:raise ValueError('Repeated spool in replacement chain needs review')
+            expected[sid]=e['new_remaining_mg']
+        end=history.get('filament_used')
+        if type(end) in (int,float) and math.isfinite(end) and end>0:
+            if end<counter:raise ValueError('Terminal counter reset')
+            remainder=mass(end,parameter)-mass(counter,parameter);source='history_counter_and_paused_uid_segments'
+        else:
+            remainder=mg(plan['logical_weights'][logical])-sum(totals.values());source='slicer_plan_and_paused_uid_segments'
+        if remainder<0:raise ValueError('Plan contradicts replacement counters')
+        totals[sid]=totals.get(sid,0)+remainder
+        obs=fleet.get(job['printer_id'],{})
+        if obs.get('state')!='ready' or obs.get('channels',{}).get(channel,{}).get('state')!='present' or obs['channels'][channel].get('uid')!=uid:
+            raise ValueError('Final replacement UID not confirmed')
+        if sum(o.get('uid')==uid and o.get('state')=='present' for printer in fleet.values() for o in printer.get('channels',{}).values())!=1:raise ValueError('Replacement UID conflicts across printers')
+        if status['print_task_config']['extruder_map_table']!=plan['mapping'] or status['print_task_config']['extruders_replenished']!=[0,1,2,3]:
+            raise ValueError('Manual and automatic replacements cannot be combined')
+        if self.db.execute('SELECT 1 FROM uid_manual_resolutions WHERE job_key=?',(key,)).fetchone():raise ValueError('Manually closed job')
+        receipt=json.dumps(dict(estimate_source=source,totals_by_spool_mg=totals,segments=events,file_sha256=digest,auto_replenish=plan['auto_replenish']),sort_keys=True)
+        with accounting.transaction():
+            current=accounting.job(key)
+            if current['state']!='active' or current['last_sequence']!=-1:raise ValueError('Job already accounted')
+            for spool,amount in totals.items():
+                if self.db.execute('SELECT remaining_mg FROM uid_spools WHERE spool_id=?',(spool,)).fetchone()[0]!=expected[spool]:raise ValueError('Segment spool balance changed')
+                if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE t.spool_id=? AND j.state='active' AND j.job_key<>?",(spool,key)).fetchone():raise ValueError('Spool reserved by another print')
+                cur=self.db.execute('UPDATE uid_spools SET remaining_mg=remaining_mg-? WHERE spool_id=? AND remaining_mg>=?',(amount,spool,amount))
+                if cur.rowcount!=1:raise ValueError('Insufficient segment spool balance')
+                self.db.execute('INSERT INTO uid_debits VALUES(?,?,?,?)',(key,1,spool,amount))
+                if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_remote_links'").fetchone():
+                    link=self.db.execute('SELECT * FROM uid_remote_links WHERE spool_id=?',(spool,)).fetchone()
+                    if link and amount:self.db.execute("INSERT INTO uid_remote_outbox VALUES(?,?,?,?,?,?,'held')",(key,1,spool,link['url'],link['remote_id'],amount))
+            self.db.execute('UPDATE uid_job_tools SET used_mg=? WHERE job_key=? AND channel=?',(sum(totals.values()),key,channel))
+            self.db.execute('INSERT INTO uid_usage_events VALUES(?,?,?)',(key,1,receipt))
+            self.db.execute('INSERT INTO uid_recovery_receipts VALUES(?,?)',(key,receipt))
+            self.db.execute("UPDATE uid_jobs SET state='completed',last_sequence=1 WHERE job_key=?",(key,))
+        return dict(status='applied',totals_by_spool_mg=totals,estimate_source=source)

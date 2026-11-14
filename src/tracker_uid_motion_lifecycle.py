@@ -16,6 +16,8 @@ class MotionLifecycle:
         self.db = adapter.db
         self.session = uuid.uuid4().hex
         self.recovery = Recovery(self.db)
+        from tracker_uid_replacements import Replacements
+        self.replacements = Replacements(self.db)
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS uid_motion_captures (
                 key TEXT PRIMARY KEY, printer_id TEXT NOT NULL, source TEXT NOT NULL,
@@ -25,6 +27,7 @@ class MotionLifecycle:
         ''')
         # A new owner cannot certify uninterrupted motion from a previous owner.
         for row in self.db.execute("SELECT DISTINCT c.printer_id FROM uid_motion_captures c JOIN uid_jobs j ON j.job_key=c.key WHERE j.state='active'").fetchall():
+            self.replacements.gap(row[0])
             adapter.observation_gap(row[0], 'Motion lifecycle restarted')
 
     def start(self, printer_id, *, filename, observed_at, capture_id, epoch, start, channels):
@@ -50,6 +53,11 @@ class MotionLifecycle:
         if capture is None:return 'pending_observed_start'
         return self.recovery.remember(hk,profile)
 
+    def replacement_observe(self,printer_id,history,status):
+        hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
+        row=self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
+        if row:self.replacements.observe(row['key'],status,self.adapter.service.fleet.snapshot())
+
     def recovery_terminal(self, printer_id, history, status, digest):
         self.history(printer_id,[history])
         hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
@@ -64,6 +72,7 @@ class MotionLifecycle:
         return self.recovery.preview(key,layer)
 
     def disconnected(self, printer_id, reason='Motion connection lost'):
+        self.replacements.gap(printer_id)
         self.adapter.observation_gap(printer_id, reason)
 
     def terminal(self, printer_id, evidence):

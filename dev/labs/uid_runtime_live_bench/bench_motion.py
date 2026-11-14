@@ -37,6 +37,8 @@ class BenchMotion:
                 if conn.is_closed(): continue
                 message = dict(template); message['params'] = {'data': [[stamp,1,length,0,[0,0,0],[1,0,0]]]}
                 conn.send(message)
+        elif action == 'pause': self.stats.note_pause()
+        elif action == 'resume': self.stats.note_start()
         elif action == 'cancel': self.stats.note_cancel()
         elif action == 'complete': self.stats.note_complete()
         else: raise req.error('Unknown fixture action')

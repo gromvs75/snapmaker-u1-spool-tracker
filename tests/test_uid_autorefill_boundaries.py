@@ -112,3 +112,24 @@ def test_fence_crossing_cannot_be_split_proportionally_or_replayed_conflictingly
     assert not partition_motion([p],**kw)['fully_partitioned']
     for other in [dict(p,length=11),dict(p,id='overlap',start=10,end=12),dict(p,epoch='reconnected')]:
         with pytest.raises(ValueError):partition_motion([p,other],**kw)
+
+
+def test_uncertain_status_windows_never_invent_a_split():
+    from dev.labs.uid_autorefill_boundary_bench.model import partition_uncertain_fences
+    packets=[dict(id=str(i),head=h,start=t,end=t+1,length=n,clock='motion',epoch='same') for i,(h,t,n) in enumerate([(3,2,2),(3,10,5),(1,11,20),(1,21,100)])]
+    r=partition_uncertain_fences(packets+packets,pause_window=(9,12),resume_window=(19,22),clock='motion',epoch='same')
+    assert sum(p['length'] for p in r['groups']['ambiguous'])==125
+    assert not r['fully_partitioned'] and not r['authorizes_debit']
+    exact=partition_uncertain_fences(packets,pause_window=(10,10),resume_window=(20,20),clock='motion',epoch='same')
+    assert exact['fully_partitioned'] and not exact['stream_completeness_proven']
+    # A missing packet can look perfectly partitioned: placement is not coverage.
+    missing=partition_uncertain_fences(packets[:1],pause_window=(10,10),resume_window=(20,20),clock='motion',epoch='same')
+    assert missing['fully_partitioned'] and not missing['stream_completeness_proven']
+    assert not missing['authorizes_debit']
+
+
+@pytest.mark.parametrize('pause,resume', [((12,9),(19,22)),((9,20),(19,22)),((9,float('nan')),(19,22))])
+def test_uncertain_status_windows_reject_unproven_order(pause,resume):
+    from dev.labs.uid_autorefill_boundary_bench.model import partition_uncertain_fences
+    with pytest.raises(ValueError):
+        partition_uncertain_fences([],pause_window=pause,resume_window=resume,clock='motion',epoch='same')

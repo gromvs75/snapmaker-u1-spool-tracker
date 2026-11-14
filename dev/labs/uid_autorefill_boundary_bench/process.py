@@ -1,16 +1,17 @@
 """Research only: service transition on real Klipper/Moonraker processes."""
 from pathlib import Path
-import sys,json,tempfile,shutil,time,importlib.util
+import sys,json,tempfile,shutil,time,importlib.util,argparse
 ROOT=Path(__file__).resolve().parents[3];sys.path[:0]=[str(ROOT/'src'),str(ROOT),str(ROOT/'dev/labs/uid_multi_bench')]
 import run as multi
 from tracker_uid_client import UidFleet,PrinterEndpoint
 from tracker_uid_runtime import AccountingOwner,PrinterWorkers
-from dev.labs.uid_autorefill_boundary_bench.model import Checkpoint,automatic_boundary,printing_interval,partition_motion
+from dev.labs.uid_autorefill_boundary_bench.model import Checkpoint,automatic_boundary,printing_interval,partition_motion,partition_uncertain_fences
 spec=importlib.util.spec_from_file_location('rt',ROOT/'dev/labs/uid_runtime_live_bench/run.py');rt=importlib.util.module_from_spec(spec);spec.loader.exec_module(rt)
 
 
 def main():
-    out=ROOT/'output/autorefill-process';out.mkdir(parents=True,exist_ok=True)
+    parser=argparse.ArgumentParser();parser.add_argument('--scenario',choices=['baseline','late-service'],default='baseline');args=parser.parse_args()
+    out=ROOT/'output/autorefill-boundaries-2026-11-14'/args.scenario;out.mkdir(parents=True,exist_ok=True)
     multi.ROOT=Path(tempfile.mkdtemp(prefix='uid-transition-',dir='/private/tmp'))
     p=None;fleet=owner=worker=None;checks=[]
     def check(name,ok):assert ok,name;checks.append(name);print('PASS '+name,flush=True)
@@ -42,17 +43,21 @@ def main():
         event('service_pause');time.sleep(.7)
         event('flush') # pre-pause movement arrives during paused state
         event('sample',head=3,length=5,stamp=10,counter=5)
-        event('sample',head=1,length=20,stamp=11,counter=7.84003)
+        event('queue_sample' if args.scenario=='late-service' else 'sample',head=1,length=20,stamp=11,counter=7.84003)
         event('service_resume');time.sleep(.7)
+        if args.scenario=='late-service':event('flush')
         event('sample',head=1,length=100,stamp=21);time.sleep(.5);event('complete')
         trace=status()['trace']
         check('late pre-pause packet delivered during paused',any(x['kind']=='delivery' and x['stamp']==2 and x['state']=='paused' for x in trace))
         service=[x for x in trace if x['kind']=='command' and 10<=x['stamp']<20]
         naive=sum(x['length'] for x in trace if x['kind']=='delivery' and x['state']=='paused')
-        check('arrival-state filter misattributes two millimetres',naive==27 and sum(x['length'] for x in service)==25)
+        check('arrival-state filtering is wrong',naive==(7 if args.scenario=='late-service' else 27) and sum(x['length'] for x in service)==25)
+        if args.scenario=='late-service':check('service motion delivered after printing resumes',any(x['kind']=='delivery' and x['stamp']==11 and x['state']=='printing' for x in trace))
         packets=[dict(id=str(x['stamp'])+':'+str(x['head']),head=x['head'],start=x['stamp'],end=x['stamp']+1,length=x['length'],clock='synthetic-command-clock',epoch='fixture') for x in trace if x['kind']=='delivery']
         partition=partition_motion(list(reversed(packets))+packets,pause_fence=10,resume_fence=20,clock='synthetic-command-clock',epoch='fixture')
         check('event-time partition survives late delivery and exact replay',partition['fully_partitioned'] and sum(x['length'] for x in partition['groups']['service'])==25 and not partition['authorizes_debit'])
+        uncertain=partition_uncertain_fences(packets,pause_window=(9,12),resume_window=(19,22),clock='synthetic-command-clock',epoch='fixture')
+        check('status uncertainty leaves boundary packets unresolved',not uncertain['fully_partitioned'] and sum(p['length'] for p in uncertain['groups']['ambiguous'])==125 and not uncertain['authorizes_debit'])
         def point(heads,total,fence):return Checkpoint(tuple(heads),total,'synthetic-command-clock',fence,True,('s0','s1','s2','s3'),'fixture')
         before=point([0,0,0,102],102,10);resume=point([0,20,0,107],114.84003,20);end=point([0,120,0,107],214.84003,30)
         unknown=automatic_boundary(before,resume,source_head=3,target_head=1,runout=True,mapping=[0,1,2,1])
@@ -67,7 +72,8 @@ def main():
         multi.wait(lambda:fleet.snapshot()[p.pid]['connections']>generation and fleet.snapshot()[p.pid]['state']=='ready')
         for _ in range(3):owner.call('history',p.pid,read_history())
         check('reconnect does not unblock research consumption',not owner.call('inspect')['debits'])
-        (out/'results.json').write_text(json.dumps(dict(checks=checks,trace=trace,partition=partition,unproven=unknown,synthetic_only=known,state=owner.call('inspect'),root=str(multi.ROOT)),indent=2))
+        check('no remote debit queued',not owner.call('library_snapshot')['remote_outbox'])
+        (out/'results.json').write_text(json.dumps(dict(checks=checks,scenario=args.scenario,arrival_filtered_mm=naive,ground_truth_service_mm=25,uncertain_partition=uncertain,trace=trace,partition=partition,unproven=unknown,synthetic_only=known,state=owner.call('inspect'),root=str(multi.ROOT)),indent=2))
     finally:
         if worker:worker.stop()
         if owner:owner.close()
@@ -76,6 +82,7 @@ def main():
             p.stop_m();p.stop_k();cfg=p.data/'config/printer.cfg';cfg.write_text(cfg.read_text().replace('\n[bench_transition]\n',''));p.close()
             for name in ['klippy','moonraker']:shutil.copy2(p.data/f'logs/{name}.log',out/f'{name}.log')
         if (multi.ROOT/'motion').exists():shutil.copytree(multi.ROOT/'motion',out/'motion',dirs_exist_ok=True)
+    (out/'cleanup.json').write_text(json.dumps(dict(stopped=p.k is None and p.m is None,temporary_root=str(multi.ROOT))))
     print(f'{len(checks)} process research checks passed',flush=True)
 
 if __name__=='__main__':main()

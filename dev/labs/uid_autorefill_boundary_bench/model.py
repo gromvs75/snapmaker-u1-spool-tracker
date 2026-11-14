@@ -101,3 +101,28 @@ def partition_motion(packets, *, pause_fence, resume_fence, clock, epoch):
         groups[phase].append(dict(p))
     return dict(groups=groups,fully_partitioned=not groups['ambiguous'],authorizes_debit=False,
                 reason='Counter inclusion of service commands remains unproven')
+
+
+def partition_uncertain_fences(packets, *, pause_window, resume_window, clock, epoch):
+    """Research hypothesis: windows need an independently proven common clock.
+
+    These are event-time brackets, NOT wall-clock arrival timestamps. Even
+    unambiguous placement cannot prove stream completeness without watermarks.
+    """
+    values=(*pause_window,*resume_window)
+    if (len(pause_window)!=2 or len(resume_window)!=2
+            or any(type(v) not in (int,float) or not math.isfinite(v) for v in values)):
+        raise ValueError('Invalid fence windows')
+    pl,ph=pause_window;rl,rh=resume_window
+    if not pl<=ph<rl<=rh:raise ValueError('Overlapping or reversed fence windows')
+    # Reuse validation/deduplication, never infer boundaries from totals.
+    validated=partition_motion(packets,pause_fence=pl,resume_fence=rh,clock=clock,epoch=epoch)
+    groups={k:[] for k in ('before','service','after','ambiguous')}
+    for group in validated['groups'].values():
+        for p in group:
+            phase=('before' if p['end']<=pl else 'after' if p['start']>=rh else
+                   'service' if p['start']>=ph and p['end']<=rl else 'ambiguous')
+            groups[phase].append(p)
+    return dict(groups=groups,fully_partitioned=not groups['ambiguous'],
+                stream_completeness_proven=False,authorizes_debit=False,
+                reason='Common-clock windows are assumed; completeness and counter scope remain unproven')

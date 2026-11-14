@@ -1,7 +1,7 @@
 name: Tracker 2 current unified Windows build
 on:
   push:
-    branches: ['integrate/2.0-registration-drawer-spoolman']
+    branches: ['integrate/2.0-registration-drawer-spoolman', 'integrate/2.0-history-recovery']
   workflow_dispatch:
 permissions:
   contents: read
@@ -17,9 +17,11 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install isolated build dependencies
-        run: python -m pip install pystray==0.19.5 pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1 pywinauto==0.6.9
+        run: python -m pip install pystray==0.19.5 pyinstaller==6.16.0 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1 pywinauto==0.6.9 playwright==1.56.0
+      - name: Install browser for actual packaged GUI scenario
+        run: python -m playwright install chromium
       - name: Current UID delivery settings and shell regressions
-        run: python -m pytest tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_tags.py tests/test_uid_delivery.py tests/test_uid_settings_backup.py tests/test_uid_port_shell.py tests/test_uid_collectors.py tests/test_uid_runtime.py tests/test_uid_autorefill_boundaries.py --timeout=45 --junitxml=output/unified-windows/tests.xml -q
+        run: python -m pytest tests/test_uid_manual.py tests/test_uid_resolution.py tests/test_uid_unlock_window.py tests/test_uid_tags.py tests/test_uid_delivery.py tests/test_uid_settings_backup.py tests/test_uid_port_shell.py tests/test_uid_collectors.py tests/test_uid_runtime.py tests/test_uid_autorefill_boundaries.py tests/test_uid_recovery.py tests/test_uid_calculated_history.py tests/test_uid_replacements.py tests/test_uid_reconciliation.py tests/test_uid_port_presentation.py --timeout=45 --junitxml=output/unified-windows/tests.xml -q
       - name: Build current unified entrypoint
         run: python -m PyInstaller --clean --noconfirm packaging/TrackerUidSettings.spec
       - name: Verify packaged API settings restore and second process
@@ -65,6 +67,8 @@ jobs:
             if ($LASTEXITCODE) { throw 'Current EXE process bench failed' }
             $result = Get-Content "$out/unified-live-result.json" -Raw | ConvertFrom-Json
             if (!$result.success) { throw 'Missing current EXE result' }
+            python dev/labs/uid_unified_bench/recovery_exe.py --exe "$exe" --manifest "$manifest" --output "$out" --browser
+            if ($LASTEXITCODE) { throw 'Current EXE UID recovery GUI scenario failed' }
           } finally {
             if (Test-Path $manifest) {
               $cfg = Get-Content $manifest -Raw | ConvertFrom-Json

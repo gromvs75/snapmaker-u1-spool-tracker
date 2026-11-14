@@ -33,7 +33,7 @@ def main():
         except BaseException:proc.terminate();proc.wait(15);raise
         return proc
     def event(pid,action,**kw):return http(cfg['printers'][pid],'/printer/bench_motion/event',dict(action=action,**kw))
-    def subscribed():return all(all(http(port,'/printer/objects/query?bench_motion')['result']['status']['bench_motion']['subscribers']) for port in cfg['printers'].values())
+    def subscribed():return all(all(http(port,'/printer/objects/query?bench_transition')['result']['status']['bench_transition']['subscribers']) for port in cfg['printers'].values())
     def connected():return len(api('state')['printers'])==2 and all(p['ready'] for p in api('state')['printers'])
     def control(action):return http(18780,'/',dict(action=action,printer='a'),{'X-Bench-Token':cfg['token']})
     try:

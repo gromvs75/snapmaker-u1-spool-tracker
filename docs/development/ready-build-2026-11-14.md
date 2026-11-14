@@ -83,9 +83,11 @@ output/ready-build-windows-app/. Публикации релиза и merge в m
    Auto on: 20 + 50 г; auto off: то же переключение требует сверки.
    Повтор истории, второй restart и restore не создают повторного расхода.
 7. Нативный macOS WebView: история отрисована, закрытие окна скрывает его.
-   Для пунктов системного меню трея запрошена проверка пользователя: CUA возвращает
-   timeoutReached/noWindowsAvailable для SystemUIServer. Не объявлять это пройденным
-   до наблюдения результата.
+   Пункты «Открыть Tracker» и «Выход» проверены пользователем: «Открытие и выход
+   работают». После этого CUA listApps подтвердил isRunning=false для отдельной
+   стендовой сборки. Меню проверено человеком, поскольку CUA не получал доступ
+   к SystemUIServer (timeoutReached/noWindowsAvailable). Открытых пунктов проверки
+   нативной оболочки этого этапа не осталось.
 
 Локальные артефакты (не коммитятся): output/build-completion-*.log,
 output/manual-uid-replacement-gui/, output/build-completion-macos/,

@@ -146,3 +146,34 @@ def test_restore_cannot_replace_inflight_remote_operation(bench,tmp_path):
             app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
         assert app.call('delivery_list')[0]['state']=='sending'
     finally:app.close()
+
+@pytest.mark.parametrize('missing',[
+    ['uid_recovery_decisions'],
+    ['uid_recovery_decisions','uid_replacement_events','uid_replacement_state'],
+    ['uid_recovery_decisions','uid_replacement_events','uid_replacement_state','uid_recovery_profiles','uid_recovery_receipts']])
+def test_additive_old_backup_migrates_on_copy_and_preserves_ledger(app,tmp_path,missing):
+    app.call('register','04112233','Preserved UID',123456)
+    package=app.call('backup_package')
+    path=tmp_path/'older.sqlite';path.write_bytes(base64.b64decode(package['base64']))
+    db=sqlite3.connect(path)
+    for table in missing:db.execute('DROP TABLE '+table)
+    db.commit();db.close();raw=path.read_bytes()
+    package.update(base64=base64.b64encode(raw).decode(),sha256=hashlib.sha256(raw).hexdigest())
+    original=copy.deepcopy(package)
+    preview=app.call('validate_backup',package=package)
+    assert preview['migrated_tables']==sorted(missing)
+    app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
+    assert package==original
+    assert app.call('inspect')['spools'][0]['remaining_mg']==123456
+    assert app.call('inspect')['spools'][0]['uid']=='04112233'
+    assert not app.connected
+    assert app.call('validate_backup',package=app.call('backup_package'))['migrated_tables']==[]
+
+
+def test_missing_ledger_and_modified_schema_cannot_be_called_migrations(app,tmp_path):
+    original=app.call('backup_package')
+    for sql in ('DROP TABLE uid_debits','ALTER TABLE uid_recovery_profiles ADD COLUMN surprise TEXT'):
+        path=tmp_path/'unsupported.sqlite';path.write_bytes(base64.b64decode(original['base64']))
+        db=sqlite3.connect(path);db.execute(sql);db.commit();db.close();raw=path.read_bytes()
+        package=dict(original,base64=base64.b64encode(raw).decode(),sha256=hashlib.sha256(raw).hexdigest())
+        with pytest.raises(ValueError,match='Схема'):app.call('validate_backup',package=package)

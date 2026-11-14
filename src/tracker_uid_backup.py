@@ -8,6 +8,25 @@ from pathlib import Path
 
 MAX_BACKUP = 32 * 1024 * 1024
 
+# Additive 2.0 development schemas, never a generic "accept any missing table".
+RECOVERY_ADDITIONS = {'uid_recovery_profiles', 'uid_recovery_receipts',
+                     'uid_replacement_state', 'uid_replacement_events',
+                     'uid_recovery_decisions'}
+
+
+def migrate_copy(db, live):
+    """Upgrade a disposable, checksum-verified copy using trusted local DDL."""
+    expected = {r[1]: r for r in schema(live)}
+    actual = {r[1]: r for r in schema(db)}
+    missing = set(expected)-set(actual)
+    if (set(actual)-set(expected) or missing-RECOVERY_ADDITIONS
+            or any(actual[name] != expected[name] for name in actual)):
+        raise ValueError('Схема копии отличается от поддерживаемых версий Tracker.')
+    with db:
+        for name in sorted(missing):
+            db.execute(expected[name][3])
+    return sorted(missing)
+
 
 def schema(db):
     return [tuple(r) for r in db.execute("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name")]
@@ -49,9 +68,10 @@ def validate(package, live):
     raw=decode(package)
     with tempfile.TemporaryDirectory(prefix='uid-validate-') as folder:
         path=Path(folder)/'copy.sqlite';path.write_bytes(raw)
-        db=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True)
+        db=sqlite3.connect(path)
         try:
             db.execute('PRAGMA trusted_schema=OFF')
+            migrated=migrate_copy(db,live)
             if db.execute('PRAGMA integrity_check').fetchone()[0]!='ok' or db.execute('PRAGMA foreign_key_check').fetchall():
                 raise ValueError('Нарушена целостность SQLite или связей.')
             if schema(db)!=schema(live):raise ValueError('Схема копии отличается от этой версии Tracker.')
@@ -62,7 +82,7 @@ def validate(package, live):
             from tracker_uid_settings import validate_printers
             row=db.execute("SELECT payload FROM uid_preferences WHERE key='printers'").fetchone()
             if row:validate_printers(json.loads(row[0]))
-            result.update(sha256=package['sha256'],current_revision=fingerprint(live))
+            result.update(sha256=package['sha256'],current_revision=fingerprint(live),migrated_tables=migrated)
             return result
         except (sqlite3.Error,TypeError,json.JSONDecodeError) as exc:
             raise ValueError('Резервная копия повреждена.') from exc
@@ -78,6 +98,8 @@ def restore(package, live, expected_revision):
         path=Path(folder)/'copy.sqlite';path.write_bytes(raw)
         source=sqlite3.connect(path)
         try:
+            source.execute('PRAGMA trusted_schema=OFF')
+            migrate_copy(source,live)
             with source:
                 source.execute('UPDATE manual_assignments SET confirmed=0,version=lower(hex(randomblob(16)))')
                 source.execute('UPDATE uid_locations SET confirmed=0')

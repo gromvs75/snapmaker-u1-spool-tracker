@@ -124,7 +124,7 @@ class AccountingOwner:
                                   'debits': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_debits')],
                                   'reviews': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_motion_review')]}
                     elif operation == 'refresh': result = service.refresh()
-                    elif operation in ('start', 'terminal', 'history', 'disconnected'):
+                    elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview'):
                         result = getattr(lifecycle, operation)(*args, **kwargs)
                     else: raise ValueError('Unknown accounting operation')
                     if not future.cancelled(): future.set_result(result)

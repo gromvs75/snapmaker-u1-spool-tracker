@@ -7,6 +7,7 @@ import json
 import math
 import uuid
 from tracker_uid_accounting import job_key
+from tracker_uid_recovery import Recovery, TERMINAL
 
 
 class MotionLifecycle:
@@ -14,6 +15,7 @@ class MotionLifecycle:
         self.adapter = adapter
         self.db = adapter.db
         self.session = uuid.uuid4().hex
+        self.recovery = Recovery(self.db)
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS uid_motion_captures (
                 key TEXT PRIMARY KEY, printer_id TEXT NOT NULL, source TEXT NOT NULL,
@@ -37,6 +39,19 @@ class MotionLifecycle:
             self.db.execute('INSERT OR IGNORE INTO uid_motion_captures(key,printer_id,source,observed,filename,session) VALUES(?,?,?,?,?,?)',
                             (result['job_key'], printer_id, source, observed_at, filename, self.session))
         return result
+
+    def recovery_profile(self, printer_id, history, profile):
+        if history.get('status')!='in_progress':raise ValueError('Plan must be saved while job is active')
+        if profile.get('filename')!=history['filename'] or profile.get('started_at')!=history['start_time']:
+            raise ValueError('Profile/history mismatch')
+        self.history(printer_id,[history])
+        hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
+        capture=self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
+        if capture is None:return 'pending_observed_start'
+        return self.recovery.remember(hk,profile)
+
+    def recovery_preview(self, key, layer=None):
+        return self.recovery.preview(key,layer)
 
     def disconnected(self, printer_id, reason='Motion connection lost'):
         self.adapter.observation_gap(printer_id, reason)
@@ -65,7 +80,7 @@ class MotionLifecycle:
             t = job.get('start_time')
             if type(t) not in (int, float) or not math.isfinite(t) or t <= 0:
                 continue
-            if job.get('status') not in ('in_progress', 'completed', 'cancelled'): continue
+            if job.get('status') not in TERMINAL | {'in_progress'}: continue
             legacy = self.adapter.service.accounting.legacy_history(printer_id, job['job_id'], t)
             if legacy:
                 imported.append({'status': 'legacy_duplicate' if legacy['status']=='committed' else 'review', 'reason': 'Imported history is fenced', 'legacy_key': legacy['legacy_key']})
@@ -91,7 +106,7 @@ class MotionLifecycle:
                 continue
             job = unique[hk]
             old = json.loads(row['history']) if row['history'] else None
-            if old and old['status'] in ('completed', 'cancelled') and old['status'] != job['status']:
+            if old and old['status'] in TERMINAL and old['status'] != job['status']:
                 # Polling a stale active row must not regress a terminal receipt.
                 if job['status'] == 'in_progress': continue
                 results.append(self.adapter._review(row['key'], 'Terminal history changed'))

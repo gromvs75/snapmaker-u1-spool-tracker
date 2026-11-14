@@ -82,6 +82,8 @@ def restore(package, live, expected_revision):
                 source.execute('UPDATE manual_assignments SET confirmed=0,version=lower(hex(randomblob(16)))')
                 source.execute('UPDATE uid_locations SET confirmed=0')
                 source.execute("UPDATE uid_jobs SET mapping_valid=0 WHERE state='active'")
+                if source.execute("SELECT 1 FROM sqlite_master WHERE name='uid_recovery_profiles'").fetchone():
+                    source.execute('UPDATE uid_recovery_profiles SET quarantined=1')
                 source.execute('DELETE FROM uid_unlock_windows')
                 source.execute('DELETE FROM uid_unlock_attempts')
                 source.execute("UPDATE uid_remote_outbox SET state='uncertain' WHERE state IN ('held','pending','sending')")

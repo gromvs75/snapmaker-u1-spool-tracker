@@ -67,9 +67,12 @@ class ReadOnlyMoonraker:
             if received!=size or any(before.get(k)!=after.get(k) for k in ('size','modified','slicer','filament_type','filament_weight')):
                 raise ValueError('G-code changed during verification')
             weights=parse_u1_gcode_handle(file);params=parse_filament_parameters_handle(file)
+            from tracker_uid_gcode_estimate import layer_estimates
+            try:layers=layer_estimates(file);layer_error=None
+            except (ValueError,UnicodeError) as exc:layers={};layer_error=str(exc)
             if not params or any(w>0 and i>=len(params) for i,w in enumerate(weights)):
                 raise ValueError('Used tool material parameters unavailable')
-            return dict(logical_weights=weights,parameters=params+[None]*(4-len(params)),filament_type=after.get('filament_type'),file_sha256=digest.hexdigest())
+            return dict(logical_weights=weights,parameters=params+[None]*(4-len(params)),filament_type=after.get('filament_type'),file_sha256=digest.hexdigest(),layers=layers,layer_error=layer_error)
 
 
 class MotionSocket:
@@ -91,7 +94,7 @@ class MotionSocket:
 
 
 class ProfileHistory:
-    def __init__(self,client,store):self.client=client;self.store=store;self.key=None;self.error=None
+    def __init__(self,client,store,profile_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink
     @staticmethod
     def identity(job):return (job['job_id'],job['start_time'],job['filename'])
     @staticmethod
@@ -122,6 +125,7 @@ class ProfileHistory:
                     self.key=key
                 elif old['mapping']!=mapping:
                     raise ValueError('Tool mapping changed during capture')
+                if self.profile_sink:self.profile_sink(job,self.store._motion_slicer_profile)
             elif not (self.key and stats.get('filename')==self.key[2] and stats.get('state') in ('complete','cancelled','error')):
                 self.store._motion_slicer_profile=None;self.key=None
             self.error=None
@@ -134,7 +138,7 @@ class ProfileHistory:
 def create_workers(owner,printer,directory):
     u=urlsplit(printer['url']);config={'enabled':True,'host':u.hostname,'port':u.port or (443 if u.scheme=='https' else 80)}
     store=ModelInventoryStore(owner,printer['id'],directory/('motion-'+printer['id']),config)
-    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store)
+    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile))
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
                           lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5)
     client.stop_event=worker.stop_event

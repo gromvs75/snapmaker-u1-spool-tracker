@@ -17,6 +17,9 @@
 
 ## Tracker 2.0 development
 
+- [Запуск отдельной стендовой сборки 2.0](guides/tracker-2.0-bench-ru.md)
+- [История, ручная сверка и итоговая сборка](development/ready-build-2026-11-14.md)
+
 - [Единый launcher, чтение UID и учёт на двух принтерах](development/unified-launcher-rfid-2026-11-13.md)
 
 - [Настройки, восстановление, автодозаправка и macOS: результаты этапов](development/settings-recovery-native-2026-11-13.md)

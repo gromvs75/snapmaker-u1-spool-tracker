@@ -44,7 +44,21 @@ https://www.lazyweb.com/report/lazyweb/0f1ca9df-c5de-4f5f-bbb6-c74d9ff416a8/?sou
 
 После основных изменений: **785 passed, 5 skipped**, 73,98 s.
 После дополнительных защит UID и статусов: целевые **52 passed**.
-Подробный финальный результат и Windows run дописываются после завершения сборок.
+Финальный полный набор на отправленном коде: **796 passed, 3 skipped**, 92,36 s.
+Часть прежних пропусков закрылась после установки Playwright в тестовый venv.
+Windows run [43589168690](https://github.com/gromvs75/snapmaker-u1-spool-tracker/actions/runs/43589168690)
+успешен, commit `39d3af8d78ee05d7ba52460cb706b7214b2931ef`.
+**186 passed, 0 skipped**, 169,32 s. Собран именно этот код.
+Packaged smoke: 3 проверки; настоящее окно/меню трея: 5;
+исходный процессный сценарий: 9; новый recovery GUI: 7.
+Итого 24 проверки собранного EXE сверх pytest. Windows GUI больше не помечен
+непроверенным для этого artifact. Проверка формы сверки — браузерная страница
+packaged backend; нативные действия — окно, закрытие, Open/Exit в трее.
+Снимки recovery-form.png и tray-exit.png просмотрены: поля, подтверждение и меню
+видимы, элементы не выходят за рабочую область.
+Четыре Linux-процесса остановлены: stopped=true, cleanup_errors=[].
+Артефакты скачаны в output/ready-build-windows-results/ и
+output/ready-build-windows-app/. Публикации релиза и merge в main нет.
 
 1. Две реальные пары Klipper/Moonraker, `manual.py --gui`: **9 проверок**.
    A: доказанная смена на паузе, после сна 298 мг + 2685 мг.
@@ -61,14 +75,32 @@ https://www.lazyweb.com/report/lazyweb/0f1ca9df-c5de-4f5f-bbb6-c74d9ff416a8/?sou
    успешного ответа и повторное нажатие, restore и второй restart.
    Это проверка страницы GUI, обслуживаемой packaged backend; она не подменяет
    отдельную проверку нативного WebView/трея.
-5. Нативный macOS WebView: история отрисована, закрытие окна скрывает его.
+5. Окончательный macOS artifact `output/ready-build-macos/` повторно прошёл
+   packaged smoke (3) и recovery_exe --browser (7). Архив
+   `output/Tracker-2.0-macOS-39d3af8.zip`, SHA256
+   `7c7583013e0f92f08bd96ccb2c8b0497f96730707f02ace0b9ba0b80ee7c4017`.
+6. Расчётная автозамена на двух процессных стендах: **6 проверок** на текущем коде.
+   Auto on: 20 + 50 г; auto off: то же переключение требует сверки.
+   Повтор истории, второй restart и restore не создают повторного расхода.
+7. Нативный macOS WebView: история отрисована, закрытие окна скрывает его.
    Для пунктов системного меню трея запрошена проверка пользователя: CUA возвращает
    timeoutReached/noWindowsAvailable для SystemUIServer. Не объявлять это пройденным
    до наблюдения результата.
 
 Локальные артефакты (не коммитятся): output/build-completion-*.log,
 output/manual-uid-replacement-gui/, output/build-completion-macos/,
-output/current-process-app/ (manifest содержит временный токен и не публикуется).
+output/current-process-app/, output/final-process-app/, output/ready-build-final-tests.log.
+Manifest содержит временный токен и не публикуется. Очистка всех процессных стендов
+подтверждена stopped=true, cleanup_errors=[].
+
+Руководство запуска: [отдельная стендовая сборка](../guides/tracker-2.0-bench-ru.md).
+
+Готовые локальные архивы: `output/Tracker-2.0-macOS-39d3af8.zip` и
+`output/Tracker-2.0-Windows-39d3af8.zip`. Windows следует распаковать целиком:
+одного EXE без каталога `_internal` недостаточно. Контрольные суммы и версия —
+`output/ready-build-manifest.json`. Документационные коммиты после 39d3af8 не
+меняют код сборки. Двойной щелчок создаёт новую временную базу; для постоянного
+стендового состояния используйте явно указанный `--data` из руководства.
 
 ## Сохраняемые ограничения
 

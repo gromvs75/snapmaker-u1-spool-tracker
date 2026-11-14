@@ -50,6 +50,16 @@ class MotionLifecycle:
         if capture is None:return 'pending_observed_start'
         return self.recovery.remember(hk,profile)
 
+    def recovery_terminal(self, printer_id, history, status, digest):
+        self.history(printer_id,[history])
+        hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
+        row=self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
+        if row is None:return {'status':'review','reason':'No observed start'}
+        try:
+            return self.recovery.calculate(row['key'],status,digest,self.adapter.service.accounting,self.adapter.service.fleet.snapshot())
+        except (ValueError,KeyError,TypeError,IndexError) as exc:
+            return self.adapter._review(row['key'],'Recovery: '+str(exc))
+
     def recovery_preview(self, key, layer=None):
         return self.recovery.preview(key,layer)
 

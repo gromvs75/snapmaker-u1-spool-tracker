@@ -74,3 +74,16 @@ def test_recorder_has_no_legacy_write_path_and_logs_are_isolated(tmp_path):
         assert 'only_b' not in (tmp_path/'a/motion-diagnostic.jsonl').read_text()
         assert 'only_a' not in (tmp_path/'b/motion-diagnostic.jsonl').read_text()
     finally:a.stop();b.stop()
+
+
+def test_replacement_mode_change_is_not_silently_ignored():
+    from types import SimpleNamespace
+    class ModeClient(Client):
+        mode=True
+        def status(self):
+            value=super().status();value['print_task_config']['auto_replenish_filament']=self.mode;return value
+    saved=[];c=ModeClient();store=SimpleNamespace();reader=ProfileHistory(c,store,lambda job,p:saved.append(p))
+    reader();assert saved[-1]['auto_replenish'] is True
+    c.mode=False
+    with pytest.raises(ValueError,match='mode changed'):reader()
+    assert saved[-1]['auto_replenish'] is False and store._motion_slicer_profile is None

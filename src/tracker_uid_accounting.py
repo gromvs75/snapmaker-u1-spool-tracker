@@ -321,7 +321,7 @@ class UidAccounting:
             self.db.execute('INSERT INTO uid_unlock_attempts VALUES(?,?,?,?)',(job_key,expected_version,mode,json.dumps(result)))
             return result
 
-    def apply(self, key, sequence, totals_mg, *, state, source, basis):
+    def apply(self, key, sequence, totals_mg, *, state, source, basis, recovery_validator=None):
         """Atomic cumulative evidence. Cancellation requires executed usage.
 
         source identifies a stable capture/history evidence stream, not a socket.
@@ -329,7 +329,7 @@ class UidAccounting:
         """
         if type(sequence) is not int or sequence<0 or state not in ('active','completed','cancelled'):
             raise ValueError('Invalid event identity/state')
-        if basis not in ('executed_gcode','motion_estimate','completed_gcode') or (basis=='completed_gcode' and state!='completed'):
+        if basis not in ('executed_gcode','motion_estimate','completed_gcode','calculated_history') or (basis in ('completed_gcode','calculated_history') and state!='completed'):
             raise ValueError('Cancellation/progress require executed usage, not full plan')
         if not isinstance(totals_mg,dict) or any(type(v) is not int or v<0 for v in totals_mg.values()):
             raise ValueError('Expected cumulative integer milligrams per tool')
@@ -350,7 +350,11 @@ class UidAccounting:
                 raise AccountingConflict('Terminal job already accounted; review changed result')
             deltas={t['spool_id']:totals_mg[t['channel']]-t['used_mg'] for t in tools}
             if any(v<0 for v in deltas.values()):raise AccountingConflict('Cumulative counter decreased')
-            if not j['mapping_valid'] and any(deltas.values()):raise AccountingConflict('Spool continuity lost; review additional consumption')
+            recovered = basis=='calculated_history' and callable(recovery_validator)
+            if basis=='calculated_history':
+                if not recovered:raise AccountingConflict('Recovery validation required')
+                recovery_validator(j,tools)
+            if not j['mapping_valid'] and any(deltas.values()) and not recovered:raise AccountingConflict('Spool continuity lost; review additional consumption')
             for sid,amount in deltas.items():
                 cur=self.db.execute('UPDATE uid_spools SET remaining_mg=remaining_mg-? WHERE spool_id=? AND remaining_mg>=?',(amount,sid,amount))
                 if cur.rowcount!=1:raise AccountingConflict('Insufficient spool balance')

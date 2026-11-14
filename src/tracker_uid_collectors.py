@@ -44,7 +44,7 @@ class ReadOnlyMoonraker:
             if len(page['jobs'])<50 or start+50>=page.get('count',0):break
         return jobs
     def status(self):
-        return self.read('/printer/objects/query?print_stats&print_task_config')['status']
+        return self.read('/printer/objects/query?print_stats&print_task_config&filament_feed%20left&filament_feed%20right')['status']
     def inspect(self,filename):
         if not isinstance(filename,str) or not filename or filename.startswith('/') or '..' in filename.split('/'):
             raise ValueError('Invalid G-code filename')
@@ -94,7 +94,7 @@ class MotionSocket:
 
 
 class ProfileHistory:
-    def __init__(self,client,store,profile_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink
+    def __init__(self,client,store,profile_sink=None,terminal_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
     @staticmethod
     def identity(job):return (job['job_id'],job['start_time'],job['filename'])
     @staticmethod
@@ -121,13 +121,27 @@ class ProfileHistory:
                     if (after['print_stats'].get('filename')!=job['filename'] or after['print_stats'].get('state') not in ('printing','paused')
                             or self.mapping(after)!=(mapping,replenished) or len(latest)!=1 or self.identity(latest[0])!=key):
                         raise ValueError('Print changed during G-code verification')
-                    self.store._motion_slicer_profile=dict(profile,filename=job['filename'],started_at=job['start_time'],mapping=mapping,replenished=replenished)
+                    self.store._motion_slicer_profile=dict(profile,filename=job['filename'],started_at=job['start_time'],mapping=mapping,replenished=replenished,auto_replenish=status['print_task_config'].get('auto_replenish_filament'),feed_start={k:v for k,v in status.items() if k.startswith('filament_feed ')})
                     self.key=key
+                elif old.get('auto_replenish')!=status['print_task_config'].get('auto_replenish_filament'):
+                    if self.profile_sink:self.profile_sink(job,dict(old,auto_replenish=status['print_task_config'].get('auto_replenish_filament')))
+                    raise ValueError('Automatic replacement mode changed during capture')
                 elif old['mapping']!=mapping:
                     raise ValueError('Tool mapping changed during capture')
                 if self.profile_sink:self.profile_sink(job,self.store._motion_slicer_profile)
             elif not (self.key and stats.get('filename')==self.key[2] and stats.get('state') in ('complete','cancelled','error')):
                 self.store._motion_slicer_profile=None;self.key=None
+            if self.terminal_sink and stats.get('state')=='complete':
+                latest=sorted(jobs,key=lambda j:j.get('start_time',0),reverse=True)
+                if (latest and latest[0].get('status')=='completed' and latest[0].get('filename')==stats.get('filename')
+                        and self.identity(latest[0]) not in self.terminal_done and time.monotonic()-self.terminal_checked>=5):
+                    self.terminal_checked=time.monotonic()
+                    # Refetch the file: a reused filename is not the saved plan.
+                    verified=self.client.inspect(latest[0]['filename'])
+                    after=self.client.status()
+                    if (after.get('print_stats',{}).get('state')=='complete' and after['print_stats'].get('filename')==stats.get('filename') and after.get('print_task_config')==status.get('print_task_config') and all(after.get(k)==v for k,v in status.items() if k.startswith('filament_feed '))):
+                        outcome=self.terminal_sink(latest[0],status,verified['file_sha256'])
+                        if outcome.get('status') in ('applied','duplicate'):self.terminal_done.add(self.identity(latest[0]))
             self.error=None
             return jobs
         except Exception as exc:
@@ -138,7 +152,7 @@ class ProfileHistory:
 def create_workers(owner,printer,directory):
     u=urlsplit(printer['url']);config={'enabled':True,'host':u.hostname,'port':u.port or (443 if u.scheme=='https' else 80)}
     store=ModelInventoryStore(owner,printer['id'],directory/('motion-'+printer['id']),config)
-    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile))
+    client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest))
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
                           lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5)
     client.stop_event=worker.stop_event

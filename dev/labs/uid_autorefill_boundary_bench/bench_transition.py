@@ -9,6 +9,9 @@ class Transition(BenchMotion):
         super().__init__(config)
     def event(self,req):
         action=req.get_str('action')
+        if action=='auto_mode':
+            self.printer.lookup_object('print_task_config').value['auto_replenish_filament']=bool(req.get_int('enabled'))
+            req.send({'ok':True});return
         if action.startswith('barrier_'):
             try:
                 if action=='barrier_start':

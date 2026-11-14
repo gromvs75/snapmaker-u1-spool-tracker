@@ -120,11 +120,13 @@ class AccountingOwner:
                                   'spools': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_spools')],
                                   'manual_assignments': [dict(r) for r in catalog.db.execute('SELECT * FROM manual_assignments')],
                                   'jobs': [dict(r, resolution_version=service.accounting.resolution_version(r),unlock=service.accounting.unlock_state(r['job_key']),spool_ids=[t[0] for t in catalog.db.execute('SELECT spool_id FROM uid_job_tools WHERE job_key=?',(r['job_key'],))]) for r in catalog.db.execute('SELECT j.*,c.filename FROM uid_jobs j LEFT JOIN uid_motion_captures c ON c.key=j.job_key')],
+                                  'recovery_plans': [dict(history_key=r['history_key'],quarantined=bool(r['quarantined']),auto_replenish=__import__('json').loads(r['profile']).get('auto_replenish')) for r in catalog.db.execute('SELECT * FROM uid_recovery_profiles')],
+                                  'recovery_receipts': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_recovery_receipts')],
                                   'resolutions': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_manual_resolutions')],
                                   'debits': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_debits')],
                                   'reviews': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_motion_review')]}
                     elif operation == 'refresh': result = service.refresh()
-                    elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview'):
+                    elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview', 'recovery_terminal'):
                         result = getattr(lifecycle, operation)(*args, **kwargs)
                     else: raise ValueError('Unknown accounting operation')
                     if not future.cancelled(): future.set_result(result)

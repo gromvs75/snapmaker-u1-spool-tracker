@@ -7,7 +7,7 @@ import time
 from tracker_uid_catalog import UidCatalog
 
 
-def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None, forecast=None):
+def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None, forecast=None, window_action=None):
     token=secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -55,6 +55,11 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<(46*1024*1024 if self.path in ('/api/validate_backup','/api/restore_backup') else 16384):raise ValueError('Invalid request size')
                 data=json.loads(self.rfile.read(size))
+                if self.path=='/api/window':
+                    if set(data)!={'action'} or data['action'] not in ('show','hide') or window_action is None:
+                        raise ValueError('Нативное окно недоступно.')
+                    window_action(data['action'])
+                    return self.reply(200,{'status':'ok'})
                 if self.path in ('/api/connections_start','/api/connections_stop','/api/validate_backup','/api/restore_backup') and not hasattr(owner,'connected'):
                     raise ValueError('Managed session required')
                 if self.path in ('/api/tag_preview','/api/tag_register'):

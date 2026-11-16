@@ -43,8 +43,15 @@ class Library:
         return {'values':data, 'revision':revision(data)}
 
     def save_settings(self, values, expected_revision):
-        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers','slice_root'}:
+        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers','slice_root','safety_margin_g','selected_printer'}:
             raise ValueError('Неверные настройки.')
+        if 'safety_margin_g' in values:
+            # Same input precision as inventory; display rounding is not storage rounding.
+            values=dict(values,safety_margin_g=mg(values['safety_margin_g'])/1000)
+        if 'selected_printer' in values:
+            printers=values.get('printers',self.settings()['values'].get('printers',[]))
+            if values['selected_printer'] not in {p['id'] for p in printers}:
+                raise ValueError('Выберите сохранённый принтер.')
         if 'slice_root' in values and (not isinstance(values['slice_root'],str) or len(values['slice_root'])>4096):
             raise ValueError('Неверный каталог нарезки.')
         if 'printers' in values:
@@ -58,6 +65,31 @@ class Library:
             if self.settings()['revision']!=expected_revision:raise AccountingConflict('Настройки изменились. Обновите экран.')
             for k,v in values.items():self.db.execute('INSERT OR REPLACE INTO uid_preferences VALUES(?,?)',(k,json.dumps(v)))
         return self.settings()
+
+    def forecast_inventory(self, *, fleet):
+        """One owner-thread snapshot for all forecast consumers; no balance writes."""
+        settings=self.settings()['values']
+        locations=self.catalog.reconcile(fleet)
+        spools={s['spool_id']:s for s in self.snapshot()['spools']}
+        uncertain={r[0] for r in self.db.execute("SELECT spool_id FROM uid_remote_outbox WHERE state IN ('sending','uncertain')")}
+        printers={}
+        for p in settings.get('printers',[]):
+            heads=[]
+            for ch in range(4):
+                matches=[r for r in locations if r['printer_id']==p['id'] and r['channel']==str(ch)]
+                row=matches[0] if len(matches)==1 else None
+                spool=spools.get((row.get('spool') or {}).get('spool_id')) if row else None
+                heads.append(dict(channel=str(ch),spool=spool,
+                    usable=bool(row and row['usable'] and spool and spool['spool_id'] not in uncertain),
+                    reason=('Отправка Spoolman требует сверки' if spool and spool['spool_id'] in uncertain
+                            else '' if row and row['usable'] else 'Назначение не подтверждено' if row else 'Катушка не назначена')))
+            printers[p['id']]=dict(id=p['id'],name=settings.get('printer_names',{}).get(p['id'],p['name']),heads=heads)
+        accounted={}
+        for row in self.db.execute("SELECT p.profile FROM uid_recovery_profiles p JOIN uid_motion_captures c ON c.history_key=p.history_key JOIN uid_jobs j ON j.job_key=c.key WHERE j.state='completed'"):
+            profile=json.loads(row[0]);digest=profile.get('file_sha256')
+            if digest:accounted[digest]=max(accounted.get(digest,0),profile.get('started_at',0))
+        return dict(printers=printers,selected_printer=settings.get('selected_printer'),
+                    safety_margin_g=settings.get('safety_margin_g',5),accounted=accounted)
 
     def cache_catalog(self, url, items=None):
         url=endpoint(url)

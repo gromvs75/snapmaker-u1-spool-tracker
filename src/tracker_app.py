@@ -65,11 +65,12 @@ def main(argv=None):
                 raise ValueError('Подключения остановлены.')
             return ReadOnlyMoonraker(printer['url']).status()['print_stats']['state']
         forecast.start()
-        server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info,forecast=forecast)
+        server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info,forecast=forecast,
+                       window_action=lambda action:getattr(shell,action)() if shell else None)
         thread = threading.Thread(target=server.serve_forever,name='tracker20-http'); thread.start()
         url = f'http://127.0.0.1:{server.server_port}'
         logger.info('GUI %s', url)
-        shell = UidWindow(url,directory/'webview',title=f'Snapmaker U1 Spool Tracker {VERSION} · кандидат',tray_title=f'Tracker {VERSION} · кандидат')
+        shell = UidWindow(url,directory/'webview',title=f'Snapmaker U1 Spool Tracker {VERSION} · кандидат',tray_title=f'Tracker {VERSION} · кандидат',forecast=forecast)
         def stop(signum, frame):
             logger.info('Exit requested signal=%s', signum)
             shell.quit()

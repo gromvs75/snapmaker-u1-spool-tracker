@@ -4,7 +4,7 @@ import threading
 
 
 class UidWindow:
-    def __init__(self, url, storage_path, *, webview_module=None, title='Snapmaker U1 Spool Tracker 2.0 · стенд', tray_title='Tracker 2.0 · стенд'):
+    def __init__(self, url, storage_path, *, webview_module=None, title='Snapmaker U1 Spool Tracker 2.0 · стенд', tray_title='Tracker 2.0 · стенд', forecast=None):
         if webview_module is None:
             import webview as webview_module
         self._webview = webview_module
@@ -13,6 +13,9 @@ class UidWindow:
             webview_module.settings['ALLOW_DOWNLOADS'] = True
         self._storage_path = str(storage_path)
         self._tray_title = tray_title
+        self._forecast = forecast
+        self._tray_stop = threading.Event()
+        self._menu_presented = False
         self._ready = False
         self._quitting = False
         self._pending_show = False
@@ -61,8 +64,48 @@ class UidWindow:
 
     def quit(self, *_):
         self._quitting = True
+        self._tray_stop.set()
         if self._ready:
             self._window.destroy()
+
+    def hide(self):
+        threading.Thread(target=self._window.hide,daemon=True).start()
+
+    def show_forecast(self, *_):
+        def open_view():
+            self.show()
+            if self._ready:
+                self._window.evaluate_js('window.showLatestForecast && window.showLatestForecast()')
+        threading.Thread(target=open_view,daemon=True).start()
+
+    def _watch_forecast(self, tray):
+        import logging
+        from tracker_user_tray import tray_model, build_menu, create_tray_icon
+        last=None;last_event=None;first=True
+        def refresh(model, popup):
+            if self._quitting or self._menu_presented:return
+            tray.menu=build_menu(model,self.show,self.show_forecast,self.quit)
+            tray.icon=create_tray_icon(model['status'])
+            if popup and sys.platform=='darwin':
+                self._menu_presented=True
+                try:
+                    tray.visible=True
+                    tray._status_item.button().performClick_(None)
+                except Exception:logging.getLogger('tracker20').exception('Slice menu could not open')
+                finally:self._menu_presented=False
+        while not self._tray_stop.is_set():
+            try:
+                model=tray_model(self._forecast.snapshot())
+                if model!=last:
+                    popup=not first and model['event'] is not None and model['event']!=last_event
+                    if sys.platform=='darwin':
+                        from PyObjCTools import AppHelper
+                        AppHelper.callAfter(refresh,model,popup)
+                    else:refresh(model,False)
+                    if model['event'] is not None:last_event=model['event']
+                    first=False;last=model
+            except Exception:logging.getLogger('tracker20').exception('Tray forecast refresh failed')
+            self._tray_stop.wait(1)
 
     def _route_macos_quit(self):
         if hasattr(self, '_quit_target'):
@@ -99,9 +142,21 @@ class UidWindow:
         tray = pystray.Icon('tracker-uid', icon, self._tray_title,
             menu=pystray.Menu(pystray.MenuItem('Открыть Tracker', self.show, default=True),
                               pystray.MenuItem('Выход', self.quit)))
+        watcher=None
+        if self._forecast is not None:
+            from tracker_user_tray import tray_model,build_menu,create_tray_icon,install_macos_toolhead_icons
+            model=tray_model(self._forecast.snapshot())
+            tray.icon=create_tray_icon(model['status'])
+            tray.menu=build_menu(model,self.show,self.show_forecast,self.quit)
+            if sys.platform=='darwin':install_macos_toolhead_icons(tray)
         tray.run_detached()
+        if self._forecast is not None:
+            watcher=threading.Thread(target=self._watch_forecast,args=(tray,),name='tracker20-tray')
+            watcher.start()
         try:
             self._webview.start(gui='edgechromium' if sys.platform == 'win32' else None,
                                  private_mode=True, storage_path=self._storage_path)
         finally:
+            self._tray_stop.set()
+            if watcher:watcher.join()
             tray.stop()

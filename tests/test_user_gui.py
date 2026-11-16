@@ -34,7 +34,7 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             page.goto(f'http://127.0.0.1:{server.server_port}')
             page.wait_for_selector('#activePrinter option',state='attached')
             page.get_by_role('button',name='Обзор',exact=True).click()
-            page.get_by_text('Прогноз обнаруженной нарезки',exact=True).wait_for()
+            page.get_by_text('Прогноз после нарезки',exact=True).wait_for()
             assert page.locator('.topnav button').all_text_contents()==['Обзор','Катушки','История','Настройки']
             assert '25,1 г' in page.locator('#workspaceBody').inner_text()
             page.screenshot(path=str(screenshots/'overview.png'),full_page=True)

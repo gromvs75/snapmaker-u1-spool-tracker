@@ -20,6 +20,16 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
             return (self.headers.get('Host')==f'127.0.0.1:{self.server.server_port}'
                     and self.headers.get('X-Tracker-Token')==token
                     and self.headers.get('Origin',f'http://127.0.0.1:{self.server.server_port}')==f'http://127.0.0.1:{self.server.server_port}')
+        def refresh_spoolman(self):
+            from tracker_uid_spoolman import Client
+            settings=owner.call('settings')['values'];url=settings.get('spoolman_url','')
+            if settings.get('spoolman_mode','read')=='off' or sender is None or not sender.permits(url):
+                raise ValueError('Сервер Spoolman не разрешён для этого сеанса.')
+            try:items=Client(url).catalog()
+            except Exception:
+                owner.call('cache_catalog',url,None)
+                raise ValueError('Spoolman недоступен. Каталог не обновлён.')
+            return owner.call('cache_catalog',url,items)
         def do_GET(self):
             if self.headers.get('Host')!=f'127.0.0.1:{self.server.server_port}':return self.reply(403,{'error':'Invalid host'})
             if self.path=='/favicon.ico':
@@ -29,7 +39,19 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 return self.reply(200,integration_html(token,(app_info or {}).get('version','2.0 integration')),'text/html')
             if self.path.startswith('/api/desktop/'):
                 if not self.authorized():return self.reply(403,{'error':'Forbidden'})
-                if self.path=='/api/desktop/data':return self.reply(200,owner.call('desktop_snapshot'))
+                if self.path=='/api/desktop/spoolman/status':
+                    value=owner.call('desktop_spoolman_status');value['delivery']=owner.call('delivery_list');value['delivery_enabled']=sender is not None
+                    return self.reply(200,value)
+                if self.path=='/api/desktop/spoolman/compare':return self.reply(200,owner.call('desktop_spoolman_compare'))
+                if self.path=='/api/desktop/printer/head-counters':
+                    try:
+                        if not hasattr(owner,'connected'):raise ValueError('Managed session required')
+                        return self.reply(200,owner.call('head_counters'))
+                    except (ValueError,OSError,KeyError,TypeError) as exc:return self.reply(409,{'error':str(exc)})
+                if self.path=='/api/desktop/data':
+                    value=owner.call('desktop_snapshot')
+                    value['connections']=owner.call('connection_state') if hasattr(owner,'connected') else None
+                    return self.reply(200,value)
                 if self.path=='/api/desktop/forecast':
                     from tracker_desktop_model import forecast_view
                     selected=owner.call('desktop_snapshot')['selected_printer']
@@ -70,9 +92,31 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<(46*1024*1024 if self.path in ('/api/validate_backup','/api/restore_backup') else 16384):raise ValueError('Invalid request size')
                 data=json.loads(self.rfile.read(size))
+                if self.path=='/api/test_printer':
+                    if not hasattr(owner,'connected') or set(data)!={'url'}:raise ValueError('Managed session and explicit URL required')
+                    return self.reply(200,owner.call('test_printer',**data))
                 if self.path.startswith('/api/desktop/'):
                     expected=data.pop('_settings_revision',None)
                     action=self.path.removeprefix('/api/desktop/')
+                    if action=='spoolman/configure':
+                        if set(data)!={'url','mode','sole_sender'} or data['mode'] not in ('off','read','send') or data['mode']=='send' and data['sole_sender'] is not True:
+                            raise ValueError('Подтвердите единственного отправителя расхода.')
+                        from tracker_uid_spoolman import endpoint
+                        url=endpoint(data['url']) if data['url'] else ''
+                        if data['mode']!='off' and not url:raise ValueError('Укажите адрес Spoolman.')
+                        values=dict(spoolman_url=url,spoolman_mode=data['mode'])
+                        if sender is not None:
+                            with sender._mutex:return self.reply(200,owner.call('desktop_spoolman_configure',values=values,expected_revision=expected))
+                        return self.reply(200,owner.call('desktop_spoolman_configure',values=values,expected_revision=expected))
+                    if action in ('spoolman/refresh','spoolman/refresh-labels'):
+                        if data:raise ValueError('Invalid refresh request')
+                        return self.reply(200,self.refresh_spoolman())
+                    if action=='spoolman/sync-label':
+                        if set(data)!={'id','revision'}:raise ValueError('Invalid name update')
+                        return self.reply(200,owner.call('rename_from_remote',spool_id=data['id'],expected_revision=data['revision'],confirmed=True))
+                    if action in ('spoolman/attach','spoolman/detach'):
+                        return self.reply(200,owner.call('desktop_spoolman_change',action=action.split('/')[1],
+                            expected_revision=data.pop('_inventory_revision',None),request_id=data.pop('_request_id',None),confirmed=data.pop('_confirmed',False),data=data))
                     if action in ('spools/add','spools/update','spools/color','spools/delete','slots'):
                         return self.reply(200,owner.call('desktop_inventory',action=action,
                             expected_revision=data.pop('_inventory_revision',None),

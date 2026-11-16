@@ -26,6 +26,8 @@ class Sender:
 
     def send_one(self, operation_id=None, expected_revision=None):
         with self._mutex:
+            values=self.owner.call('settings')['values']
+            if values.get('spoolman_mode','send')!='send':return 'disabled'
             rows=self.owner.call('delivery_list')
             if any(r['state'] in ('sending','uncertain') for r in rows):return 'blocked'
             row=next((r for r in rows if r['state']=='pending' and r['url'] in self.allowed_urls and (operation_id is None or (r['operation_id']==operation_id and r['revision']==expected_revision))),None)

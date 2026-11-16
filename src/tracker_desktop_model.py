@@ -29,6 +29,7 @@ def snapshot(library, history_review, fleet):
     for s in catalog['spools']:
         value=dict(s['details'],name=s['name'],remaining_g=s['remaining_mg']/1000,
                    material=s['details'].get('material',''),uid=s['uid'],revision=s['revision'])
+        value['calibration']=dict(s['details'].get('calibration') or {},uid=s['uid'] or '',identity_mode='tag' if s['uid'] else 'unverified')
         value['assignments']=[dict(printer_id=r['printer_id'],printer_name=settings.get('printer_names',{}).get(r['printer_id'],next((p['name'] for p in printers if p['id']==r['printer_id']),r['printer_id'])),channel=r['channel'],state=r['state'])
                               for r in locations if (r.get('spool') or {}).get('spool_id')==s['spool_id']]
         if s['remote']:value['spoolman']=dict(url=s['remote']['url'],id=s['remote']['remote_id'])
@@ -75,7 +76,8 @@ def snapshot(library, history_review, fleet):
                 slots=slots,slot_status=slot_status,spools=spools,plans=plans,runs=runs,last_preflight=last_preflight,last_guard=None,
                 printer=dict(host=address.hostname if address else '',port=address.port or (443 if address.scheme=='https' else 80) if address else 7125,
                              enabled=connected,guard_mode='warn'),monitor=monitor,printers=printers,selected_printer=pid,
-                settings_revision=catalog['settings']['revision'],inventory_revision=inventory['revision'],saved_history=details)
+                settings_revision=catalog['settings']['revision'],inventory_revision=inventory['revision'],saved_history=details,
+                observations=locations)
 
 
 def forecast_view(forecast,printer_id):

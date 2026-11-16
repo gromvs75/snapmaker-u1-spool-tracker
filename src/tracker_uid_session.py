@@ -63,9 +63,34 @@ class Session:
         return {'connected':True}
     def call(self, operation, *args, **kwargs):
         with self.lock:
+            if operation=='head_counters':
+                if not self.connected:raise ValueError('Подключения остановлены.')
+                from tracker_uid_collectors import ReadOnlyMoonraker
+                from moonraker import MoonrakerClient,MoonrakerError
+                from types import SimpleNamespace
+                values=self.owner.call('settings')['values'];printers=values.get('printers',[])
+                pid=values.get('selected_printer') or (printers[0]['id'] if printers else '')
+                p=next(p for p in printers if p['id']==pid)
+                if self.allowed_urls is not None and p['url'] not in self.allowed_urls:raise ValueError('Адрес не разрешён.')
+                # Reuse the published counter parser with the restricted read-only
+                # transport. Do not instantiate legacy monitor or action clients.
+                try:heads=MoonrakerClient.head_maintenance(SimpleNamespace(_json=ReadOnlyMoonraker(p['url']).read))
+                except MoonrakerError as exc:raise ValueError(str(exc)) from exc
+                return dict(heads=heads)
+            if operation=='test_printer':
+                from tracker_uid_collectors import ReadOnlyMoonraker
+                p=validate_printers([dict(id='probe',name='Probe',url=kwargs['url'])])[0]
+                if self.allowed_urls is not None and p['url'] not in self.allowed_urls:
+                    raise ValueError('Этот адрес не разрешён на изолированном стенде.')
+                client=ReadOnlyMoonraker(p['url'])
+                status=client.status()
+                objects=client.read('/printer/objects/list').get('objects',[])
+                return dict(state=status['print_stats']['state'],uid_available='tracker_uid' in objects)
             if operation=='connection_state':return {'connected':self.connected,'collectors_enabled':self.worker_factory is not None}
             if operation in ('connect_printers','disconnect_printers'):
-                if kwargs!={'confirmed':True}:raise ValueError('Подтвердите изменение подключений.')
+                if kwargs.get('confirmed') is not True or set(kwargs)-{'confirmed','expected_revision'}:raise ValueError('Подтвердите изменение подключений.')
+                if 'expected_revision' in kwargs and kwargs['expected_revision']!=self.owner.call('settings')['revision']:
+                    raise ValueError('Настройки изменились. Проверьте список принтеров заново.')
                 if operation=='connect_printers':return self._connect()
                 self._stop();return {'connected':False}
             if operation=='save_settings' and 'printers' in kwargs.get('values',{}):

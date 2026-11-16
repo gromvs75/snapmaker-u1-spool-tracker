@@ -92,6 +92,12 @@ class AccountingOwner:
                     elif operation == 'desktop_inventory':
                         from tracker_desktop_inventory import DesktopInventory
                         result=DesktopInventory(library).execute(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation in ('desktop_spoolman_status','desktop_spoolman_compare','desktop_spoolman_change','desktop_spoolman_configure'):
+                        import tracker_desktop_spoolman as sm
+                        if operation=='desktop_spoolman_status':result=sm.status(library,self.fleet.snapshot())
+                        elif operation=='desktop_spoolman_compare':result=sm.comparison(library)
+                        elif operation=='desktop_spoolman_configure':result=sm.configure(library,*args,**kwargs)
+                        else:result=sm.change(library,*args,fleet=self.fleet.snapshot(),**kwargs)
                     elif operation in ('export_preview','export_save'):
                         result=getattr(library,operation)(*args,fleet=fleet.snapshot(),**kwargs)
                     elif operation == 'history_decide':

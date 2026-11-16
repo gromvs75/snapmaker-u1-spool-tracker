@@ -13,7 +13,9 @@ metadata.write_text(json.dumps(dict(commit=commit,dirty=dirty,built_at=datetime.
 analysis=Analysis([str(ROOT/'src/tracker_app.py')],pathex=[str(ROOT/'src')],
     datas=[(str(ROOT/'src'/name),'.') for name in ('tracker_uid_gui.html','tracker_user_ui.css','tracker_user_ui.js')]+[(str(metadata),'.')],
     hiddenimports=['websocket','pystray._darwin'] if sys.platform=='darwin' else ['websocket','pystray._win32','webview.platforms.winforms','webview.platforms.edgechromium'],
-    excludes=['pytest','tkinter','PyQt5','PyQt6','PySide2','PySide6'],noarchive=False)
+    # The restored 1.3.3 Windows export confirmation uses tkinter. Omitting it
+    # silently cancels exports that need confirmation in the packaged EXE.
+    excludes=['pytest','PyQt5','PyQt6','PySide2','PySide6']+(['tkinter'] if sys.platform!='win32' else []),noarchive=False)
 pyz=PYZ(analysis.pure)
 version_options={}
 if sys.platform=='win32':

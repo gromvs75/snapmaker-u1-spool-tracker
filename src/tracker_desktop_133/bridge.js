@@ -12,7 +12,7 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
   if(resource.startsWith('/api/core/'))return original(resource.replace('/api/core/','/api/'),options2);
   let pendingKey=null;
   if(!resource.startsWith('/api/history_')){
-   if(options2.body&&['/api/spools/add','/api/spools/update','/api/spools/color','/api/spools/delete','/api/slots','/api/spoolman/attach','/api/spoolman/detach'].includes(resource)){
+   if(options2.body&&['/api/spools/add','/api/spools/update','/api/spools/color','/api/spools/delete','/api/spools/calibration','/api/spools/archive','/api/slots','/api/spoolman/attach','/api/spoolman/detach'].includes(resource)){
     const body=JSON.parse(options2.body);
     pendingKey='tracker20-inventory:'+resource+':'+JSON.stringify(body);
     let pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');

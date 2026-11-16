@@ -76,6 +76,16 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call('reconcile_apply',**data,observation=observation))
+                if self.path=='/api/history_decide':
+                    if 'observation' in data or 'fleet' in data:raise ValueError('Неверные параметры подтверждения.')
+                    detail=owner.call('history_detail',data['job_key'])
+                    pid=detail['job']['printer_id'];snapshot=fleet.snapshot().get(pid,{})
+                    observation=None
+                    if snapshot.get('state')=='ready' and data.get('action')!='defer':
+                        if status_reader is None:raise ValueError('Проверка принтера недоступна.')
+                        checked=time.monotonic()
+                        observation=dict(state=status_reader(pid),checked_at=checked,connection_token=UidCatalog.connection_token(snapshot))
+                    return self.reply(200,owner.call('history_decide',**data,observation=observation))
                 if self.path=='/api/resolve':
                     if not {'job_key','expected_version','confirmed','accept_unaccounted'}<=set(data) or set(data)-{'job_key','expected_version','confirmed','accept_unaccounted','mode'}:
                         raise ValueError('Неверные параметры разрешения задания.')

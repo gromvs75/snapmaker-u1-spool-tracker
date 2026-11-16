@@ -86,3 +86,31 @@ def test_uncertain_remote_local_amount_not_repeated(bench):
         c.db.execute("INSERT INTO uid_remote_outbox VALUES(?,?,?,? ,?,?,'uncertain')",(key,0,sid,'http://127.0.0.1:19872',1,300))
     with pytest.raises(ValueError,match='неопределённые'):review.decide(**args(review,key))
     assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+
+
+def test_connected_idle_requires_fresh_server_observation(bench):
+    import time
+    from tracker_uid_catalog import UidCatalog
+    life,key,c,review=setup_review(bench)
+    request=args(review,key);request['fleet']=life.adapter.service.fleet.snapshot()
+    snapshot=request['fleet']['a']
+    observation=dict(state='complete',checked_at=time.monotonic(),connection_token=UidCatalog.connection_token(snapshot))
+    with pytest.raises(ValueError):review.decide(**request,observation=dict(observation,state='paused'))
+    with pytest.raises(ValueError):review.decide(**request,observation=dict(observation,checked_at=time.monotonic()-5))
+    assert review.decide(**request,observation=observation)['status']=='saved'
+
+
+def test_manual_receipt_restore_keeps_idempotency_and_holds_remote(bench):
+    from tracker_uid_library import Library
+    from tracker_uid_delivery import Delivery
+    from tracker_uid_backup import export,validate,restore
+    life,key,c,review=setup_review(bench)
+    Library(life.adapter.service.accounting);Delivery(life.adapter.service.accounting)
+    sid=review.detail(key)['candidates'][0]['spool_id']
+    with c.db:c.db.execute('INSERT INTO uid_remote_links VALUES(?,?,?)',(sid,'http://127.0.0.1:19872',1))
+    request=args(review,key);review.decide(**request)
+    package=export(c.db);v=validate(package,c.db);restore(package,c.db,v['current_revision'])
+    assert review.decide(**request)['status']=='duplicate'
+    life.history('a',[history('completed')])
+    assert review.detail(key)['accounted_mg']==750
+    assert c.db.execute('SELECT state FROM uid_remote_outbox').fetchone()[0]=='uncertain'

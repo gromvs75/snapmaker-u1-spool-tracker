@@ -66,7 +66,7 @@ class HistoryReview:
         return value
 
     def decide(self, job_key, action, expected_revision, request_id, confirmed=False,
-               allocations_mg=None, note='', completed=None, *, fleet):
+               allocations_mg=None, note='', completed=None, *, fleet, observation=None):
         if action not in ('defer','close','account'): raise ValueError('Неизвестное решение.')
         if not isinstance(request_id,str) or not 8<=len(request_id)<=100: raise ValueError('Неверный ID решения.')
         payload = encoded(dict(job_key=job_key,action=action,expected_revision=expected_revision,request_id=request_id,
@@ -83,8 +83,14 @@ class HistoryReview:
                 if confirmed is not True: raise ValueError('Подтвердите завершение задания и выбранное действие.')
                 if detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')
                 # Live collector evidence wins over a stale UI confirmation.
-                if fleet.get(detail['job']['printer_id'],{}).get('state')=='ready':
-                    raise ValueError('Остановите подключения перед ручным подтверждением неподтверждённого задания.')
+                snapshot=fleet.get(detail['job']['printer_id'],{})
+                if snapshot.get('state')=='ready':
+                    observation=observation or {}
+                    checked=observation.get('checked_at')
+                    if (observation.get('state') not in ('standby','complete','cancelled','error')
+                            or type(checked) not in (float,int) or not 0<=time.monotonic()-checked<=3
+                            or observation.get('connection_token')!=self.accounting.catalog.connection_token(snapshot)):
+                        raise ValueError('Принтер печатает, на паузе или проверка состояния устарела. Повторите после завершения.')
             if action=='account':
                 if completed is not True: raise ValueError('Подтвердите: печать завершилась, продолжения не будет.')
                 if not isinstance(note,str) or not 3<=len(note.strip())<=2000: raise ValueError('Укажите основание и исправления расхода.')

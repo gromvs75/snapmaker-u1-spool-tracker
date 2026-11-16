@@ -21,6 +21,11 @@ def integration_html(token,version):
     """Add the 2.0 bridge while retaining the entire published presentation."""
     import json
     html=published_html()
+    html=html.replace("if(!loaded){$('url').value=s.url;","if(!loaded){desktopSpoolmanFormRevision=data.configuration_revision; $('url').value=s.url;")
+    html=html.replace("if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet');","if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet'); window.desktopDeliveryRows?.(data);")
+    html=html.replace('Отвязать катушку? Данные Spoolman не удаляются.','Перевести катушку на локальный учёт? UID, назначения и история сохранятся. Незавершённые отправки нужно разрешить заранее.').replace('Detach this spool? Spoolman data is kept.','Switch this spool to local accounting? UID, assignments and history are kept. Resolve unfinished deliveries first.')
+    html=html.replace('Списывать филамент в Spoolman после учёта печати','Разрешить явную отправку после проверки каждой операции').replace('Deduct filament in Spoolman after accounting for a print','Allow explicit sending after reviewing each operation')
+    html=html.replace("item.remaining_g+t(' г',' g')","displayGrams(item.remaining_g)+t(' г',' g')")
     # Only text formatting changes; numeric inputs and the SQLite model stay exact.
     for expression in ('spool.remaining_g','row.required_g','item.required_g','item.remaining_g','grams'):
         html=html.replace('${'+expression+'}', '${displayGrams('+expression+')}')
@@ -51,6 +56,6 @@ def integration_html(token,version):
     bootstrap=Path(__file__).with_name('bridge.js').read_text(encoding='utf-8')
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
-    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','forecast','history'))
+    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history'))
     html=html.replace('</body>','<script>'+extension+'</script></body>')
     return html.replace('· 1.3.3','· '+version)

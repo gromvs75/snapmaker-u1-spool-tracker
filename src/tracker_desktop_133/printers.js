@@ -2,7 +2,7 @@
 (()=>{
  const text=(ru,en,de,uk,es)=>({ru,en,de,uk,es}[currentLang]||en);
  const row=node('div');row.id='desktop-printer-context';row.style.cssText='display:flex;align-items:center;gap:12px;margin:-8px 0 24px;flex-wrap:wrap';
- const label=node('label'),picker=node('select'),status=node('span');picker.id='desktop-printer-picker';picker.style.width='min(320px, 100%)';label.htmlFor=picker.id;status.className='subtitle';
+ const label=node('label'),picker=node('select'),status=node('span');picker.id='desktop-printer-picker';picker.style.cssText='flex:0 1 320px;max-width:100%;min-width:0';label.htmlFor=picker.id;status.className='subtitle';
  row.append(label,picker,status);document.querySelector('.header-bar').after(row);
  const base=window.desktopInventoryLoaded;
  window.desktopInventoryLoaded=data=>{

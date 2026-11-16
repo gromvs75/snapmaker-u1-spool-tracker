@@ -1,0 +1,123 @@
+"""Exercise the supplied user bundle on synthetic data, never installed profiles.
+
+Browser interactions use HTML/API served by that executable. A separate native
+window capture verifies Cocoa/WebKit rendering, not just a browser screenshot.
+"""
+import argparse
+import json
+import os
+from pathlib import Path
+import plistlib
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.request import Request, urlopen
+
+ROOT=Path(__file__).resolve().parents[3]
+sys.path[:0]=[str(ROOT/'src'),str(ROOT)]
+from backup import create_backup
+from storage import Store
+from dev.observer_fixture import payload
+from playwright.sync_api import sync_playwright
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('bundle',type=Path);parser.add_argument('--output',type=Path,required=True)
+    args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
+    bundle=args.bundle.resolve();info=plistlib.loads((bundle/'Contents/Info.plist').read_bytes())
+    root=Path(tempfile.mkdtemp(prefix='tracker-graphite-package-'));data=root/'profile'
+    colors=['#151a1c','#ffffff','#ff7f26','#2b9c70']
+    names=['Generic Basis','Generic Basic','Generic Orange','Generic PLA']
+    masses=[571.597,195.82,833.574,886.58]
+    old=Store(root/'synthetic-133')
+    def seed(d):
+        d.update(language='ru',safety_margin_g=10)
+        d['printer'].update(host='127.0.0.1',port=19991,enabled=False)
+        for i in range(4):
+            d['spools'][str(i)]=dict(name=names[i],color=colors[i],material='PLA',remaining_g=masses[i])
+            d['slots'][str(i+1)]=str(i)
+    old.update(seed);package=create_backup(old,'1.3.3')
+    writes=[]
+    class FakeSpoolman(BaseHTTPRequestHandler):
+        def log_message(self,*args):pass
+        def do_GET(self):
+            value={'version':'0.27.1'} if self.path=='/api/v1/info' else [dict(id=i+1,remaining_weight=masses[i],filament=dict(name=names[i],material='PLA',color_hex=colors[i][1:])) for i in range(4)]
+            raw=json.dumps(value).encode();self.send_response(200);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
+        def do_PUT(self):writes.append(self.path);self.send_error(405)
+    fake=ThreadingHTTPServer(('127.0.0.1',0),FakeSpoolman);worker=threading.Thread(target=fake.serve_forever);worker.start()
+    log=(out/'process.log').open('w');child=None;checks=[]
+    def wait(fn,timeout=40):
+        end=time.monotonic()+timeout
+        while time.monotonic()<end:
+            try:
+                result=fn()
+                if result:return result
+            except (OSError,ValueError):pass
+            if child and child.poll() is not None:raise RuntimeError('Candidate exited')
+            time.sleep(.1)
+        raise TimeoutError('Packaged UI wait timed out')
+    def api(route,body=None):
+        descriptor=json.loads((data/'instance.json').read_text())
+        request=Request(f'http://127.0.0.1:{descriptor["port"]}/api/'+route,data=None if body is None else json.dumps(body).encode(),headers={'X-Tracker-Token':descriptor['token'],'Content-Type':'application/json'})
+        with urlopen(request,timeout=15) as r:return json.load(r)
+    try:
+        child=subprocess.Popen([str(bundle/'Contents/MacOS'/info['CFBundleExecutable'])],env=dict(os.environ,TRACKER20_DATA_DIR=str(data)),stdout=log,stderr=subprocess.STDOUT)
+        wait(lambda:(data/'instance.json').exists())
+        checked=api('validate_backup',dict(package=package))
+        api('restore_backup',dict(package=package,expected_revision=checked['current_revision'],confirmed=True))
+        # A newly completed synthetic slice: never read the user's slicer cache.
+        metadata=data/'slices'/'Graphite fixture'/'Metadata';metadata.mkdir(parents=True)
+        (metadata/'.42.0.gcode').write_bytes(payload('0, 0, 0, 54.7'))
+        wait(lambda:api('desktop/forecast')['entries'])
+        descriptor=json.loads((data/'instance.json').read_text())
+        url=f'http://127.0.0.1:{descriptor["port"]}/desktop'
+        with sync_playwright() as p:
+            browser=p.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1000});errors=[]
+            page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
+            page.goto(url);page.wait_for_selector('.graphite-head-art')
+            assert page.locator('body.graphite').count()==1
+            assert page.locator('.graphite-head-art').count()==4
+            assert page.evaluate('getComputedStyle(document.querySelector(".sidebar-slot")).borderRadius')=='10px'
+            for language in ['en','de','uk','es','ru']:
+                page.locator('#lang-picker').select_option(language);page.wait_for_function('(l)=>currentLang===l',arg=language)
+            page.screenshot(path=str(out/'overview.png'),full_page=True);checks.append('packaged Graphite, five languages, heads above live synthetic forecast')
+            page.locator('#nav-spools').click();page.screenshot(path=str(out/'library.png'),full_page=True)
+            page.locator('#inventory-create').click();page.screenshot(path=str(out/'add.png'),full_page=True);page.locator('#inventory-add-dialog .dialog-close').click()
+            page.locator('#desktop-tags-open').click()
+            page.wait_for_function('document.getElementById("desktop-tags-message").textContent.length>0 && !document.getElementById("desktop-tags-refresh").disabled')
+            page.screenshot(path=str(out/'uid.png'),full_page=True);page.locator('#desktop-tags-close').click()
+            page.locator('#nav-settings').click();page.locator('[data-settings-section=spoolman]').click();page.locator('[data-sm-tab=connection]').click()
+            page.locator('#sm-url').fill(f'http://127.0.0.1:{fake.server_port}');page.locator('#sm-read').check();page.locator('#sm-save').click()
+            page.wait_for_function("desktopSpoolmanData.state.mode==='read'")
+            page.locator('#sm-refresh').click();page.locator('[data-sm-tab=spools]').click()
+            page.wait_for_selector('.sm-spool-row');assert page.locator('.sm-spool-row').count()==4
+            for row,color in zip(page.locator('.sm-spool-row').all(),colors):assert color in row.locator('svg').inner_html()
+            page.locator('.sm-spool-row').first.click();page.screenshot(path=str(out/'spoolman.png'),full_page=True)
+            checks.append('packaged Spoolman catalog shows all four real fixture colors without writes')
+            page.locator('[data-settings-section=printer]').click();page.screenshot(path=str(out/'settings.png'),full_page=True)
+            assert not errors,errors
+            browser.close()
+        assert not api('state')['connections']['connected'] and not writes and not api('state')['debits']
+        # Capture only this child PID's native window, not the user's desktop.
+        import AppKit,Quartz
+        app=AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(child.pid)
+        assert app and app.activationPolicy()==1 and str(app.bundleURL().path())==str(bundle)
+        api('window',dict(action='show'));time.sleep(2)
+        windows=[w for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll,0) if w.get('kCGWindowOwnerPID')==child.pid and w.get('kCGWindowLayer')==0]
+        window=max(windows,key=lambda w:w['kCGWindowBounds']['Width']*w['kCGWindowBounds']['Height'])
+        subprocess.run(['screencapture','-x','-o','-l',str(window['kCGWindowNumber']),str(out/'native-overview.png')],check=True)
+        checks.append('native child window captured, Accessory policy, no real connections or debits')
+        child.send_signal(signal.SIGTERM);child.wait(20)
+        assert child.returncode==0 and not (data/'instance.json').exists();checks.append('clean packaged exit')
+        (out/'results.json').write_text(json.dumps(dict(version=info['CFBundleShortVersionString'],commit=info['TrackerSourceCommit'],dirty=info['TrackerBuildDirty'],profile=str(data),bundle=str(bundle),checks=checks),indent=2))
+        print('\n'.join('PASS '+c for c in checks))
+    finally:
+        if child and child.poll() is None:child.terminate();child.wait(20)
+        fake.shutdown();worker.join();fake.server_close();log.close()
+
+if __name__=='__main__':main()

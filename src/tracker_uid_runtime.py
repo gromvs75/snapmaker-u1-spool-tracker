@@ -63,6 +63,8 @@ class AccountingOwner:
             delivery = Delivery(service.accounting)
             from tracker_uid_reconciliation import Reconciliation
             reconciliation = Reconciliation(lifecycle.recovery, service.accounting)
+            from tracker_uid_history_review import HistoryReview
+            history_review = HistoryReview(service.accounting)
             from tracker_uid_tags import Tags
             tags = Tags(service.accounting)
             self.ready.set_result(threading.get_ident())
@@ -80,6 +82,10 @@ class AccountingOwner:
                     if operation in ('tag_preview','tag_register'):
                         # Registration commits against current observations, not a queued stale scan.
                         result=getattr(tags,operation.removeprefix('tag_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation == 'history_detail':
+                        result = history_review.detail(*args, **kwargs)
+                    elif operation == 'history_decide':
+                        result = history_review.decide(*args, fleet=self.fleet.snapshot(), **kwargs)
                     elif operation == 'reconcile_preview':
                         result = reconciliation.preview(*args, **kwargs)
                     elif operation == 'reconcile_apply':
@@ -112,6 +118,7 @@ class AccountingOwner:
                         delivery=Delivery(service.accounting)
                         tags=Tags(service.accounting)
                         reconciliation=Reconciliation(lifecycle.recovery, service.accounting)
+                        history_review=HistoryReview(service.accounting)
                     elif operation == 'export_backup':
                         import sqlite3, tempfile, base64
                         from pathlib import Path
@@ -130,6 +137,7 @@ class AccountingOwner:
                                   'replacement_events': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_replacement_events ORDER BY job_key,ordinal')],
                                   'recovery_plans': [dict(history_key=r['history_key'],quarantined=bool(r['quarantined']),auto_replenish=__import__('json').loads(r['profile']).get('auto_replenish')) for r in catalog.db.execute('SELECT * FROM uid_recovery_profiles')],
                                   'recovery_receipts': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_recovery_receipts')],
+                                  'history_decisions': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_history_decisions')],
                                   'resolutions': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_manual_resolutions')],
                                   'debits': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_debits')],
                                   'reviews': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_motion_review')]}

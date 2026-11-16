@@ -38,6 +38,7 @@ class Tags:
     def _candidate(self,row,printer_id,channel):
         if row['uid'] is not None:raise AccountingConflict('Катушка уже связана с другой меткой.')
         sid=row['spool_id'];self._guard(printer_id,sid)
+        if self.catalog.archived(sid):raise AccountingConflict('Сначала верните катушку из архива.')
         assignment=self.db.execute('SELECT * FROM manual_assignments WHERE spool_id=?',(sid,)).fetchone()
         if assignment and (assignment['printer_id'],assignment['channel'])!=(printer_id,channel):
             raise AccountingConflict('Сначала снимите прежнее ручное назначение этой катушки.')

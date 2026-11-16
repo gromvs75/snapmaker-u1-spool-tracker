@@ -7,7 +7,7 @@ import time
 from tracker_uid_catalog import UidCatalog
 
 
-def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None, forecast=None, window_action=None):
+def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None, forecast=None, window_action=None, backup_file=None):
     token=secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -51,14 +51,14 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 if self.path=='/api/desktop/data':
                     value=owner.call('desktop_snapshot')
                     value['connections']=owner.call('connection_state') if hasattr(owner,'connected') else None
+                    value['native_backup']=backup_file is not None
                     return self.reply(200,value)
                 if self.path=='/api/desktop/forecast':
                     from tracker_desktop_model import forecast_view
                     selected=owner.call('desktop_snapshot')['selected_printer']
                     return self.reply(200,forecast_view(forecast.snapshot() if forecast else {},selected))
                 if self.path=='/api/desktop/statistics':
-                    from print_statistics import summarize_prints
-                    return self.reply(200,summarize_prints(owner.call('desktop_snapshot')))
+                    return self.reply(200,owner.call('desktop_statistics'))
                 if self.path=='/api/desktop/sender/status':return self.reply(200,{'enabled':False})
                 return self.reply(409,{'error':'Этот маршрут полной оболочки ещё не подключён к ядру 2.0. Старое хранилище не используется.'})
             if self.path=='/':
@@ -98,6 +98,10 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 if self.path.startswith('/api/desktop/'):
                     expected=data.pop('_settings_revision',None)
                     action=self.path.removeprefix('/api/desktop/')
+                    if action=='backup_file':
+                        if backup_file is None or set(data)!={'action'} or data['action'] not in ('export','select'):raise ValueError('Native file dialog unavailable')
+                        package=owner.call('backup_package') if data['action']=='export' else None
+                        return self.reply(200,backup_file(data['action'],package))
                     if action=='spoolman/configure':
                         if set(data)!={'url','mode','sole_sender'} or data['mode'] not in ('off','read','send') or data['mode']=='send' and data['sole_sender'] is not True:
                             raise ValueError('Подтвердите единственного отправителя расхода.')
@@ -117,7 +121,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     if action in ('spoolman/attach','spoolman/detach'):
                         return self.reply(200,owner.call('desktop_spoolman_change',action=action.split('/')[1],
                             expected_revision=data.pop('_inventory_revision',None),request_id=data.pop('_request_id',None),confirmed=data.pop('_confirmed',False),data=data))
-                    if action in ('spools/add','spools/update','spools/color','spools/delete','slots'):
+                    if action in ('spools/add','spools/update','spools/color','spools/delete','spools/calibration','spools/archive','slots'):
                         return self.reply(200,owner.call('desktop_inventory',action=action,
                             expected_revision=data.pop('_inventory_revision',None),
                             request_id=data.pop('_request_id',None),confirmed=data.pop('_confirmed',False),data=data))

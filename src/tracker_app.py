@@ -72,9 +72,12 @@ def main(argv=None):
             if not session.connected:
                 raise ValueError('Подключения остановлены.')
             return ReadOnlyMoonraker(printer['url']).status()['print_stats']['state']
+        from tracker_desktop_files import BackupFiles
+        import webview
+        backup_files=BackupFiles(lambda: shell._window if shell else None,webview)
         forecast.start()
         server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info,forecast=forecast,
-                       window_action=lambda action:getattr(shell,action)() if shell else None)
+                       window_action=lambda action:getattr(shell,action)() if shell else None,backup_file=backup_files)
         thread = threading.Thread(target=server.serve_forever,name='tracker20-http'); thread.start()
         url = f'http://127.0.0.1:{server.server_port}'
         logger.info('GUI %s', url)

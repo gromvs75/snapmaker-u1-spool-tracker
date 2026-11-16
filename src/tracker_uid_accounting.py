@@ -148,6 +148,7 @@ class UidAccounting:
         if expected_version is not None and (current['version'] if current else '')!=expected_version:
             raise AccountingConflict('Назначение изменилось. Обновите экран.')
         spool=self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?',(spool_id,)).fetchone()
+        if self.catalog.archived(spool_id):raise AccountingConflict('Сначала верните катушку из архива.')
         if not spool or spool['uid'] is not None: raise AccountingConflict('Manual assignment requires a local untagged spool')
         snapshot=fleet.get(printer_id,{})
         obs=snapshot.get('channels',{}).get(channel,{})

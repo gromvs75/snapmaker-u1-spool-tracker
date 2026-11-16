@@ -143,10 +143,15 @@ class UidCatalog:
             spool = self.spool(row['uid'])
             row['state'] = ('conflict' if counts[row['uid']] > 1 else
                             'uncertain' if not row['confirmed'] else
+                            'archived' if spool and self.archived(spool['spool_id']) else
                             'recognized' if spool else 'needs_registration')
             row['spool'] = spool
             row['usable'] = row['state'] == 'recognized'
         return rows + self._manual_locations(fleet, rows)
+
+    def archived(self, spool_id):
+        row=self.db.execute('SELECT payload FROM spool_details WHERE spool_id=?',(spool_id,)).fetchone()
+        return bool(row and json.loads(row[0]).get('archived'))
 
     def register_manual(self, name, remaining_mg, *, spool_id=None, details=None):
         if not isinstance(name,str) or not name.strip() or type(remaining_mg) is not int or remaining_mg<0:

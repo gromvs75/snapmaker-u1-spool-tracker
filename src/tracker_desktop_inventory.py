@@ -41,6 +41,7 @@ class DesktopInventory:
             elif action=='slots':result=self.slots(data,ctx,fleet)
             elif action in ('spools/color','spools/update'):result=self.edit(action,data,ctx)
             elif action=='spools/delete':result=self.delete(data,ctx)
+            elif action in ('spools/calibration','spools/archive'):result=self.parameters(action,data,ctx)
             else:raise ValueError('Неподдерживаемое действие библиотеки.')
             self.db.execute('INSERT INTO uid_inventory_edits VALUES(?,?,?,?)',
                             (request_id,payload,json.dumps(result),time.time()))
@@ -129,3 +130,35 @@ class DesktopInventory:
         self.db.execute('DELETE FROM spool_details WHERE spool_id=?',(sid,))
         self.db.execute('DELETE FROM uid_spools WHERE spool_id=?',(sid,))
         return dict(status='deleted',spool_id=sid)
+
+    def parameters(self,action,data,ctx):
+        field='calibration' if action=='spools/calibration' else 'archived'
+        if set(data)!={'id',field}:raise ValueError('Неверные параметры катушки.')
+        sid=data['id'];spool=next((s for s in ctx['spools'] if s['spool_id']==sid),None)
+        if spool is None:raise ValueError('Катушка не найдена.')
+        self.accounting._unlock_guard('',sid,starting=True)
+        if self.db.execute("SELECT 1 FROM uid_job_tools JOIN uid_jobs USING(job_key) WHERE state='active' AND spool_id=?",(sid,)).fetchone():
+            raise AccountingConflict('Сначала завершите или разрешите задание катушки.')
+        if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_replacement_events'").fetchone():
+            for row in self.db.execute("SELECT payload FROM uid_replacement_events JOIN uid_jobs USING(job_key) WHERE state='active'"):
+                event=json.loads(row[0])
+                if sid in (event.get('old_spool_id'),event.get('new_spool_id')):
+                    raise AccountingConflict('Катушка участвует в незавершённой замене.')
+        details=dict(spool['details'])
+        if field=='calibration':
+            from spool_identity import calibration
+            value=data[field]
+            if not isinstance(value,dict) or set(value)!={'diameter_mm','density_g_cm3'}:
+                raise ValueError('UID изменяется только через регистрацию наблюдённой метки.')
+            clean=calibration(value)
+            details[field]={k:clean[k] for k in value}
+        else:
+            if type(data[field]) is not bool:raise ValueError('Неверный признак архива.')
+            if data[field]:
+                if any((r.get('spool') or {}).get('spool_id')==sid for r in ctx['locations']):
+                    raise AccountingConflict('Сначала снимите катушку со всех принтеров и подтвердите отсутствие метки.')
+                if self.db.execute("SELECT 1 FROM uid_remote_outbox WHERE spool_id=? AND state NOT IN ('sent','resolved')",(sid,)).fetchone():
+                    raise AccountingConflict('Сначала разрешите очередь Spoolman этой катушки.')
+            details[field]=data[field]
+        self.db.execute('INSERT OR REPLACE INTO spool_details VALUES(?,?)',(sid,json.dumps(details,allow_nan=False)))
+        return dict(status='saved',spool_id=sid)

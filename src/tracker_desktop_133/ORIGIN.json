@@ -1,0 +1,12 @@
+{
+  "commit": "fdeb1aa11c64bd9a06344c9bcc6433c6bcce4bb1",
+  "files": {
+    "sender_view.py": "056880f64e893ec70bb66d4b3d12a5a9bd09b11879aad103735d00f3e60d8220",
+    "forecast_view.py": "c951a0309af37a9cd7dc1d6e7f30104725307b1909db2785caff28c6d260b992",
+    "spoolman_view.py": "90a6ce52baaefc2341653d2b697421dd6f6d27ee108a73786cbc452802fb0dfb",
+    "spoolman_compare_view.py": "23ad8e5c9a059da50cb8d09645708403887c6a7081d16e0fdfca4ab107b76ee3",
+    "settings_view.py": "7fdaf7ecf2e25851e1a1ec0856aed624b726786c6cf3c340ab93ec667d599488",
+    "inventory_view.py": "b2b9c500d83581ef09f15e33895e2c14db06fa6105753bb9e1345ba7a18f0ee1",
+    "base.html": "905da01f92f78500ae8b5d13c079664bc36a93d03e2eb7bd6d9c90ede6d5de48"
+  }
+}

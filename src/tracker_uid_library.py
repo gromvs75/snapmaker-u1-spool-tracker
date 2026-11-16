@@ -49,8 +49,10 @@ class Library:
         return {'values':data, 'revision':revision(data)}
 
     def save_settings(self, values, expected_revision):
-        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers','slice_root','safety_margin_g','selected_printer'}:
+        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers','slice_root','safety_margin_g','selected_printer','language'}:
             raise ValueError('Неверные настройки.')
+        if 'language' in values and values['language'] not in ('en','ru','de','uk','es'):
+            raise ValueError('Unsupported language')
         if 'safety_margin_g' in values:
             # Same input precision as inventory; display rounding is not storage rounding.
             values=dict(values,safety_margin_g=mg(values['safety_margin_g'])/1000)

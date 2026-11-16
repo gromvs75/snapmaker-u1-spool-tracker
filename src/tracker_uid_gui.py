@@ -24,6 +24,21 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
             if self.headers.get('Host')!=f'127.0.0.1:{self.server.server_port}':return self.reply(403,{'error':'Invalid host'})
             if self.path=='/favicon.ico':
                 self.send_response(204);self.end_headers();return
+            if self.path=='/desktop':
+                from tracker_desktop_133 import integration_html
+                return self.reply(200,integration_html(token,(app_info or {}).get('version','2.0 integration')),'text/html')
+            if self.path.startswith('/api/desktop/'):
+                if not self.authorized():return self.reply(403,{'error':'Forbidden'})
+                if self.path=='/api/desktop/data':return self.reply(200,owner.call('desktop_snapshot'))
+                if self.path=='/api/desktop/forecast':
+                    from tracker_desktop_model import forecast_view
+                    selected=owner.call('desktop_snapshot')['selected_printer']
+                    return self.reply(200,forecast_view(forecast.snapshot() if forecast else {},selected))
+                if self.path=='/api/desktop/statistics':
+                    from print_statistics import summarize_prints
+                    return self.reply(200,summarize_prints(owner.call('desktop_snapshot')))
+                if self.path=='/api/desktop/sender/status':return self.reply(200,{'enabled':False})
+                return self.reply(409,{'error':'Этот маршрут полной оболочки ещё не подключён к ядру 2.0. Старое хранилище не используется.'})
             if self.path=='/':
                 html=Path(__file__).with_name('tracker_uid_gui.html').read_text(encoding='utf-8')
                 if app_info and app_info.get('mode')=='user':
@@ -55,6 +70,12 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 size=int(self.headers.get('Content-Length','0'))
                 if not 0<size<(46*1024*1024 if self.path in ('/api/validate_backup','/api/restore_backup') else 16384):raise ValueError('Invalid request size')
                 data=json.loads(self.rfile.read(size))
+                if self.path.startswith('/api/desktop/'):
+                    expected=data.pop('_settings_revision',None)
+                    key={'/api/desktop/lang':'language','/api/desktop/settings':'safety_margin_g'}.get(self.path)
+                    if key and set(data)=={key}:
+                        return self.reply(200,owner.call('save_settings',values=data,expected_revision=expected))
+                    return self.reply(409,{'error':'Этот маршрут полной оболочки ещё не подключён к ядру 2.0. Изменений нет.'})
                 if self.path=='/api/window':
                     if set(data)!={'action'} or data['action'] not in ('show','hide') or window_action is None:
                         raise ValueError('Нативное окно недоступно.')

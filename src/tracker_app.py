@@ -74,7 +74,8 @@ def main(argv=None):
             return ReadOnlyMoonraker(printer['url']).status()['print_stats']['state']
         from tracker_desktop_files import BackupFiles
         import webview
-        backup_files=BackupFiles(lambda: shell._window if shell else None,webview)
+        backup_files=BackupFiles(lambda: shell._window if shell else None,webview,
+                                 on_dialog_closed=lambda: shell.show() if shell else None)
         forecast.start()
         server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info,forecast=forecast,
                        window_action=lambda action:getattr(shell,action)() if shell else None,backup_file=backup_files)

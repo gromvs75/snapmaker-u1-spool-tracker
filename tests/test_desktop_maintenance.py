@@ -89,6 +89,20 @@ def test_native_backup_files_cancel_save_read_bounded(tmp_path):
     assert path.read_text()=='not JSON'
 
 
+def test_native_backup_returns_to_accessory_window_after_select_cancel_or_error():
+    calls=[]
+    class Window:
+        def create_file_dialog(self,*args,**kwargs):
+            calls.append('dialog')
+            if len(calls)>2:raise RuntimeError('Closed picker')
+            return []
+    files=BackupFiles(lambda:Window(),SimpleNamespace(SAVE_DIALOG=1,OPEN_DIALOG=2),on_dialog_closed=lambda:calls.append('show'))
+    assert files('select')['status']=='cancelled'
+    assert calls==['dialog','show']
+    with pytest.raises(RuntimeError):files('select')
+    assert calls==['dialog','show','dialog','show']
+
+
 def test_full_shell_parameters_archive_statistics_backup_and_restart(tmp_path,delivery_bench):
     directory=tmp_path/'app';app=Session(directory,allowed_urls=[],fleet_factory=Fleet)
     original,remote,_,_,_,_=delivery_bench

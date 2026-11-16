@@ -102,11 +102,11 @@
   }));
  },true);
  $('backup-import').addEventListener('click',event=>{
-  event.stopImmediatePropagation();act(async()=>{
+  event.stopImmediatePropagation();act(()=>withBackupDialog(async()=>{
    reset();file.value='';fileName.textContent='';localize();
    if(desktopFormData?.native_backup){const result=await api('/api/backup_file',{action:'select'});if(result.status!=='ok')return;packageData=result.package;choose.hidden=true}else choose.hidden=false;
    dialog.showModal();
-  });
+  }));
  },true);
  function localize(){
   choose.textContent=t('Выбрать файл','Choose file','Datei wählen','Вибрати файл','Elegir archivo');

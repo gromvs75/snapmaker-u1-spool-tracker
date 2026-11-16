@@ -136,7 +136,7 @@ class Library:
                 or set(changes)-{'remaining_g','color'} or not isinstance(request_id,str)
                 or not 1<=len(request_id)<=128 or not isinstance(note,str) or not 3<=len(note.strip())<=2000):
             raise ValueError('Подтвердите изменение и укажите основание.')
-        if 'color' in changes and (not isinstance(changes['color'],str) or not re.fullmatch('#[0-9a-fA-F]{6}',changes['color'])):
+        if 'color' in changes and changes['color'] not in (None,'') and (not isinstance(changes['color'],str) or not re.fullmatch('#[0-9a-fA-F]{6}',changes['color'])):
             raise ValueError('Неверный цвет.')
         amount=mg(changes['remaining_g']) if 'remaining_g' in changes else None
         if amount is not None and amount>100_000_000:raise ValueError('Остаток слишком велик.')
@@ -146,22 +146,27 @@ class Library:
             if old:
                 if old['payload']!=payload:raise AccountingConflict('Повтор запроса содержит другое изменение.')
                 return dict(json.loads(old['result']),status='duplicate')
-            spool=next((s for s in self.snapshot()['spools'] if s['spool_id']==spool_id),None)
-            if spool is None or spool['revision']!=expected_revision:raise AccountingConflict('Катушка изменилась. Откройте её заново.')
-            if spool['remote']:raise AccountingConflict('Остаток и цвет этой катушки изменяются в Spoolman.')
-            if amount is not None:
-                self.accounting._unlock_guard('',spool_id,starting=True)
-                active=self.db.execute("SELECT 1 FROM uid_jobs j JOIN uid_job_tools t USING(job_key) WHERE j.state='active' AND t.spool_id=?",(spool_id,)).fetchone()
-                if not active and self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_replacement_events'").fetchone():
-                    active=any(spool_id in (e.get('old_spool_id'),e.get('new_spool_id')) for e in
-                        (json.loads(r[0]) for r in self.db.execute("SELECT e.payload FROM uid_replacement_events e JOIN uid_jobs j USING(job_key) WHERE j.state='active'")))
-                if active:raise AccountingConflict('Сначала завершите или разрешите задание этой катушки.')
-                self.db.execute('UPDATE uid_spools SET remaining_mg=? WHERE spool_id=?',(amount,spool_id))
-            if 'color' in changes:
-                details=dict(spool['details'],color=changes['color'])
-                self.db.execute('INSERT OR REPLACE INTO spool_details VALUES(?,?)',(spool_id,json.dumps(details)))
-            result=dict(spool_id=spool_id,previous_mg=spool['remaining_mg'],remaining_mg=amount if amount is not None else spool['remaining_mg'],status='saved')
+            result=self._edit_spool(spool_id,changes,expected_revision,amount)
             self.db.execute('INSERT INTO uid_inventory_edits VALUES(?,?,?,?)',(request_id,payload,json.dumps(result),time.time()))
+        return result
+
+    def _edit_spool(self, spool_id, changes, expected_revision, amount):
+        # Internal: caller owns the SQLite transaction and validates the inputs.
+        spool=next((s for s in self.snapshot()['spools'] if s['spool_id']==spool_id),None)
+        if spool is None or spool['revision']!=expected_revision:raise AccountingConflict('Катушка изменилась. Откройте её заново.')
+        if spool['remote']:raise AccountingConflict('Остаток и цвет этой катушки изменяются в Spoolman.')
+        if amount is not None:
+            self.accounting._unlock_guard('',spool_id,starting=True)
+            active=self.db.execute("SELECT 1 FROM uid_jobs j JOIN uid_job_tools t USING(job_key) WHERE j.state='active' AND t.spool_id=?",(spool_id,)).fetchone()
+            if not active and self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_replacement_events'").fetchone():
+                active=any(spool_id in (e.get('old_spool_id'),e.get('new_spool_id')) for e in
+                    (json.loads(r[0]) for r in self.db.execute("SELECT e.payload FROM uid_replacement_events e JOIN uid_jobs j USING(job_key) WHERE j.state='active'")))
+            if active:raise AccountingConflict('Сначала завершите или разрешите задание этой катушки.')
+            self.db.execute('UPDATE uid_spools SET remaining_mg=? WHERE spool_id=?',(amount,spool_id))
+        if 'color' in changes:
+            details=dict(spool['details'],color=changes['color'])
+            self.db.execute('INSERT OR REPLACE INTO spool_details VALUES(?,?)',(spool_id,json.dumps(details)))
+        result=dict(spool_id=spool_id,previous_mg=spool['remaining_mg'],remaining_mg=amount if amount is not None else spool['remaining_mg'],status='saved')
         return result
 
     def cache_catalog(self, url, items=None):
@@ -207,26 +212,29 @@ class Library:
         return {'name':comparison['remote_name']}
 
     def create(self, name, remaining_g, *, fleet, details=None, assignment=None, remote=None):
+        with self.accounting.transaction():
+            return self._create(name,remaining_g,fleet=fleet,details=details,assignment=assignment,remote=remote)
+
+    def _create(self, name, remaining_g, *, fleet, details=None, assignment=None, remote=None):
         # Validate everything before INSERT, then create + assign in one transaction.
         if not isinstance(name,str) or not name.strip() or len(name)>100:raise ValueError('Укажите имя катушки.')
         amount=mg(remaining_g);details=dict(details or {})
         if set(details)-{'material','color'} or any(not isinstance(v,str) or len(v)>100 for v in details.values()):raise ValueError('Неверные параметры катушки.')
         sid=uuid.uuid4().hex
-        with self.accounting.transaction():
-            if remote:
-                item=self.remote_item(remote['url'],remote['id'],remote['revision'])
-                if item['remaining_g'] is None:raise ValueError('Остаток Spoolman неизвестен.')
-                name=item['name'];amount=mg(item['remaining_g']);details.update(material=item['material'],color=item['color'] or '')
-                if self.db.execute('SELECT 1 FROM uid_remote_links WHERE url=? AND remote_id=?',(remote['url'],remote['id'])).fetchone():
-                    raise AccountingConflict('Эта катушка Spoolman уже есть в библиотеке.')
-            self.db.execute('INSERT INTO uid_spools VALUES(?,NULL,?,?)',(sid,name.strip(),amount))
-            self.db.execute('INSERT INTO spool_details VALUES(?,?)',(sid,json.dumps(details)))
-            if remote:self.db.execute('INSERT INTO uid_remote_links VALUES(?,?,?)',(sid,remote['url'],remote['id']))
-            result={'spool_id':sid}
-            if assignment:
-                if set(assignment)!={'printer_id','channel','expected_version','confirmed'} or not isinstance(assignment['expected_version'],str) or assignment['confirmed'] is not True or assignment['channel'] not in ('0','1','2','3'):
-                    raise ValueError('Подтвердите физическое назначение.')
-                result.update(self.accounting._assign_manual(assignment['printer_id'],assignment['channel'],sid,fleet,assignment['expected_version']))
+        if remote:
+            item=self.remote_item(remote['url'],remote['id'],remote['revision'])
+            if item['remaining_g'] is None:raise ValueError('Остаток Spoolman неизвестен.')
+            name=item['name'];amount=mg(item['remaining_g']);details.update(material=item['material'],color=item['color'] or '')
+            if self.db.execute('SELECT 1 FROM uid_remote_links WHERE url=? AND remote_id=?',(remote['url'],remote['id'])).fetchone():
+                raise AccountingConflict('Эта катушка Spoolman уже есть в библиотеке.')
+        self.db.execute('INSERT INTO uid_spools VALUES(?,NULL,?,?)',(sid,name.strip(),amount))
+        self.db.execute('INSERT INTO spool_details VALUES(?,?)',(sid,json.dumps(details)))
+        if remote:self.db.execute('INSERT INTO uid_remote_links VALUES(?,?,?)',(sid,remote['url'],remote['id']))
+        result={'spool_id':sid}
+        if assignment:
+            if set(assignment)!={'printer_id','channel','expected_version','confirmed'} or not isinstance(assignment['expected_version'],str) or assignment['confirmed'] is not True or assignment['channel'] not in ('0','1','2','3'):
+                raise ValueError('Подтвердите физическое назначение.')
+            result.update(self.accounting._assign_manual(assignment['printer_id'],assignment['channel'],sid,fleet,assignment['expected_version']))
         return result
 
     def detach(self, printer_id, channel, expected_version, confirmed, *, fleet):

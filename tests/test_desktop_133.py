@@ -94,3 +94,65 @@ def test_full_frontend_languages_offline_plan_manual_account_and_restart(bench,t
         assert sum(d['delta_mg'] for d in session.call('inspect')['debits'])==750
         assert session.call('desktop_snapshot')['runs'][key]['status']=='committed'
     finally:session.close()
+
+
+def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_path):
+    import copy
+    from tracker_uid_runtime import AccountingOwner
+    from test_uid_accounting import snapshot
+    class Fleet:
+        value={p:snapshot(p,{}) for p in ('a','b')}
+        def snapshot(self):return copy.deepcopy(self.value)
+    fleet=Fleet();owner=AccountingOwner(tmp_path/'ui.sqlite',fleet)
+    owner.call('save_settings',values={'printers':[dict(id=p,name='Printer '+p,url='http://127.0.0.1:'+str(19840+i)) for i,p in enumerate(('a','b'))]},expected_revision=owner.call('settings')['revision'])
+    server=serve(owner,fleet,app_info={'version':'2.0.0rc1','mode':'user'})
+    thread=threading.Thread(target=server.serve_forever);thread.start();errors=[]
+    try:
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1050})
+            page.on('pageerror',lambda e:errors.append(str(e)))
+            page.on('dialog',lambda d:d.accept())
+            page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
+            page.locator('#nav-spools').click();page.locator('#inventory-create').click()
+            page.locator('#new-name').fill('Precision PLA');page.locator('#new-mat').fill('PLA');page.locator('#new-weight').fill('125.259')
+            lost=[]
+            def lose_response(route):
+                if not lost:
+                    assert route.fetch().ok;lost.append(True);route.abort()
+                else:route.continue_()
+            page.route('**/api/desktop/spools/add',lose_response)
+            with page.expect_event('requestfailed',predicate=lambda r:r.url.endswith('/spools/add')):
+                page.locator('#t-add-btn').click()
+            page.locator('#t-add-btn').click()
+            page.wait_for_function("!document.getElementById('inventory-add-dialog').open")
+            spools=owner.call('library_snapshot')['spools'];assert len(spools)==1
+            sid=spools[0]['spool_id'];assert spools[0]['remaining_mg']==125259
+            field=page.locator('#spools-table input[type=number]');assert field.input_value()=='125.259'
+            field.fill('124.987')
+            with page.expect_response('**/api/desktop/spools/update') as response:field.press('Tab')
+            assert response.value.ok
+            page.wait_for_function("document.querySelector('#spools-table input').value==='124.987'")
+            assert owner.call('library_snapshot')['spools'][0]['remaining_mg']==124987
+            page.get_by_role('button',name='Головки T0–T3',exact=True).click()
+            page.locator('select[name=slot_1]').select_option(sid)
+            with page.expect_response('**/api/desktop/slots') as response:page.locator('#slots-form button[type=submit]').click()
+            assert response.value.ok
+            page.wait_for_function("document.querySelector('.uid-inventory-assignments').textContent.includes('Printer a · T0')")
+            page.get_by_role('button',name='Библиотека',exact=True).click()
+            assert 'Printer a · T0' in page.locator('.uid-inventory-assignments').inner_text()
+            page.locator('#nav-overview').click()
+            assert '125' in page.locator('.head-remaining').first.inner_text()
+            page.wait_for_function("document.getElementById('forecast-heading').textContent==='Прогноз после нарезки'")
+            page.screenshot(path='output/full-133-integration-ui/inventory-connected.png',full_page=True)
+            page.reload();page.locator('#nav-spools').click()
+            page.wait_for_function("document.querySelector('#spools-table input').value==='124.987'")
+            assert len(owner.call('library_snapshot')['spools'])==1
+            assert owner.call('inspect')['debits']==[]
+            assert not errors,errors
+            browser.close()
+        package=owner.call('backup_package');checked=owner.call('validate_backup',package=package)
+        owner.call('restore_backup',package=package,expected_revision=checked['current_revision'])
+        assert owner.call('library_snapshot')['spools'][0]['remaining_mg']==124987
+        assert owner.call('inspect')['debits']==[]
+    finally:
+        server.shutdown();thread.join();server.server_close();owner.close()

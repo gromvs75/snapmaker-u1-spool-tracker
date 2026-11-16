@@ -72,6 +72,11 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 data=json.loads(self.rfile.read(size))
                 if self.path.startswith('/api/desktop/'):
                     expected=data.pop('_settings_revision',None)
+                    action=self.path.removeprefix('/api/desktop/')
+                    if action in ('spools/add','spools/update','spools/color','spools/delete','slots'):
+                        return self.reply(200,owner.call('desktop_inventory',action=action,
+                            expected_revision=data.pop('_inventory_revision',None),
+                            request_id=data.pop('_request_id',None),confirmed=data.pop('_confirmed',False),data=data))
                     key={'/api/desktop/lang':'language','/api/desktop/settings':'safety_margin_g'}.get(self.path)
                     if key and set(data)=={key}:
                         return self.reply(200,owner.call('save_settings',values=data,expected_revision=expected))

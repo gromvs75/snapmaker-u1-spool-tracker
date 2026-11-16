@@ -1,18 +1,34 @@
 // Complete 1.3.3 presentation, with explicit 2.0 routes. No legacy write handler.
 const DESKTOP_TOKEN=__TOKEN__,DESKTOP_VERSION=__VERSION__;
 let desktopRevision='';
+let desktopLatestData=null,desktopFormData=null;
 function displayGrams(value){return Number(value).toLocaleString(typeof currentLang==='undefined'?'ru':currentLang,{maximumFractionDigits:1})}
 (()=>{
  const original=window.fetch.bind(window);
  window.fetch=async(resource,options={})=>{
   if(typeof resource!=='string'||!resource.startsWith('/api/'))return original(resource,options);
   const options2={...options,headers:{...(options.headers||{}),'X-Tracker-Token':DESKTOP_TOKEN}};
+  let pendingKey=null;
   if(!resource.startsWith('/api/history_')){
+   if(options2.body&&['/api/spools/add','/api/spools/update','/api/spools/color','/api/spools/delete','/api/slots'].includes(resource)){
+    const body=JSON.parse(options2.body);
+    pendingKey='tracker20-inventory:'+resource+':'+JSON.stringify(body);
+    let pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');
+    if(!pending){
+     if(!desktopFormData)throw Error('Reload the inventory before changing it.');
+     if(window.desktopConfirmInventory&&!window.desktopConfirmInventory(resource,body))return new Response('{}',{status:200});
+     pending={...body,_inventory_revision:desktopFormData.inventory_revision,_request_id:crypto.randomUUID(),_confirmed:true};
+     sessionStorage.setItem(pendingKey,JSON.stringify(pending));
+    }
+    options2.body=JSON.stringify(pending);
+   }
    if(options2.body){const body=JSON.parse(options2.body);body._settings_revision=desktopRevision;options2.body=JSON.stringify(body)}
    resource=resource.replace('/api/','/api/desktop/');
   }
   const response=await original(resource,options2);
-  if(resource==='/api/desktop/data'&&response.ok)desktopRevision=(await response.clone().json()).settings_revision;
+  // Retain the same intent after a lost response; never fabricate a new retry ID.
+  if(pendingKey&&response.status<500)sessionStorage.removeItem(pendingKey);
+  if(resource==='/api/desktop/data'&&response.ok){desktopLatestData=await response.clone().json();desktopRevision=desktopLatestData.settings_revision}
   return response;
  };
 })();

@@ -89,6 +89,9 @@ class AccountingOwner:
                     elif operation == 'desktop_snapshot':
                         from tracker_desktop_model import snapshot as desktop_snapshot
                         result=desktop_snapshot(library,history_review,fleet.snapshot())
+                    elif operation == 'desktop_inventory':
+                        from tracker_desktop_inventory import DesktopInventory
+                        result=DesktopInventory(library).execute(*args,fleet=self.fleet.snapshot(),**kwargs)
                     elif operation in ('export_preview','export_save'):
                         result=getattr(library,operation)(*args,fleet=fleet.snapshot(),**kwargs)
                     elif operation == 'history_decide':

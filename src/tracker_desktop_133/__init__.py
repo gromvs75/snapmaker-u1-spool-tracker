@@ -26,6 +26,7 @@ def integration_html(token,version):
         html=html.replace('${'+expression+'}', '${displayGrams('+expression+')}')
     html=html.replace('maximumFractionDigits:2','maximumFractionDigits:1')
     html=html.replace('${Math.round(grams * 1000) / 1000}','${displayGrams(grams)}')
+    html=html.replace('    renderPreflight(data, true);','    window.desktopInventoryLoaded?.(data);\n    renderPreflight(data, true);')
     # This sentence is true for 1.3.3, but not for the optional RFID module in 2.0.
     for old,new in [
         ('Spool tracking and usage forecasts for Snapmaker U1 — without firmware changes.','Spool tracking and usage forecasts for Snapmaker U1. RFID requires the printer module.'),
@@ -37,6 +38,6 @@ def integration_html(token,version):
     bootstrap=Path(__file__).with_name('bridge.js').read_text(encoding='utf-8')
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
-    extension=Path(__file__).with_name('history.js').read_text(encoding='utf-8')
+    extension=Path(__file__).with_name('inventory.js').read_text(encoding='utf-8')+'\n'+Path(__file__).with_name('history.js').read_text(encoding='utf-8')
     html=html.replace('</body>','<script>'+extension+'</script></body>')
     return html.replace('· 1.3.3','· '+version)

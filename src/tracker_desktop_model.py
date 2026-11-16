@@ -60,9 +60,9 @@ def snapshot(library, history_review, fleet):
         if p['printer_id']==pid or not p['printer_id']:
             plans[p['plan_id']]=dict(filename=p['filename'],weights=p['weights'],sha256=p['file_sha256'],
                                     created_at=p['created_at'],status='exported',mapping_assumed=True)
-    connected=fleet.get(pid,{}).get('state')=='ready'
+    connected=False
     active=next((r for r in reversed(list(runs.values())) if r['status']=='active'),None)
-    # RFID readiness alone does not establish printer idle/printing/paused status.
+    # Only the independent, fresh Moonraker monitor can establish print status.
     monitor=dict(connected=connected,state='unknown' if connected else 'disabled',filename=active['filename'] if active else '',
                  error='',checked_at=0,active_job_key=active['job_key'] if active else None)
     last_preflight=None

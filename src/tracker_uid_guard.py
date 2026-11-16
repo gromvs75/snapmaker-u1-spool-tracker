@@ -18,9 +18,11 @@ class Guard:
 
     def status(self,pid,status):
         stats=status.get('print_stats',{})
+        if not isinstance(stats.get('state'),str) or not isinstance(stats.get('filename',''),str):
+            raise ValueError('Invalid print status')
         extruder=status.get('toolhead',{}).get('extruder')
         heads={'extruder':0,'extruder1':1,'extruder2':2,'extruder3':3}
-        self.live[pid]=dict(state=stats.get('state','unknown'),filename=stats.get('filename',''),checked_at=time.time(),active_head=heads.get(extruder))
+        self.live[pid]=dict(connected=True,error='',state=stats.get('state','unknown'),filename=stats.get('filename',''),checked_at=time.time(),active_head=heads.get(extruder))
         return self.live[pid]
 
     def snapshot(self,pid):

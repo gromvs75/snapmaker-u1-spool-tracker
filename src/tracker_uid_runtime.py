@@ -89,6 +89,9 @@ class AccountingOwner:
                     elif operation == 'forecast_inventory':
                         result = library.forecast_inventory(fleet=fleet.snapshot())
                     elif operation == 'monitor_status':result=guard.status(*args,**kwargs)
+                    elif operation == 'monitor_clear':result=guard.live.pop(args[0],None)
+                    elif operation == 'monitor_error':
+                        guard.live[args[0]]=dict(connected=False,state='disconnected',filename='',checked_at=__import__('time').time(),error='Status unavailable');result=None
                     elif operation == 'guard_arm':
                         guard.armed[args[0]]=__import__('time').time();result=None
                     elif operation == 'guard_snapshot':result=guard.snapshot(*args,**kwargs)
@@ -99,7 +102,7 @@ class AccountingOwner:
                         from tracker_desktop_model import snapshot as desktop_snapshot
                         result=desktop_snapshot(library,history_review,fleet.snapshot())
                         observed=guard.snapshot(result['selected_printer']);live=observed['monitor']
-                        if live and result['monitor']['connected'] and 0<=__import__('time').time()-live['checked_at']<5:result['monitor'].update(live)
+                        if live and 0<=__import__('time').time()-live['checked_at']<5:result['monitor'].update(live)
                         result['last_guard']=observed['guard']
                         if observed['guard']:
                             from tracker_uid_migration import history_identity
@@ -182,7 +185,6 @@ class AccountingOwner:
                     elif operation == 'refresh': result = service.refresh()
                     elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview', 'recovery_terminal', 'replacement_observe'):
                         result = getattr(lifecycle, operation)(*args, **kwargs)
-                        if operation=='disconnected':guard.live.pop(args[0],None)
                     else: raise ValueError('Unknown accounting operation')
                     if not future.cancelled(): future.set_result(result)
                 except Exception as exc:
@@ -233,12 +235,13 @@ class PrinterWorkers:
     worker invokes the old polling/accounting pipeline.
     """
     def __init__(self, owner, printer_id, recorder_factory, socket_factory, history_reader,
-                 config, *, poll_interval=3, reconnect_interval=1):
+                 config, *, poll_interval=3, reconnect_interval=1, status_reader=None):
         self.owner, self.printer_id = owner, printer_id
         self.proxy = QueuedLifecycle(owner)
         self.recorder_factory, self.socket_factory = recorder_factory, socket_factory
         self.history_reader, self.config = history_reader, copy.deepcopy(config)
         self.poll_interval, self.reconnect_interval = poll_interval, reconnect_interval
+        self.status_reader = status_reader
         self.stop_event = threading.Event()
         self.errors = Queue()
         self.socket_lock = threading.Lock()
@@ -246,6 +249,8 @@ class PrinterWorkers:
         self.recorder = None
         self.threads = [threading.Thread(target=self._motion, name=f'motion-{printer_id}'),
                         threading.Thread(target=self._history, name=f'history-{printer_id}')]
+        if status_reader is not None:
+            self.threads.append(threading.Thread(target=self._status, name=f'status-{printer_id}'))
 
     def start(self):
         for thread in self.threads: thread.start()
@@ -288,6 +293,19 @@ class PrinterWorkers:
                 self.owner.call('history', self.printer_id, jobs)
             except Exception as exc:
                 self._gap(exc)
+            self.stop_event.wait(self.poll_interval)
+
+    def _status(self):
+        # Display telemetry is independent of UID/motion/history eligibility.
+        # A failed accounting capture must not hide a successful print-state read.
+        while not self.stop_event.is_set():
+            try:
+                status = self.status_reader()
+                if not self.stop_event.is_set():
+                    self.owner.call('monitor_status', self.printer_id, status)
+            except Exception:
+                if not self.stop_event.is_set():
+                    self.owner.call('monitor_error', self.printer_id)
             self.stop_event.wait(self.poll_interval)
 
     def stop(self, timeout=15):

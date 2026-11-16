@@ -11,9 +11,12 @@
   picker.replaceChildren();
   for(const p of data.printers){const o=node('option',p.name);o.value=p.id;picker.append(o)}
   picker.value=data.selected_printer;picker.disabled=!data.printers.length;
+  window.desktopPrinterConnection(data);
+ };
+ window.desktopPrinterConnection=data=>{
   status.textContent=data.monitor.connected?
    text('Есть связь','Connected','Verbunden','Є зв’язок','Conectada'):
-   text('Подключения остановлены / нет связи','Connections stopped / offline','Verbindungen gestoppt / offline','Підключення зупинені / немає зв’язку','Conexiones detenidas / sin conexión');
+   data.monitor.state==='disabled'?text('Подключения остановлены','Connections stopped','Verbindungen gestoppt','Підключення зупинені','Conexiones detenidas'):text('Нет связи с принтером','Printer offline','Drucker offline','Немає зв’язку з принтером','Impresora sin conexión');
  };
  picker.onchange=()=>act(async()=>{
   const selected=picker.value;picker.disabled=true;

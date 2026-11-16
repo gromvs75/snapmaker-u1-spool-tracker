@@ -42,7 +42,9 @@ class Session:
         if fleet:fleet.stop()
         with self.fleet.lock:self.fleet.fleet=None
         self.connected=False
-        for p in self.fleet.printers:self.owner.call('disconnected',p['id'],'Connections stopped')
+        for p in self.fleet.printers:
+            self.owner.call('disconnected',p['id'],'Connections stopped')
+            self.owner.call('monitor_clear',p['id'])
         self.owner.call('refresh')
     def _connect(self):
         if self.connected:return {'connected':True}
@@ -94,6 +96,14 @@ class Session:
                 status=client.status()
                 objects=client.read('/printer/objects/list').get('objects',[])
                 return dict(state=status['print_stats']['state'],uid_available='tracker_uid' in objects)
+            if operation=='desktop_snapshot':
+                result=self.owner.call(operation,*args,**kwargs)
+                result['printer']['enabled']=self.connected
+                if not self.connected:
+                    result['monitor'].update(connected=False,state='disabled',filename='',active_head=None,checked_at=0)
+                elif not result['monitor']['connected']:
+                    result['monitor']['state']='disconnected'
+                return result
             if operation=='connection_state':return {'connected':self.connected,'collectors_enabled':self.worker_factory is not None}
             if operation in ('connect_printers','disconnect_printers'):
                 if kwargs.get('confirmed') is not True or set(kwargs)-{'confirmed','expected_revision'}:raise ValueError('Подтвердите изменение подключений.')

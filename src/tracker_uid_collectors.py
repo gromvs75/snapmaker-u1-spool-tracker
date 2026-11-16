@@ -45,6 +45,8 @@ class ReadOnlyMoonraker:
         return jobs
     def status(self):
         return self.read('/printer/objects/query?print_stats&print_task_config&filament_feed%20left&filament_feed%20right&toolhead')['status']
+    def monitor_status(self):
+        return self.read('/printer/objects/query?print_stats&toolhead')['status']
     def inspect(self,filename):
         if not isinstance(filename,str) or not filename or filename.startswith('/') or '..' in filename.split('/'):
             raise ValueError('Invalid G-code filename')
@@ -168,8 +170,9 @@ def create_workers(owner,printer,directory):
     u=urlsplit(printer['url']);config={'enabled':True,'host':u.hostname,'port':u.port or (443 if u.scheme=='https' else 80)}
     store=ModelInventoryStore(owner,printer['id'],directory/('motion-'+printer['id']),config)
     client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest),lambda job,status:owner.call('replacement_observe',printer['id'],job,status))
+    status_client=ReadOnlyMoonraker(printer['url'])
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
-                          lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5)
+                          lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5,status_reader=status_client.monitor_status)
     def guard_check(job,profile):
         from tracker_uid_guard import execute
         ticket=owner.call('guard_check',printer['id'],job,profile)
@@ -183,7 +186,7 @@ def create_workers(owner,printer,directory):
     # On reconnect/restart, never replay previously issued pause attempts.
     previous=owner.call('guard_snapshot',printer['id'])['guard']
     if previous and previous.get('attempt'):attempted.add(previous['attempt'])
-    history.status_sink=lambda status:owner.call('monitor_status',printer['id'],status)
     history.guard_sink=guard_check
     client.stop_event=worker.stop_event
+    status_client.stop_event=worker.stop_event
     return worker

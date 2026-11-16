@@ -3,7 +3,8 @@
  const t=desktopText,form=el('printer-form');let data=null,draft=false,busy=false;
  const nameLabel=node('label'),name=node('input');name.id='desktop-printer-name';name.maxLength=100;nameLabel.style.cssText='display:flex;align-items:center;gap:12px;margin-bottom:14px';nameLabel.append(name);form.prepend(nameLabel);
  const add=node('button'),toggle=node('button'),message=node('p');add.type=toggle.type='button';add.id='desktop-printer-add';toggle.id='desktop-connections-toggle';message.id='desktop-connections-message';message.className='subtitle';
- form.querySelector('.printer-actions').append(add,toggle);form.append(message);
+ el('desktop-printer-picker').after(add);form.querySelector('.printer-actions').append(toggle);form.append(message);
+ const style=node('style');style.textContent='#desktop-printer-context button{padding:7px 12px;font-size:13px;line-height:1.3;border-radius:8px;background:var(--input);border:1px solid var(--border);margin:0;white-space:normal} #view-settings .printer-actions button{padding:8px 12px;font-size:14px;line-height:1.4;border-radius:8px}';document.body.append(style);
  // Connection lifecycle is explicit. Saving a URL never starts a collector.
  el('printer-enabled').closest('label').hidden=true;
  const base=window.desktopInventoryLoaded;
@@ -17,7 +18,7 @@
   message.textContent=t('Адреса сохраняются отдельно. Подключение запускается кнопкой; после перезапуска оно остановлено.','Addresses are saved separately. Use Connect to start; connections stay stopped after restart.','Adressen werden getrennt gespeichert. Verbinden startet die Verbindung; nach Neustart bleibt sie gestoppt.','Адреси зберігаються окремо. Підключення запускається кнопкою; після перезапуску воно зупинене.','Las direcciones se guardan por separado. Conectar inicia las conexiones; al reiniciar permanecen detenidas.');
  };
  const url=()=>{const host=el('printer-host').value.trim();return host.includes('://')?host:'http://'+(host.includes(':')&&!host.startsWith('[')?'['+host+']':host)+':'+Number(el('printer-port').value)};
- add.onclick=()=>{draft=true;name.value='';el('printer-host').value='';el('printer-port').value=7125;name.focus();message.textContent=t('Новый принтер. Заполните адрес и сохраните.','New printer. Enter its address and save.','Neuer Drucker. Adresse eingeben und speichern.','Новий принтер. Введіть адресу та збережіть.','Nueva impresora. Introduzca la dirección y guarde.')};
+ add.onclick=()=>{el('nav-settings').click();document.querySelector('[data-settings-section=printer]').click();draft=true;name.value='';el('printer-host').value='';el('printer-port').value=7125;name.focus();message.textContent=t('Новый принтер. Заполните адрес и сохраните.','New printer. Enter its address and save.','Neuer Drucker. Adresse eingeben und speichern.','Новий принтер. Введіть адресу та збережіть.','Nueva impresora. Introduzca la dirección y guarde.')};
  async function work(fn){if(busy)return;busy=true;toggle.disabled=add.disabled=true;try{await fn()}catch(e){message.textContent=e.message}finally{busy=false;toggle.disabled=!data?.connections||!data?.printers.length;add.disabled=!!data?.connections?.connected}}
  form.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation();work(async()=>{
   if(data.connections?.connected)throw Error(t('Сначала остановите подключения.','Stop connections first.','Zuerst Verbindungen stoppen.','Спочатку зупиніть підключення.','Detenga primero las conexiones.'));

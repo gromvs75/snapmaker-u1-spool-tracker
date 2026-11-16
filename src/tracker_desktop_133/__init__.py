@@ -45,6 +45,8 @@ def integration_html(token,version):
     html=html.replace('Нет связи с наблюдателем. Показан последний полученный прогноз.','Нет связи с наблюдателем. Актуальность прогноза не подтверждена.')
     html=html.replace('Observer unavailable. Showing the last received forecast.','Observer unavailable. Forecast freshness is unconfirmed.')
     html=html.replace('Beobachter nicht erreichbar. Letzte empfangene Prognose wird angezeigt.','Beobachter nicht erreichbar. Aktualität der Prognose ist unbestätigt.')
+    html=html.replace('Проверка G-кода ещё не выполнялась','Проверка при старте печати ещё не выполнялась').replace('No G-code check yet','No print-start check yet')
+    html=html.replace('    head.append(note);','    if (!unknown) head.append(note);')
     html=html.replace('Нет актуального остатка Spoolman','Назначение или остаток не подтверждены').replace('Spoolman balance unavailable','Assignment or balance is unconfirmed')
     html=html.replace('${Math.round(grams * 1000) / 1000}','${displayGrams(grams)}')
     html=html.replace('    renderPreflight(data, true);','    window.desktopInventoryLoaded?.(data);\n    renderPreflight(data, true);')

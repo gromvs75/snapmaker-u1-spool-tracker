@@ -91,6 +91,9 @@ class Library:
                 spool=spools.get((row.get('spool') or {}).get('spool_id')) if row else None
                 heads.append(dict(channel=str(ch),spool=spool,
                     usable=bool(row and row['usable'] and spool and spool['spool_id'] not in uncertain),
+                    # Saved positions support a provisional forecast, never accounting.
+                    forecast_usable=bool(row and row['state'] in ('recognized','manual_confirmed','manual_unconfirmed','uncertain')
+                                         and spool and not spool['details'].get('archived') and spool['spool_id'] not in uncertain),
                     reason=('Отправка Spoolman требует сверки' if spool and spool['spool_id'] in uncertain
                             else '' if row and row['usable'] else 'Назначение не подтверждено' if row else 'Катушка не назначена')))
             printers[p['id']]=dict(id=p['id'],name=settings.get('printer_names',{}).get(p['id'],p['name']),heads=heads)

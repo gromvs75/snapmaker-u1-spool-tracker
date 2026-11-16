@@ -25,16 +25,17 @@ def forecast_entry(entry, heads, reserve):
     for head,used in zip(heads,entry['weights']):
         spool=head['spool'];remaining=spool['remaining_mg']/1000 if spool else None
         required=totals.get(spool['spool_id'],used) if spool else used
-        unknown=bool(used and not head['usable'])
+        unknown=bool(used and not head.get('forecast_usable',head['usable']))
+        provisional=bool(used and not unknown and not head['usable'])
         enough=bool(not used or not unknown and remaining is not None and remaining>=required+reserve)
         rows.append(dict(head,used=used,remaining=remaining,
                          after=remaining-required if remaining is not None else None,
                          deficit=max(0,required+reserve-remaining) if remaining is not None else None,
-                         unknown=unknown,enough=enough,
+                         unknown=unknown,enough=enough,provisional=provisional,
                          status='unused' if not used else 'unknown' if unknown else 'ok' if enough else 'shortage'))
     status=('unknown' if not any(entry['weights']) or any(r['unknown'] for r in rows)
             else 'shortage' if any(not r['enough'] for r in rows) else 'ok')
-    return dict(result,rows=rows,status=status)
+    return dict(result,rows=rows,status=status,provisional=any(r['provisional'] for r in rows))
 
 
 def enrich(snapshot, inventory):

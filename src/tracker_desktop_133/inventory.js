@@ -1,5 +1,24 @@
 // Reuse the published forms; attach safe 2.0 commands and assignment context.
 (()=>{
+ const compact=document.createElement('style');compact.textContent=`
+ #view-spools .table-scroll{max-height:none;overflow:visible}
+ #view-spools .spool-inventory{min-width:0;width:100%;table-layout:fixed}
+ #view-spools .spool-inventory td,#view-spools .spool-inventory th{white-space:normal;overflow-wrap:anywhere;padding:10px 8px}
+ #view-spools .spool-inventory td:last-child button{display:inline-block;margin:3px;padding:6px 9px;font-size:12px;line-height:1.35;min-height:30px;white-space:normal;max-width:100%}
+ #view-spools .spool-inventory input{width:86px!important;max-width:100%;box-sizing:border-box;padding:6px}
+ #view-spools .inventory-name>span{min-width:0}
+ #view-spools .inventory-name .sm-art{flex-shrink:0}
+ #inventory-toolbar{gap:8px}
+ #inventory-toolbar button{padding:7px 10px;font-size:13px;line-height:1.35}
+ #inventory-toolbar input:not([type=checkbox]){padding:8px 10px;min-width:140px}
+ #inventory-toolbar input[type=checkbox]{width:auto;min-width:0;min-height:0}
+ #view-spools .inventory-param-button{margin:3px}
+ @media(max-width:800px){
+ #view-spools .spool-inventory col{width:auto!important}
+ #view-spools .inventory-name{gap:6px;flex-wrap:wrap}
+ #view-spools .spool-inventory td,#view-spools .spool-inventory th{padding:8px 4px;font-size:12px}
+ }
+ `;document.body.append(compact);
  el('new-weight').step='any';el('new-weight').min='0';
  const text=(ru,en,de,uk,es)=>({ru,en,de,uk,es}[currentLang]||en);
  window.desktopConfirmInventory=(path,body)=>{

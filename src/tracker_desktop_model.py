@@ -90,9 +90,10 @@ def forecast_view(forecast,printer_id):
         if e['state']!='ready':continue
         rows=[dict(tool='T'+r['channel'],spool_id=(r['spool'] or {}).get('spool_id'),
                    name=(r['spool'] or {}).get('name',''),used=r['used'],remaining=r['remaining'],
-                   after=r['after'],enough=r['enough'],unknown=r['unknown']) for r in e['rows']]
+                   after=r['after'],enough=r['enough'],unknown=r['unknown'],provisional=r.get('provisional',False)) for r in e['rows']]
         source=Path(e['source'])
         entries.append(dict(e,rows=rows,label='Plate '+str(e['plate'] or '?'),source_label=source.parent.parent.name+' · '+source.name,
+                            observed_at=e.get('completed_at_ns',0)/1e9 or e.get('observed_at',0),
                             unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
     value=dict(entries=entries,printer_id=printer_id,latest=forecast.get('latest'),safety_margin_g=forecast.get('safety_margin_g',5),
                project=forecast.get('project'),error=forecast.get('error',''),mapping=[0,1,2,3],mapping_assumed=True)

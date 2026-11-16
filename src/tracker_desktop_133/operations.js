@@ -20,7 +20,9 @@
    const request={spool_id:a.spool_id,source_printer:a.printer_id,source_channel:a.channel,target_printer:target.value,target_channel:head.value,expected_version:a.version,request_id:id,confirmed:true};
    const raw=JSON.stringify(request);if(submitted&&submitted!==raw)throw Error(t('Повторите запрос без изменений или откройте форму заново.','Retry unchanged or reopen the form.','Unverändert wiederholen oder Formular neu öffnen.','Повторіть без змін або відкрийте форму знову.','Reintente sin cambios o abra el formulario otra vez.'));submitted=raw;
    await desktopCore('transfer',request);dialog.close();await loadData();
-  }));dialog.showModal();
+  }));
+  if(window.graphiteTransferDialog){dialog.dataset.sourceChannel=a.channel;window.graphiteTransferDialog(dialog,d.spools[a.spool_id],d.printers.find(p=>p.id===a.printer_id)?.name||a.printer_id,target,head,el('desktop-transfer-apply'))}
+  dialog.showModal();
  }
  async function unlock(key){
   const state=await desktopCore('state'),job=state.jobs.find(j=>j.job_key===key);if(!job)throw Error('Job unavailable');

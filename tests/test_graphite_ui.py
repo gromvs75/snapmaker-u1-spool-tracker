@@ -30,7 +30,7 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
     app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     remote_state,url=remote
     sender=Sender(app,[url])
-    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc10'})
+    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc11'})
     thread=threading.Thread(target=server.serve_forever);thread.start()
     out=Path('output/graphite-ui');out.mkdir(parents=True,exist_ok=True)
     try:
@@ -81,8 +81,8 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
                 assert row.locator('.graphite-assignments').is_visible()
                 assert not row.locator('.delete-spool').is_visible()
             assert page.locator('.inventory-tabs button').first.bounding_box()['height']<45
-            page.locator('.graphite-row-menu>summary').first.click()
-            assert page.locator('.delete-spool').first.is_visible()
+            page.locator('.graphite-actions-open').first.click()
+            assert page.locator('#graphite-spool-actions [data-action=delete]').is_visible()
             page.keyboard.press('Escape')
             assert not page.locator('.delete-spool').first.is_visible()
             page.screenshot(path=str(out/'library.png'),full_page=True)
@@ -95,7 +95,55 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             page.locator('#inventory-create').click();page.screenshot(path=str(out/'add-spool.png'),full_page=True)
             page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('.inventory-param-button').first.click();page.screenshot(path=str(out/'parameters.png'),full_page=True)
-            page.locator('#inventory-param-dialog .dialog-close').click()
+            assert page.locator('#inventory-param-dialog .gs-field').count()==2
+            assert page.locator('#inventory-param-dialog .gs-footer #cal-save').is_visible()
+            page.locator('#inventory-param-dialog .gs-edit-color').click()
+            assert page.locator('dialog[open]').count()==1
+            assert page.locator('.gs-swatch').count()==34
+            page.screenshot(path=str(out/'color.png'),full_page=True)
+            boxes=page.locator('.gs-swatch').evaluate_all('(xs)=>xs.map(x=>{const r=x.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})')
+            assert all(b['w']==28 and b['h']==28 for b in boxes)
+            assert len({b['y'] for b in boxes})==5
+            original=app.call('library_snapshot')['spools']
+            page.locator('.gs-swatch[data-color="#ff7f26"]').click()
+            assert app.call('library_snapshot')['spools']==original
+            page.keyboard.press('Escape')
+            assert app.call('library_snapshot')['spools']==original
+            # Check all open dialogs, not just the underlying page, on every language.
+            for language in ['ru','en','de','uk','es']:
+                page.locator('#lang-picker').select_option(language)
+                page.wait_for_function('(l)=>currentLang===l',arg=language)
+                page.locator('.graphite-actions-open').first.click()
+                assert page.locator('#graphite-spool-actions .gs-action').count()>=4
+                if language=='ru':page.screenshot(path=str(out/'actions.png'),full_page=True)
+                page.locator('#graphite-spool-actions [data-action=params]').click()
+                for width in [945,480]:
+                    page.set_viewport_size({'width':width,'height':800})
+                    assert page.locator('#inventory-param-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
+                    assert page.locator('#cal-save').bounding_box()['width']>100
+                page.locator('#inventory-param-dialog .gs-edit-color').click()
+                assert page.locator('#graphite-color-dialog').evaluate('(e)=>e.scrollHeight<=e.clientHeight+1 && e.scrollWidth<=e.clientWidth+1')
+                page.keyboard.press('Escape');page.set_viewport_size({'width':945,'height':800})
+            page.locator('#lang-picker').select_option('ru')
+            page.locator('.inventory-param-button').first.click();page.locator('.gs-edit-color').click()
+            page.locator('.gs-swatch[data-color="#ff7f26"]').click()
+            # Lost response must allow the same safe request, without changing balances.
+            lost=[]
+            def lose_color_reply(route):
+                if not lost:
+                    assert route.fetch().ok;lost.append(True);route.abort()
+                else:route.continue_()
+            page.route('**/api/desktop/spools/color',lose_color_reply)
+            with page.expect_event('requestfailed',predicate=lambda r:r.url.endswith('/spools/color')):
+                page.locator('#graphite-color-save').click()
+            assert page.locator('#graphite-color-dialog').is_visible()
+            with page.expect_response('**/api/desktop/spools/color') as response:
+                page.locator('#graphite-color-save').click()
+            assert response.value.ok
+            page.locator('#graphite-color-dialog').wait_for(state='hidden')
+            assert [s['remaining_mg'] for s in app.call('library_snapshot')['spools']]==[s['remaining_mg'] for s in original]
+            assert page.locator('.inventory-name .sm-art').count()==4
+
             page.locator('#desktop-tags-open').click();page.screenshot(path=str(out/'uid.png'),full_page=True)
             page.locator('#desktop-tags-close').click()
             page.locator('#nav-settings').click();page.locator('[data-settings-section=printer]').click();page.screenshot(path=str(out/'printer.png'),full_page=True)

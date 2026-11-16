@@ -99,6 +99,18 @@ def main():
             assert page.locator('.history-row').count()==3
             assert page.locator('.history-usage').first.inner_text()=='9,1 гр.'
             page.locator('#nav-spools').click()
+            page.locator('.graphite-actions-open').first.click();page.screenshot(path=str(out/'spool-actions.png'),full_page=True)
+            page.locator('#graphite-spool-actions [data-action=transfer]').click()
+            assert page.locator('#desktop-operation-dialog .gs-field').count()==2
+            page.screenshot(path=str(out/'transfer.png'),full_page=True);page.keyboard.press('Escape')
+            page.locator('.inventory-param-button').first.click()
+            assert page.locator('#inventory-param-dialog .gs-footer #cal-save').is_visible()
+            page.screenshot(path=str(out/'parameters.png'),full_page=True)
+            page.locator('#inventory-param-dialog .gs-edit-color').click()
+            assert page.locator('.gs-swatch').count()==34
+            assert page.locator('#graphite-color-dialog').evaluate('(e)=>e.scrollHeight<=e.clientHeight+1')
+            page.screenshot(path=str(out/'color.png'),full_page=True);page.keyboard.press('Escape')
+            checks.append('packaged spool actions, parameters, transfer and 34-color grid; cancel without writes')
             page.locator('#inventory-create').click();page.screenshot(path=str(out/'add.png'),full_page=True);page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('#desktop-tags-open').click()
             page.wait_for_function('document.getElementById("desktop-tags-message").textContent.length>0 && !document.getElementById("desktop-tags-refresh").disabled')

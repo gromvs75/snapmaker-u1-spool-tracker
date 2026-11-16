@@ -128,9 +128,11 @@ def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_
             spools=owner.call('library_snapshot')['spools'];assert len(spools)==1
             sid=spools[0]['spool_id'];assert spools[0]['remaining_mg']==125259
             field=page.locator('#spools-table input[type=number]');assert field.input_value()=='125.259'
-            page.locator('.graphite-row-menu > summary').click()
-            field.fill('124.987')
-            with page.expect_response('**/api/desktop/spools/update') as response:field.press('Tab')
+            page.locator('.graphite-actions-open').click()
+            page.locator('#graphite-spool-actions [data-action=balance]').click()
+            page.locator('#graphite-balance-value').fill('124.987')
+            page.locator('#graphite-balance-ack').check()
+            with page.expect_response('**/api/desktop/spools/update') as response:page.locator('#graphite-balance-save').click()
             assert response.value.ok
             page.wait_for_function("document.querySelector('#spools-table input').value==='124.987'")
             assert owner.call('library_snapshot')['spools'][0]['remaining_mg']==124987

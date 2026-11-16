@@ -28,7 +28,11 @@ def test_full_shell_interrupted_unlock_and_confirmed_transfer(tmp_path):
             assert r.value.ok and r.value.json()['deadline'] is not None
             page.locator('#desktop-operation-dialog').wait_for(state='hidden')
             state=app.call('inspect');assert state['jobs'][0]['state']=='resolved' and not state['manual_assignments'][0]['confirmed']
-            page.locator('#nav-spools').click();page.locator('.graphite-row-menu > summary').first.click();page.locator('#desktop-transfer-'+sid).click()
+            page.locator('#nav-spools').click();page.locator('.graphite-actions-open').first.click();page.locator('#graphite-spool-actions [data-action=transfer]').click()
+            assert page.locator('#desktop-operation-dialog .gs-route').is_visible()
+            assert page.locator('#desktop-operation-dialog .gs-field').count()==2
+            assert page.locator('#desktop-operation-dialog .gs-footer #desktop-transfer-apply').is_visible()
+            page.screenshot(path='output/graphite-ui/transfer.png',full_page=True)
             page.locator('#desktop-transfer-printer').select_option('b');page.locator('#desktop-transfer-head').select_option('1')
             with page.expect_response('**/api/transfer') as r:page.locator('#desktop-transfer-apply').click()
             assert r.value.ok

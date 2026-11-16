@@ -292,3 +292,57 @@ body.graphite{padding:0;margin:0}
 .graphite .graphite-heads-heading h3{margin:0;font-size:14px;font-weight:500}
 .graphite .graphite-heads-heading button{background:transparent;border-color:transparent;color:var(--muted);font-size:12px;padding:0;min-height:24px}
 .graphite .overview-card #overview-connection{font-size:18px}
+/* Spool workflows: the same dialog structure as the approved atlas. */
+.graphite .inventory-name{display:flex;align-items:center;gap:10px!important;flex-wrap:nowrap!important}
+.graphite .inventory-name .sm-art{display:block;width:30px;height:30px;flex:0 0 30px}
+.graphite #view-spools .spool-inventory td:last-child .graphite-actions-open{width:28px;min-width:28px;min-height:32px;padding:0;margin:0;border:0;background:transparent;font-size:20px;line-height:1;color:var(--muted)}
+.graphite .graphite-spool-controls[hidden]{display:none!important}
+.graphite dialog.graphite-spool-dialog{width:min(620px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0;border-radius:10px;border:1px solid #414956;background:#20242b;box-sizing:border-box;color:var(--text);overflow:auto}
+.graphite .graphite-spool-dialog .gs-header{display:flex;align-items:flex-start;gap:16px;padding:22px 24px 18px;border-bottom:1px solid var(--border)}
+.graphite .gs-header>div{flex:1;min-width:0}
+.graphite .graphite-spool-dialog .gs-header h2{font-size:19px;line-height:1.35;letter-spacing:-.4px;font-weight:600;padding:0;margin:0 0 8px}
+.graphite .graphite-spool-dialog .gs-header p{margin:0;font-size:12px;line-height:1.55;color:var(--muted)}
+.graphite .graphite-spool-dialog .gs-header .gs-close{float:none;margin:0;background:transparent;border:0;min-width:28px;min-height:28px;padding:0;font-size:24px;line-height:1;color:var(--muted)}
+.graphite .graphite-spool-dialog .gs-body{padding:22px 24px;display:grid;gap:18px;min-width:0}
+.graphite .graphite-spool-dialog .gs-footer{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:9px;padding:16px 24px;border-top:1px solid var(--border);background:#1c2026;border-radius:0 0 10px 10px}
+.graphite .graphite-spool-dialog .gs-footer[hidden]{display:none}
+.graphite .graphite-spool-dialog .gs-footer button{font-size:12px;margin:0;padding:9px 12px;min-height:34px}
+.graphite .graphite-spool-dialog button.gs-primary,.graphite #cal-save.gs-primary{background:var(--accent-btn);color:#101b31;border:1px solid transparent;font-weight:600}
+.graphite .graphite-spool-dialog button.gs-secondary{background:transparent;border-color:transparent;color:var(--muted);font-weight:400}
+.graphite .graphite-spool-dialog .gs-action-list{gap:8px}
+.graphite .graphite-spool-dialog .gs-action{display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:12px;background:transparent;color:var(--muted);border:0;font-size:14px;font-weight:400}
+.graphite .graphite-spool-dialog .gs-action:hover{background:#2b3038;color:var(--text)}
+.graphite .gs-action svg{width:18px;height:18px;flex:none}
+.graphite .gs-spool-summary{display:flex;gap:12px;align-items:center;flex-wrap:wrap;min-width:0}
+.graphite .gs-spool-summary .sm-art{width:44px;height:44px;flex:none}
+.graphite .gs-spool-summary>div{min-width:0;flex:1}
+.graphite .gs-spool-summary strong{font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.graphite .gs-spool-summary p.subtitle{font-size:12px;margin:6px 0 0;color:var(--muted)}
+.graphite .gs-badge{border-radius:20px;background:#29364d;color:#b1c5ff;font-size:11px;padding:3px 8px;white-space:nowrap}
+.graphite .gs-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:center}
+.graphite .graphite-spool-dialog .gs-field{display:grid;gap:8px;min-width:0;margin:0;font-size:12px;color:var(--muted)}
+.graphite .graphite-spool-dialog .gs-field input,.graphite .graphite-spool-dialog .gs-field select{display:block;width:100%;min-width:0;max-width:none;margin:0;min-height:38px;border-radius:7px;padding:9px 10px;font-size:13px;box-sizing:border-box}
+.graphite #inventory-param-dialog #cal-form{display:grid;grid-template-columns:1fr;gap:18px;margin:0;clear:none}
+.graphite .gs-tag{display:flex;gap:16px;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:18px;min-width:0}
+.graphite .gs-tag h3{margin:0 0 6px;font-size:14px}
+.graphite .gs-tag code,.graphite .gs-body code{font:12px ui-monospace,SFMono-Regular,monospace;color:#c5d5f7;overflow-wrap:anywhere}
+.graphite #inventory-param-dialog #cal-form>p{margin:0;font-size:12px;color:var(--muted);line-height:1.6}
+.graphite .graphite-spool-dialog .gs-notice{background:#192333;border:1px solid #394b67;border-radius:8px;margin:0;padding:12px 14px;font-size:12px;line-height:1.6;color:#b8c5d8}
+.graphite .gs-route{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px}
+.graphite .gs-route>div{padding:16px;background:#191d23;border-radius:9px;min-width:0}
+.graphite .gs-route small{font-size:11px;color:var(--muted)}
+.graphite .gs-route strong{display:block;margin-top:5px;font-size:14px;overflow-wrap:anywhere}
+.graphite .gs-route p{font-size:12px;margin:6px 0 0;color:var(--muted)}
+.graphite .gs-route-arrow{color:var(--muted);font-size:20px}
+.graphite .gs-current-balance{display:grid;gap:6px}
+.graphite .gs-current-balance strong{font-size:24px;font-weight:600}
+.graphite .gs-check{display:flex;align-items:flex-start;gap:10px;font-size:12px}
+.graphite .gs-check input[type=checkbox]{width:16px;height:16px;min-height:16px;margin:2px 0 0;flex:none}
+.graphite .gs-palette{display:grid;grid-template-columns:repeat(8,28px);gap:10px;max-width:100%;justify-content:start}
+.graphite .graphite-spool-dialog .gs-palette button.gs-swatch,.graphite .color-grid button.color-choice{display:block;width:28px!important;height:28px;min-height:28px;padding:0!important;margin:0!important;border:2px solid transparent;border-radius:50%;box-sizing:border-box;box-shadow:none}
+.graphite .gs-palette button[aria-pressed=true],.graphite .color-grid button.color-choice[aria-pressed=true]{border-color:#eceff4;box-shadow:0 0 0 2px #20242b inset}
+.graphite .color-grid{display:grid!important;grid-template-columns:repeat(auto-fill,28px)!important;gap:10px!important;max-height:none;overflow:visible}
+.graphite .color-grid button.color-choice[aria-pressed=true]::after{content:''}
+@media(max-width:560px){.graphite .graphite-spool-dialog .gs-header,.graphite .graphite-spool-dialog .gs-body{padding:18px}.graphite .graphite-spool-dialog .gs-footer{padding:14px 18px}.graphite .gs-two{grid-template-columns:1fr}.graphite .gs-palette{grid-template-columns:repeat(6,28px);gap:8px}.graphite .gs-route{gap:8px}.graphite .gs-route>div{padding:10px}.graphite .gs-tag{flex-wrap:wrap}.graphite .inventory-name .sm-art{width:24px;height:24px;flex-basis:24px}}
+.graphite .graphite-spool-dialog .gs-palette button.gs-swatch[aria-pressed=true]{border-color:#eceff4;box-shadow:0 0 0 2px #20242b inset}
+.graphite .graphite-spool-dialog .gs-field select{appearance:none;-webkit-appearance:none;padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,#a3abb8 50%),linear-gradient(135deg,#a3abb8 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px;background-repeat:no-repeat}

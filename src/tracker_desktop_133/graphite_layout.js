@@ -38,15 +38,16 @@
    for(const a of spool.assignments||[]){const item=node('div');item.append(node('span',a.printer_name+' · T'+a.channel),node('small',a.state==='recognized'?t('Метка распознана','Tag recognized','Tag erkannt','Мітку розпізнано','Etiqueta reconocida'):a.state==='manual_confirmed'?t('Подтверждено вручную','Confirmed manually','Manuell bestätigt','Підтверджено вручну','Confirmado manualmente'):t('Требует проверки','Needs review','Prüfung erforderlich','Потребує перевірки','Requiere revisión')));assignments.append(item)}
    if(!spool.assignments?.length)assignments.append(node('span',t('Не назначена','Unassigned','Nicht zugewiesen','Не призначена','Sin asignar')));
    row.insertBefore(assignments,actions);
-   const exact=balance.querySelector('input'),details=node('details',undefined,'graphite-row-menu'),summary=node('summary','…');summary.setAttribute('aria-label',moreLabel()+' · '+spool.name);details.append(summary);
-   const menu=node('div',undefined,'graphite-menu-items');details.append(menu);
-   if(exact){const edit=node('label',t('Изменить остаток, г','Edit balance, g','Restmenge ändern, g','Змінити залишок, г','Cambiar saldo, g'));edit.append(exact);menu.append(edit)}
-   balance.replaceChildren(node('span',displayGrams(spool.remaining_g)+' '+gramUnit(),'graphite-balance'));
-   const params=actions.querySelector('.inventory-param-button');params.textContent=t('Параметры','Parameters','Parameter','Параметри','Parámetros');
-   for(const child of [...actions.children])if(child!==params)menu.append(child);
-   const color=name.querySelector('.color-picker');if(color){color.querySelector('summary').textContent=t('Цвет','Color','Farbe','Колір','Color');menu.append(color)}
-   actions.replaceChildren();const group=node('div',undefined,'graphite-row-actions');group.append(params,details);actions.append(group);
-   details.addEventListener('toggle',()=>{if(details.open)for(const other of document.querySelectorAll('.graphite-row-menu[open]'))if(other!==details)other.open=false});
+   const exact=balance.querySelector('input'),params=actions.querySelector('.inventory-param-button');
+   params.textContent=t('Параметры','Parameters','Parameter','Параметри','Parámetros');
+   const storage=node('div',undefined,'graphite-spool-controls');storage.hidden=true;
+   if(exact)storage.append(exact);
+   for(const child of [...actions.children])if(child!==params)storage.append(child);
+   const color=name.querySelector('.color-picker');if(color)storage.append(color);
+   balance.replaceChildren(node('span',displayGrams(spool.remaining_g)+' '+gramUnit(),'graphite-balance'),storage);
+   const more=node('button','…','graphite-actions-open');more.type='button';more.setAttribute('aria-label',moreLabel()+' · '+spool.name);
+   more.onclick=()=>window.graphiteSpoolActions(row,spool,params);
+   actions.replaceChildren();const group=node('div',undefined,'graphite-row-actions');group.append(params,more);actions.append(group);
   }
  }
  // Printer form: every moved button keeps its form ownership and listener.
@@ -90,7 +91,5 @@
   el('printer-save').textContent=t('Сохранить настройки','Save settings','Einstellungen speichern','Зберегти налаштування','Guardar ajustes');
   document.querySelector('.graphite-footer>span').textContent=t('Локальный учёт · SQLite','Local accounting · SQLite','Lokale Erfassung · SQLite','Локальний облік · SQLite','Contabilidad local · SQLite');
  });
- const localize=()=>{for(const update of bindings)update()};new MutationObserver(localize).observe(el('nav-settings'),{childList:true});localize();
- document.addEventListener('click',event=>{for(const menu of document.querySelectorAll('.graphite-row-menu[open]'))if(!menu.contains(event.target))menu.open=false});
- document.addEventListener('keydown',event=>{if(event.key==='Escape')for(const menu of document.querySelectorAll('.graphite-row-menu[open]')){menu.open=false;menu.querySelector('summary').focus()}});
+ const localize=()=>{for(const update of bindings)update()};new MutationObserver(localize).observe(el('nav-settings'),{childList:true});new MutationObserver(localize).observe(el('inventory-add-dialog'),{attributes:true,attributeFilter:['open']});localize();
 })();

@@ -43,8 +43,10 @@ class Library:
         return {'values':data, 'revision':revision(data)}
 
     def save_settings(self, values, expected_revision):
-        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers'}:
+        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','printers','slice_root'}:
             raise ValueError('Неверные настройки.')
+        if 'slice_root' in values and (not isinstance(values['slice_root'],str) or len(values['slice_root'])>4096):
+            raise ValueError('Неверный каталог нарезки.')
         if 'printers' in values:
             from tracker_uid_settings import validate_printers
             values=dict(values,printers=validate_printers(values['printers']))

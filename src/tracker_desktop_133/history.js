@@ -25,17 +25,17 @@
   const table=node('table');table.className='uid-saved-plan';const header=node('tr');
   for(const caption of [text('Головка','Toolhead','Druckkopf','Голівка','Cabezal'),text('Исходная катушка','Original spool','Ursprüngliche Spule','Початкова котушка','Bobina original'),text('План','Plan'),text('Уже учтено с катушки','Already accounted per spool','Bereits je Spule erfasst','Вже враховано з котушки','Ya contabilizado por bobina')])header.append(node('th',caption));
   table.append(header);
-  for(const p of d.plan){const row=node('tr'),used=d.debits.filter(v=>v.spool_id===p.spool_id).reduce((sum,v)=>sum+v.delta_mg,0);for(const v of ['T'+p.channel,data.spools[p.spool_id]?.name||p.spool_id||'—',weight(p.planned_mg),weight(used)])row.append(node('td',v));table.append(row)}
+  for(const p of d.plan){const row=node('tr'),used=d.debits.filter(v=>v.spool_id===p.spool_id).reduce((sum,v)=>sum+v.delta_mg,0);for(const v of [p.mapping_verified===false?text('Материал ','Material ','Material ','Матеріал ','Material ')+(p.logical_tool+1)+' (?)':'T'+p.channel,data.spools[p.spool_id]?.name||p.spool_id||'—',weight(p.planned_mg),weight(used)])row.append(node('td',v));table.append(row)}
   dialog.append(table);
   if(!d.plan.length)dialog.append(node('p',text('План не сохранён. Его нельзя восстановить из текущего назначения.','No saved plan. Current assignments cannot reconstruct it.','Kein gespeicherter Plan. Aktuelle Zuweisungen können ihn nicht rekonstruieren.','План не збережено. Поточні призначення не дозволяють його відновити.','No hay plan guardado. Las asignaciones actuales no permiten reconstruirlo.')));
   dialog.append(node('p',text('Всего уже учтено: ','Already accounted: ','Bereits erfasst: ','Всього вже враховано: ','Ya contabilizado: ')+weight(d.accounted_mg)));
-  for(const reason of d.reasons)dialog.append(node('p',text('Причина пропуска: ','Reason for review: ','Prüfgrund: ','Причина пропуску: ','Motivo de revisión: ')+reason));
+  for(const reason of d.reasons)dialog.append(node('p',text('Причина пропуска: ','Reason for review: ','Prüfgrund: ','Причина пропуску: ','Motivo de revisión: ')+(reason==='legacy_import_review'?text('История перенесена из 1.x. Перед дополнительным списанием проверьте план и возможные замены катушек.','History imported from 1.x. Verify the plan and any spool changes before an additional deduction.','Verlauf aus 1.x übernommen. Vor weiteren Abbuchungen Plan und mögliche Spulenwechsel prüfen.','Історію перенесено з 1.x. Перед додатковим списанням перевірте план і можливі заміни котушок.','Historial importado de 1.x. Verifique el plan y los cambios de bobina antes de un descuento adicional.'):reason)));
   if(d.replacements.length)dialog.append(node('p',text('Была замена катушки. Весь первоначальный план нельзя списать с прежней катушки.','A spool was replaced. The full original plan cannot be deducted from the original spool.','Eine Spule wurde gewechselt. Der ganze ursprüngliche Plan darf nicht von der alten Spule abgebucht werden.','Котушку замінили. Не можна списати весь початковий план зі старої котушки.','Se sustituyó una bobina. No se puede descontar todo el plan de la bobina original.')));
   if(d.quarantined)dialog.append(node('p',text('План из восстановленной копии требует проверки.','The restored plan requires review.','Der wiederhergestellte Plan muss geprüft werden.','Відновлений план потребує перевірки.','El plan restaurado requiere revisión.')));
  }
  async function open(key,data,ask=false){
   const d=await detail(key);view(d,data);
-  if(d.job.state==='active'&&!d.job.mapping_valid){
+  if(['active','review'].includes(d.job.state)&&!d.job.mapping_valid){
    dialog.append(node('h3',labels.ask()));
    dialog.append(historyButton(labels.review(),()=>edit(d,data)),historyButton(labels.later(),()=>decide({job_key:key,action:'defer',expected_revision:d.revision,request_id:crypto.randomUUID()})),historyButton(labels.close(),()=>closeJob(d,data)));
   }
@@ -82,7 +82,7 @@
   if(latest){
    latestBox.append(node('strong',latest.filename));
    for(const [id,grams] of Object.entries(latest.accounted_by_spool||{}))latestBox.append(node('p',(data.spools[id]?.name||id)+': '+displayGrams(grams)+' '+gramUnit(),'latest-amount'));
-   const label=latest.accounting_method==='manual_review'?text('Подтверждено вручную','Confirmed manually','Manuell bestätigt','Підтверджено вручну','Confirmado manualmente'):latest.accounting_method==='motion_estimate'?text('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'):text('Расчёт по сохранённому плану и истории','Estimate from saved plan and history','Berechnung aus gespeichertem Plan und Verlauf','Розрахунок за збереженим планом та історією','Cálculo del plan guardado y el historial');
+   const label=latest.accounting_method==='legacy_import'?text('Перенесено из истории 1.x','Imported from 1.x history','Aus Verlauf 1.x übernommen','Перенесено з історії 1.x','Importado del historial 1.x'):latest.accounting_method==='manual_review'?text('Подтверждено вручную','Confirmed manually','Manuell bestätigt','Підтверджено вручну','Confirmado manualmente'):latest.accounting_method==='motion_estimate'?text('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'):text('Расчёт по сохранённому плану и истории','Estimate from saved plan and history','Berechnung aus gespeichertem Plan und Verlauf','Розрахунок за збереженим планом та історією','Cálculo del plan guardado y el historial');
    latestBox.append(node('p',label,'subtitle'));
    if(latest.status!=='committed')latestBox.append(node('p',text('Частичный учёт — требуется проверка','Partial accounting — review required','Teilweise erfasst — Prüfung erforderlich','Частковий облік — потрібна перевірка','Contabilización parcial — requiere revisión'),'subtitle'));
    latestBox.append(historyButton(labels.expand(),()=>open(latest.job_key,data)));
@@ -90,7 +90,7 @@
   const runs=Object.values(data.runs||{}).sort((a,b)=>b.start_time-a.start_time).slice(0,20);
   const rows=[...document.querySelectorAll('#history-content .history-row')];
   rows.forEach((row,i)=>{if(row.querySelector('.uid-expand')||!runs[i])return;const b=historyButton(labels.expand(),()=>open(runs[i].job_key,data));b.className='uid-expand';row.append(b)});
-  if(initial){initial=false;const job=runs.find(r=>data.saved_history[r.job_key]?.job.state==='active'&&!data.saved_history[r.job_key]?.job.mapping_valid);
+  if(initial){initial=false;const job=runs.find(r=>['active','review'].includes(data.saved_history[r.job_key]?.job.state)&&!data.saved_history[r.job_key]?.job.mapping_valid);
    if(job)setTimeout(()=>{if(!document.querySelector('dialog[open]'))act(()=>open(job.job_key,data,true))},300);
   }
  };

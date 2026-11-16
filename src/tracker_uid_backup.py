@@ -65,6 +65,10 @@ def decode(package):
 
 
 def validate(package, live):
+    from tracker_legacy_backup import recognizes, convert
+    if recognizes(package):
+        converted, summary = convert(package, live)
+        return dict(validate(converted, live), **summary)
     raw=decode(package)
     with tempfile.TemporaryDirectory(prefix='uid-validate-') as folder:
         path=Path(folder)/'copy.sqlite';path.write_bytes(raw)
@@ -90,7 +94,12 @@ def validate(package, live):
 
 
 def restore(package, live, expected_revision):
+    from tracker_legacy_backup import recognizes, convert
+    summary = {}
+    if recognizes(package):
+        package, summary = convert(package, live)
     preview=validate(package,live)
+    preview.update(summary)
     if preview['current_revision']!=expected_revision:
         raise ValueError('Текущая база изменилась после проверки. Проверьте копию снова.')
     raw=decode(package)

@@ -154,6 +154,14 @@ class UidWindow:
             watcher=threading.Thread(target=self._watch_forecast,args=(tray,),name='tracker20-tray')
             watcher.start()
         try:
+            if sys.platform == 'darwin':
+                # Match 1.3.3: Cocoa imports set Regular, so override afterwards.
+                from webview.platforms import cocoa
+                from macos_menu import configure_accessory_panel
+                import AppKit
+                configure_accessory_panel(cocoa)
+                AppKit.NSApplication.sharedApplication().setActivationPolicy_(
+                    AppKit.NSApplicationActivationPolicyAccessory)
             self._webview.start(gui='edgechromium' if sys.platform == 'win32' else None,
                                  private_mode=True, storage_path=self._storage_path)
         finally:

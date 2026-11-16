@@ -39,7 +39,10 @@ class HistoryReview:
             for i,weight in enumerate(weights):
                 if type(weight) not in (int,float) or not math.isfinite(weight) or weight<=0 or i>=len(mapping): continue
                 channel = str(mapping[i]); tool = next((t for t in tools if t['channel']==channel),{})
-                plan.append(dict(logical_tool=i,channel=channel,spool_id=tool.get('spool_id'),planned_mg=round(weight*1000)))
+                sid = profile['legacy_spool_ids'][i] if profile.get('legacy_import') else tool.get('spool_id')
+                plan.append(dict(logical_tool=i,channel=channel,spool_id=sid,planned_mg=round(weight*1000)))
+                if profile.get('legacy_import'):
+                    plan[-1]['mapping_verified'] = profile['legacy_mapping_verified']
         ids = {t['spool_id'] for t in tools}
         ids.update(e['new_spool_id'] for e in events if e.get('new_spool_id'))
         candidates = [dict(r) for r in self.db.execute('SELECT spool_id,name,uid,remaining_mg FROM uid_spools ORDER BY spool_id') if r['spool_id'] in ids]
@@ -51,7 +54,7 @@ class HistoryReview:
             s['reserved'] = s['spool_id'] in reservations
             planned = sum(p['planned_mg'] for p in plan if p['spool_id']==s['spool_id'])
             # Never assign the full plan to the original spool across a swap.
-            s['suggested_additional_mg'] = None if events or not plan else max(0,planned-s['accounted_mg'])
+            s['suggested_additional_mg'] = None if events or not plan or (profile or {}).get('legacy_import') else max(0,planned-s['accounted_mg'])
         remote = []
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_remote_outbox'").fetchone():
             remote = [dict(r) for r in self.db.execute('SELECT * FROM uid_remote_outbox WHERE job_key=?',(job_key,))]
@@ -78,7 +81,8 @@ class HistoryReview:
                 return dict(json.loads(old['result']),status='duplicate')
             detail = self.detail(job_key)
             if detail['revision']!=expected_revision: raise ValueError('Данные изменились. Откройте задание заново.')
-            if detail['job']['state']!='active': raise ValueError('Задание уже закрыто или учтено.')
+            if not (detail['job']['state']=='active' or (detail['job']['state']=='review' and detail['job']['source']=='legacy_import')):
+                raise ValueError('Задание уже закрыто или учтено.')
             if action!='defer':
                 if confirmed is not True: raise ValueError('Подтвердите завершение задания и выбранное действие.')
                 if detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')

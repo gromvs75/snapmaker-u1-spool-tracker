@@ -30,5 +30,5 @@ def statistics(library):
             result['head_mg'][int(heads[0])]+=amount
         else:result['unattributed_mg']+=amount
     result['spool_names']={r['spool_id']:r['name'] for r in db.execute('SELECT spool_id,name FROM uid_spools')}
-    result['legacy_records']=db.execute('SELECT count(*) FROM uid_legacy_history WHERE printer_id=?',(pid,)).fetchone()[0]
+    result['legacy_records']=db.execute("SELECT count(*) FROM uid_legacy_history h WHERE printer_id=? AND NOT EXISTS (SELECT 1 FROM uid_debits WHERE job_key='legacy:'||h.identity)",(pid,)).fetchone()[0]
     return result

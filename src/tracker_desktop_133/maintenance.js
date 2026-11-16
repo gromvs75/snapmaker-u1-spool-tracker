@@ -53,7 +53,7 @@
    function table(title,rows){statsBody.append(node('h3',title));const table=node('table');for(const [name,amount] of rows){const row=node('tr');row.append(node('td',name),node('td',displayGrams(amount/1000)+' '+gramUnit()));table.append(row)}statsBody.append(table)}
    table(t('По катушкам','By spool','Nach Spule','За котушками','Por bobina'),Object.entries(data.by_spool).map(([sid,n])=>[data.spool_names[sid]||sid,n]));
    table(t('По головкам','By toolhead','Nach Druckkopf','За голівками','Por cabezal'),[...data.head_mg.map((n,i)=>['T'+i,n]),[t('Без доказанной головки','Head not established','Druckkopf nicht belegt','Голівку не підтверджено','Cabezal sin confirmar'),data.unattributed_mg]]);
-   const methods={motion_estimate:t('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'),executed_gcode:t('Выполненный G-code','Executed G-code','Ausgeführter G-Code','Виконаний G-code','G-code ejecutado'),completed_gcode:t('Завершённый план','Completed plan','Abgeschlossener Plan','Завершений план','Plan completado'),calculated_history:t('Расчёт по истории','History estimate','Historienberechnung','Розрахунок за історією','Estimación por historial'),manual_reconciliation:t('Ручное подтверждение','Manual confirmation','Manuelle Bestätigung','Ручне підтвердження','Confirmación manual')};
+   const methods={legacy_import:t('Перенесено из 1.x','Imported from 1.x','Aus 1.x übernommen','Перенесено з 1.x','Importado de 1.x'),motion_estimate:t('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'),executed_gcode:t('Выполненный G-code','Executed G-code','Ausgeführter G-Code','Виконаний G-code','G-code ejecutado'),completed_gcode:t('Завершённый план','Completed plan','Abgeschlossener Plan','Завершений план','Plan completado'),calculated_history:t('Расчёт по истории','History estimate','Historienberechnung','Розрахунок за історією','Estimación por historial'),manual_reconciliation:t('Ручное подтверждение','Manual confirmation','Manuelle Bestätigung','Ручне підтвердження','Confirmación manual')};
    table(t('Основание учёта','Accounting basis','Buchungsgrundlage','Підстава обліку','Base del cómputo'),Object.entries(data.by_basis).map(([basis,n])=>[methods[basis]||t('Неизвестно','Unknown','Unbekannt','Невідомо','Desconocido'),n]));
    table(t('По месяцам (UTC)','By month (UTC)','Nach Monat (UTC)','За місяцями (UTC)','Por mes (UTC)'),Object.entries(data.by_month).sort());
    if(data.legacy_records)statsBody.append(node('p',t('Старые записи без журнала дебетов не включены: ','Legacy records without a debit ledger excluded: ','Altdaten ohne Buchungsjournal ausgeschlossen: ','Старі записи без журналу списань не включено: ','Registros antiguos sin libro de cargos excluidos: ')+data.legacy_records));
@@ -61,7 +61,7 @@
  }
  stats.ontoggle=()=>{if(stats.open)void refreshStats()};
  const dialog=node('dialog');dialog.id='desktop-backup-dialog';dialog.className='inventory-dialog';document.body.append(dialog);
- const close=button('desktop-backup-close',labels.close(),()=>dialog.close()),info=node('p'),preview=node('p'),file=node('input');file.id='desktop-backup-file';file.type='file';file.accept='.json';file.hidden=true;
+ const close=button('desktop-backup-close',labels.close(),()=>dialog.close()),info=node('p'),preview=node('div'),file=node('input');file.id='desktop-backup-file';file.type='file';file.accept='.json';file.hidden=true;
  const fileName=node('span'),choose=button('desktop-backup-choose','',()=>file.click());
  const ackLabel=node('label'),ack=node('input'),ackText=node('span');ack.type='checkbox';ack.id='desktop-backup-ack';ack.style.width='auto';ackLabel.append(ack,ackText);
  let packageData=null,checked=null,restoreBusy=false;
@@ -72,6 +72,12 @@
   const result=await desktopCore('validate_backup',{package:candidate});
   if(packageData!==candidate)return;
   checked=result;preview.textContent=t('Целостность проверена. Катушки / задания / списания / операции Spoolman: ','Integrity verified. Spools / jobs / debits / Spoolman operations: ','Integrität geprüft. Spulen / Aufträge / Abbuchungen / Spoolman-Vorgänge: ','Цілісність перевірено. Котушки / завдання / списання / операції Spoolman: ','Integridad verificada. Bobinas / trabajos / cargos / operaciones Spoolman: ')+[result.spools,result.jobs,result.debits,result.remote_operations].join(' / ');
+  if(result.source_format==='legacy')preview.append(node('p',t(
+   'Копия 1.x → 2.0. Настройки, катушки, планы и история будут перенесены. Остатки сохранятся без новых списаний. Подключения и отправка Spoolman останутся выключены; назначения и старые незавершённые отправки требуют проверки.',
+   '1.x backup → 2.0. Settings, spools, plans and history will be imported. Balances are preserved without new deductions. Connections and Spoolman sending stay off; assignments and unfinished sends require review.',
+   'Sicherung 1.x → 2.0. Einstellungen, Spulen, Pläne und Verlauf werden übernommen. Restmengen bleiben ohne neue Abbuchungen erhalten. Verbindungen und Spoolman-Versand bleiben aus; Zuweisungen und offene Sendungen müssen geprüft werden.',
+   'Копія 1.x → 2.0. Налаштування, котушки, плани та історію буде перенесено. Залишки збережуться без нових списань. Підключення й відправлення Spoolman залишаться вимкненими; призначення та незавершені відправлення потребують перевірки.',
+   'Copia 1.x → 2.0. Se importarán ajustes, bobinas, planes e historial. Los saldos se conservan sin nuevos descuentos. Las conexiones y envíos Spoolman quedan desactivados; revise las asignaciones y los envíos pendientes.')));
  });
  const apply=button('desktop-backup-apply',labels.restore(),async()=>{
   if(restoreBusy||!checked||!ack.checked)return;

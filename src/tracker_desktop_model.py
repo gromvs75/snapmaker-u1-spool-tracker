@@ -43,12 +43,13 @@ def snapshot(library, history_review, fleet):
         status=('committed' if job['state']=='completed' else 'cancelled' if job['state']=='cancelled'
                 else 'active' if job['state']=='active' and job['mapping_valid'] else 'review')
         source=(detail['receipt'] or {}).get('estimate_source')
+        if source is None and job['source']=='legacy_import':source='legacy_import'
         run=dict(job_key=key,filename=detail['filename'] or job['job_id'],start_time=float(job['started_at']),
                  status=status,terminal_status=history.get('status') if history.get('status')!='in_progress' else None,
                  review_reason='; '.join(detail['reasons']),plan_id=key,accounted_g=detail['accounted_mg']/1000,
                  accounted_by_spool=amounts,manual_consumption=amounts if source=='manual_reconciliation' else {},
                  motion_consumption=amounts if source is None else {},
-                 accounting_method='manual_review' if source=='manual_reconciliation' else 'motion_estimate' if source is None else 'history_estimate',
+                 accounting_method='manual_review' if source=='manual_reconciliation' else 'motion_estimate' if source is None else 'legacy_import' if source=='legacy_import' else 'history_estimate',
                  closed_without_deduction=job['state']=='resolved',unlock=library.accounting.unlock_state(key))
         if profile:
             plans[key]=dict(filename=profile['filename'],weights=profile['logical_weights'],

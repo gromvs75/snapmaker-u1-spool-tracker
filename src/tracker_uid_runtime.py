@@ -96,7 +96,7 @@ class AccountingOwner:
                         result = reconciliation.apply(*args, fleet=self.fleet.snapshot(), **kwargs)
                     elif operation in ('delivery_list','delivery_audit','delivery_decide','delivery_claim','delivery_finish'):
                         result=getattr(delivery,operation.removeprefix('delivery_'))(*args,**kwargs)
-                    elif operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot'):
+                    elif operation in ('settings','save_settings','cache_catalog','remote_catalog','compare_name','rename_from_remote','library_snapshot','update_spool'):
                         result = getattr(library, 'snapshot' if operation=='library_snapshot' else operation)(*args, **kwargs)
                     elif operation in ('create_spool','detach_spool'):
                         result = getattr(library, 'create' if operation=='create_spool' else 'detach')(*args, fleet=fleet.snapshot(), **kwargs)

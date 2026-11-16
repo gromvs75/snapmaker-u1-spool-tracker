@@ -31,7 +31,7 @@ def main():
                 log=(root/'logs/tracker.log').read_text()
                 api_port=int(re.findall(r'GUI http://127.0.0.1:(\d+)',log)[-1])
             with urllib.request.urlopen(f'http://127.0.0.1:{api_port}',timeout=2) as r:html=r.read().decode()
-            token=json.loads(re.search(r'const TOKEN=("[^"]+");',html)[1]);return True
+            token=json.loads(re.search(r'const (?:TOKEN|DESKTOP_TOKEN)=("[^"]+")',html)[1]);return True
         try:wait(ready)
         except BaseException:proc.terminate();proc.wait(15);raise
         return proc
@@ -87,22 +87,25 @@ def main():
             from playwright.sync_api import sync_playwright
             with sync_playwright() as pw:
                 browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1200,'height':900});errors=[]
-                page.on('pageerror',lambda e:errors.append(str(e)))
-                page.goto(f'http://127.0.0.1:{api_port}');page.locator('#navHistory').click()
+                page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
+                page.goto(f'http://127.0.0.1:{api_port}')
                 if a.user:
-                    page.locator('.history-row').filter(has_text='Ожидаем уточнения').count() # No state inference from labels.
-                    row=page.locator('.history-row').filter(has=page.get_by_role('button',name='Печать завершилась успешно?',exact=True))
-                    row.get_by_role('button',name='Раскрыть задание',exact=True).click()
-                    page.get_by_role('button',name='Да — перейти к списанию',exact=True).click()
-                    for i,spool in enumerate(detail['candidates']):page.locator('#manualExtra_'+str(i)).fill('0.500' if spool['uid']=='04112244' else '2.483')
-                    page.locator('#manualExtraNote').fill(request['note']);page.locator('#manualExtraAck').check()
-                else:page.get_by_role('button',name='Сверить расход',exact=True).click()
+                    if page.locator('#uid-history-dialog[open]').count():page.get_by_role('button',name='Закрыть',exact=True).click()
+                    page.locator('#desktop-printer-picker').select_option('b')
+                    page.wait_for_function("desktopFormData.selected_printer==='b'")
+                    page.locator('#nav-history').click()
+                    page.get_by_role('button',name='Раскрыть задание',exact=True).click()
+                    page.get_by_role('button',name='Да — проверить списание',exact=True).click()
+                    for spool in detail['candidates']:page.locator('.uid-extra-amount[data-spool="'+spool['spool_id']+'"]').fill('0.500' if spool['uid']=='04112244' else '2.483')
+                    page.locator('#uid-review-note').fill(request['note']);page.locator('#uid-review-ack').check()
+                else:
+                    page.locator('#navHistory').click();page.get_by_role('button',name='Сверить расход',exact=True).click()
                 if not a.user:
                     page.locator('#recoveryApply').wait_for();assert page.locator('#recoveryApply').is_disabled()
                     for uid,value in [('04112244','0.500'),('04EEEEFF','2.483')]:page.locator('.recovery-spool').filter(has_text='UID '+uid).locator('input').fill(value)
                     page.locator('#recoveryNote').fill(request['note']);assert page.locator('#recoveryApply').is_disabled()
                     page.locator('#recoveryAck').check();assert page.locator('#recoveryApply').is_enabled()
-                page.locator('#historyDetail').screenshot(path=str(a.output/'recovery-form.png'))
+                page.locator('#uid-history-dialog' if a.user else '#historyDetail').screenshot(path=str(a.output/'recovery-form.png'))
                 # Lose the successful response once. A repeated identical click must be harmless.
                 captured=[]
                 def lose(route):
@@ -111,12 +114,12 @@ def main():
                     assert response.status==200
                     route.abort()
                 page.route('**/api/'+decision_route,lose,times=1)
-                page.locator('#manualExtraApply' if a.user else '#recoveryApply').click()
-                page.wait_for_function("document.querySelector('#workspaceError').textContent.length>0")
-                page.locator('#manualExtraApply' if a.user else '#recoveryApply').click()
-                page.get_by_text('Ручной учёт сохранён. Повторная история не спишет расход снова.' if a.user else 'Решение сохранено. Повторная история не спишет этот расход снова.',exact=True).wait_for()
+                page.locator('#uid-review-apply' if a.user else '#recoveryApply').click()
+                page.wait_for_timeout(500) if a.user else page.wait_for_function("document.querySelector('#workspaceError').textContent.length>0")
+                page.locator('#uid-review-apply' if a.user else '#recoveryApply').click()
+                page.locator('#uid-history-dialog').wait_for(state='hidden') if a.user else page.get_by_text('Решение сохранено. Повторная история не спишет этот расход снова.',exact=True).wait_for()
                 request=captured[0]
-                page.locator('#historyList').screenshot(path=str(a.output/'recovery-history.png'))
+                page.locator('#history-content' if a.user else '#historyList').screenshot(path=str(a.output/'recovery-history.png'))
                 assert not errors,errors
                 browser.close()
             check('GUI confirms once even when successful response is lost',len(api('state')['debits'])==4)

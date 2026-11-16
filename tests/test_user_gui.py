@@ -32,37 +32,33 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1202,'height':950});errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}')
-            page.wait_for_selector('#activePrinter option',state='attached')
-            page.get_by_role('button',name='Обзор',exact=True).click()
+            page.wait_for_selector('#desktop-printer-picker option',state='attached')
+            page.locator('#uid-history-dialog[open]').wait_for()
+            page.get_by_role('button',name='Закрыть',exact=True).click()
+            assert page.locator('#lang-picker option').count()==5
+            page.locator('#nav-overview').click()
             page.get_by_text('Прогноз после нарезки',exact=True).wait_for()
-            assert page.locator('.topnav button').all_text_contents()==['Обзор','Катушки','История','Настройки']
-            assert '25,1 г' in page.locator('#workspaceBody').inner_text()
             page.screenshot(path=str(screenshots/'overview.png'),full_page=True)
-            page.get_by_role('button',name='Катушки',exact=True).click()
-            assert page.locator('#workspaceNav button').all_text_contents()==['Библиотека','Головки T0–T3']
-            assert '123,5 г' in page.locator('#libraryList').inner_text()
+            page.locator('#nav-spools').click()
+            assert page.locator('.inventory-tabs button').all_text_contents()==['Библиотека','Головки T0–T3']
+            assert page.locator('#spools-table input[type=number]').count()>=3
             page.screenshot(path=str(screenshots/'spools.png'),full_page=True)
-            page.get_by_role('button',name='Настройки',exact=True).click()
-            assert page.locator('#workspaceNav button').all_text_contents()==['Принтер','Spoolman','Учёт','Резервная копия']
+            page.locator('#nav-settings').click()
+            assert page.locator('.settings-nav button').all_text_contents()==['Принтер','Spoolman','Учёт','Резервная копия']
             page.screenshot(path=str(screenshots/'settings.png'),full_page=True)
-            page.get_by_role('button',name='История',exact=True).click()
-            page.get_by_role('button',name='Раскрыть задание',exact=True).click()
-            page.get_by_text('Первоначальный сохранённый план · доступен без слайсера и принтера',exact=True).wait_for()
-            assert '1 г' in page.locator('.history-plan-table').inner_text()
+            page.locator('#nav-history').click();page.get_by_role('button',name='Раскрыть задание',exact=True).click()
+            assert '1 г' in page.locator('.uid-saved-plan').inner_text()
             page.screenshot(path=str(screenshots/'history.png'),full_page=True)
-            page.get_by_role('button',name='Да — перейти к списанию',exact=True).click()
-            page.locator('#manualExtra_0').fill('0.750')
-            page.locator('#manualExtraNote').fill('Проверена фактически завершённая печать')
-            page.locator('#manualExtraAck').check()
-            page.locator('#manualExtraApply').click()
-            page.get_by_text('Ручной учёт сохранён. Повторная история не спишет расход снова.',exact=True).wait_for()
+            page.get_by_role('button',name='Да — проверить списание',exact=True).click()
+            page.locator('.uid-extra-amount').fill('0.750');page.locator('#uid-review-note').fill('Проверена фактически завершённая печать');page.locator('#uid-review-ack').check()
+            page.locator('#uid-review-apply').click();page.locator('#uid-history-dialog').wait_for(state='hidden')
             assert sum(d['delta_mg'] for d in session.call('inspect')['debits'])==750
             assert not errors,errors
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             page.set_viewport_size({'width':700,'height':900})
-            for label in ['Обзор','Катушки','История','Настройки']:
-                page.get_by_role('button',name=label,exact=True).click()
-                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),label
+            for selector in ['#nav-overview','#nav-spools','#nav-history','#nav-settings']:
+                page.locator(selector).click()
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),selector
             browser.close()
     finally:
         server.shutdown();thread.join();server.server_close();session.close()

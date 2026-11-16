@@ -18,6 +18,14 @@ class BenchMotion:
             wh.register_mux_endpoint('motion_report/dump_trapq', 'name', 'extruder' if i == 0 else 'extruder%d' % i,
                                      lambda req, i=i: self.subscribe(req, i))
         wh.register_endpoint('bench_motion/event', self.event)
+        # Only this marked no-hardware fixture implements simulated control.
+        self.control_commands=[]
+        gcode=p.lookup_object('gcode')
+        for command,method in [('PAUSE',self.stats.note_pause),('RESUME',self.stats.note_start),('CANCEL_PRINT',self.stats.note_cancel)]:
+            gcode.register_command(command,None)
+            def control(gcmd,command=command,method=method):
+                self.control_commands.append(command);method()
+            gcode.register_command(command,control)
         channel = dict(module_exist=True, disable_auto=False, filament_detected=True)
         p.add_object('filament_feed left', Status({'extruder0': channel, 'extruder1': channel}))
         p.add_object('filament_feed right', Status({'extruder2': channel, 'extruder3': channel}))
@@ -44,6 +52,6 @@ class BenchMotion:
         else: raise req.error('Unknown fixture action')
         req.send({'ok': True})
     def get_status(self, eventtime):
-        return {'subscribers': [sum(not c.is_closed() for c,t in self.clients[i]) for i in range(4)]}
+        return {'control_commands':list(self.control_commands),'subscribers': [sum(not c.is_closed() for c,t in self.clients[i]) for i in range(4)]}
 
 def load_config(config): return BenchMotion(config)

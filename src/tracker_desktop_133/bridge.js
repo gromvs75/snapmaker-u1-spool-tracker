@@ -26,6 +26,7 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
     }
     options2.body=JSON.stringify(pending);
    }
+   if(resource==='/api/guard/decision'&&options2.body){const body=JSON.parse(options2.body);options2.body=JSON.stringify({...body,printer_id:desktopFormData.selected_printer,expected_revision:desktopLatestData.last_guard.revision,confirmed:true})}
    if(options2.body){const body=JSON.parse(options2.body);body._settings_revision=resource==='/api/spoolman/configure'?desktopSpoolmanFormRevision:resource==='/api/select_printer'?desktopFormData?.settings_revision:desktopRevision;options2.body=JSON.stringify(body)}
    resource=resource.replace('/api/','/api/desktop/');
   }

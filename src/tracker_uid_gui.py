@@ -34,7 +34,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
             if self.headers.get('Host')!=f'127.0.0.1:{self.server.server_port}':return self.reply(403,{'error':'Invalid host'})
             if self.path=='/favicon.ico':
                 self.send_response(204);self.end_headers();return
-            if self.path=='/desktop':
+            if self.path=='/desktop' or (self.path=='/' and app_info and app_info.get('mode')=='user'):
                 from tracker_desktop_133 import integration_html
                 return self.reply(200,integration_html(token,(app_info or {}).get('version','2.0 integration')),'text/html')
             if self.path.startswith('/api/desktop/'):
@@ -98,6 +98,9 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 if self.path.startswith('/api/desktop/'):
                     expected=data.pop('_settings_revision',None)
                     action=self.path.removeprefix('/api/desktop/')
+                    if action=='guard/decision':
+                        if not hasattr(owner,'connected'):raise ValueError('Managed session required')
+                        return self.reply(200,owner.call('guard_action',**data))
                     if action=='backup_file':
                         if backup_file is None or set(data)!={'action'} or data['action'] not in ('export','select'):raise ValueError('Native file dialog unavailable')
                         package=owner.call('backup_package') if data['action']=='export' else None

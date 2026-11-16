@@ -36,7 +36,7 @@ def main():
         def ready():
             nonlocal base,token
             base='http://127.0.0.1:'+re.findall(r'GUI http://127.0.0.1:(\d+)',(data/'logs/tracker.log').read_text())[-1]
-            html=urllib.request.urlopen(base,timeout=1).read().decode();token=json.loads(re.search(r'const TOKEN=("[^"]+")',html)[1]);return True
+            html=urllib.request.urlopen(base,timeout=1).read().decode();token=json.loads(re.search(r'const (?:TOKEN|DESKTOP_TOKEN)=("[^"]+")',html)[1]);return True
         wait(ready)
     def stop():
         nonlocal app

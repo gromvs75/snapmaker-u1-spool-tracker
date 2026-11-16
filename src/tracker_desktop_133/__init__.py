@@ -40,7 +40,7 @@ def integration_html(token,version):
     html=html.replace('const changed = next.revision !== revision','const changed = next.slice_revision !== revision')
     html=html.replace('revision = next.revision;','revision = next.slice_revision;')
     html=html.replace('  const entry = entries.find(e => e.source === selected);','  const entry = entries.find(e => e.source === selected);\n  window.desktopForecastSource?.(entry,headData);')
-    html=html.replace("entry && entry.shortage ? '#ffab91' : '#82dfb0'","!entry ? '#94a3b8' : entry.shortage ? '#ffab91' : '#82dfb0'")
+    html=html.replace("entry && entry.shortage ? '#ffab91' : '#82dfb0'","!entry || entry.unknown ? '#94a3b8' : entry.shortage ? '#ffab91' : '#82dfb0'")
     html=html.replace("} catch (e) { $('error').textContent = tr().error; }","} catch (e) { if(request<appliedSequence)return; appliedSequence=request; state={entries:[],latest:null,safety_margin_g:state?.safety_margin_g??5}; signature=''; render(); $('error').textContent = tr().error; }")
     html=html.replace('Нет связи с наблюдателем. Показан последний полученный прогноз.','Нет связи с наблюдателем. Актуальность прогноза не подтверждена.')
     html=html.replace('Observer unavailable. Showing the last received forecast.','Observer unavailable. Forecast freshness is unconfirmed.')

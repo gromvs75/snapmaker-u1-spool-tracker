@@ -37,13 +37,28 @@ def main():
         return proc
     def event(pid,action,**kw):return http(cfg['printers'][pid],'/printer/bench_motion/event',dict(action=action,**kw))
     def scan(pid,ch,uid):
-        http(cfg['printers'][pid],'/printer/bench_radio/set_tag',dict(channel=ch,uid=uid))
+        # The simulated reader may still be finishing the previous channel.
+        # set_tag rejects before mutation while busy; only this explicit fixture
+        # refusal is retryable. This is never used for accounting or delivery.
+        def set_tag():
+            try:return http(cfg['printers'][pid],'/printer/bench_radio/set_tag',dict(channel=ch,uid=uid))
+            except urllib.error.HTTPError as exc:
+                if exc.code==400 and b'Wait for fixture scan to finish' in exc.read():return False
+                raise
+        wait(set_tag)
         http(cfg['printers'][pid],'/printer/bench_radio/scan',dict(channel=ch))
     def connected():return len(api('state')['printers'])==2 and all(p['ready'] for p in api('state')['printers'])
     def balances():return {s['uid']:s['remaining_mg'] for s in api('state')['spools']}
     def register(pid,ch,uid,grams):
+        before=None
+        try:before=api('tag_preview',dict(printer_id=pid,channel=str(ch),uid=uid))['observation_revision']
+        except urllib.error.HTTPError as exc:
+            if exc.code!=409:raise
         scan(pid,ch,uid)
-        preview=wait(lambda:api('tag_preview',dict(printer_id=pid,channel=str(ch),uid=uid)))
+        def fresh_preview():
+            value=api('tag_preview',dict(printer_id=pid,channel=str(ch),uid=uid))
+            return value if value['observation_revision']!=before else None
+        preview=wait(fresh_preview)
         return api('tag_register',dict(printer_id=pid,channel=str(ch),uid=uid,expected_observation=preview['observation_revision'],request_id='register-'+uid,confirmed=True,name='Bench '+uid,remaining_g=grams,material='PLA'))
     try:
         app=launch();s=api('state')

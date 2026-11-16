@@ -11,7 +11,7 @@ MAX_BACKUP = 32 * 1024 * 1024
 # Additive 2.0 development schemas, never a generic "accept any missing table".
 RECOVERY_ADDITIONS = {'uid_recovery_profiles', 'uid_recovery_receipts',
                      'uid_replacement_state', 'uid_replacement_events',
-                     'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits'}
+                     'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits', 'uid_start_checks'}
 
 
 def migrate_copy(db, live):
@@ -106,6 +106,10 @@ def restore(package, live, expected_revision):
                 source.execute("UPDATE uid_jobs SET mapping_valid=0 WHERE state='active'")
                 if source.execute("SELECT 1 FROM sqlite_master WHERE name='uid_recovery_profiles'").fetchone():
                     source.execute('UPDATE uid_recovery_profiles SET quarantined=1')
+                if source.execute("SELECT 1 FROM sqlite_master WHERE name='uid_start_checks'").fetchone():
+                    for ident,payload in source.execute('SELECT identity,payload FROM uid_start_checks').fetchall():
+                        value=json.loads(payload);value.update(state='warning',action=None,attempt=None,reason='Restored backup: printer commands require a new observed start')
+                        source.execute('UPDATE uid_start_checks SET payload=? WHERE identity=?',(json.dumps(value),ident))
                 source.execute('DELETE FROM uid_unlock_windows')
                 source.execute('DELETE FROM uid_unlock_attempts')
                 source.execute("UPDATE uid_remote_outbox SET state='uncertain' WHERE state IN ('held','pending','sending')")

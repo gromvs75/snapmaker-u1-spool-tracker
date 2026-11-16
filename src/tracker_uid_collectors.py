@@ -1,7 +1,7 @@
 """Read-only Moonraker transports and profile acquisition for the UID launcher.
 
-No legacy Store/monitor, printer commands, constant material defaults or history
-based estimates. Only the observed continuous motion path can debit SQLite.
+No legacy Store/monitor or constant material defaults. Accounting remains in the
+UID owner. The separate opt-in guard may issue a single verified pause request.
 """
 import hashlib
 import json
@@ -44,7 +44,7 @@ class ReadOnlyMoonraker:
             if len(page['jobs'])<50 or start+50>=page.get('count',0):break
         return jobs
     def status(self):
-        return self.read('/printer/objects/query?print_stats&print_task_config&filament_feed%20left&filament_feed%20right')['status']
+        return self.read('/printer/objects/query?print_stats&print_task_config&filament_feed%20left&filament_feed%20right&toolhead')['status']
     def inspect(self,filename):
         if not isinstance(filename,str) or not filename or filename.startswith('/') or '..' in filename.split('/'):
             raise ValueError('Invalid G-code filename')
@@ -72,7 +72,7 @@ class ReadOnlyMoonraker:
             except (ValueError,UnicodeError) as exc:layers={};layer_error=str(exc)
             if not params or any(w>0 and i>=len(params) for i,w in enumerate(weights)):
                 raise ValueError('Used tool material parameters unavailable')
-            return dict(logical_weights=weights,parameters=params+[None]*(4-len(params)),filament_type=after.get('filament_type'),file_sha256=digest.hexdigest(),layers=layers,layer_error=layer_error)
+            return dict(logical_weights=weights,parameters=params+[None]*(4-len(params)),filament_type=after.get('filament_type'),file_sha256=digest.hexdigest(),layers=layers,layer_error=layer_error,metadata={k:after.get(k) for k in ('slicer','filament_type','filament_weight')})
 
 
 class MotionSocket:
@@ -94,7 +94,7 @@ class MotionSocket:
 
 
 class ProfileHistory:
-    def __init__(self,client,store,profile_sink=None,terminal_sink=None,observation_sink=None):self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.observation_sink=observation_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
+    def __init__(self,client,store,profile_sink=None,terminal_sink=None,observation_sink=None,status_sink=None,guard_sink=None):self.status_sink=status_sink;self.guard_sink=guard_sink;self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.observation_sink=observation_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
     @staticmethod
     def identity(job):return (job['job_id'],job['start_time'],job['filename'])
     @staticmethod
@@ -108,6 +108,7 @@ class ProfileHistory:
         try:
             jobs=self.client.history()
             status=self.client.status();stats=status['print_stats']
+            if self.status_sink:self.status_sink(status)
             active=[j for j in jobs if j.get('status')=='in_progress' and j.get('filename')==stats.get('filename')]
             if stats.get('state') in ('printing','paused') and not active:
                 # History and status are separate HTTP snapshots. A print can
@@ -140,6 +141,7 @@ class ProfileHistory:
                 elif old['mapping']!=mapping:
                     raise ValueError('Tool mapping changed during capture')
                 if self.profile_sink:self.profile_sink(job,self.store._motion_slicer_profile)
+                if self.guard_sink:self.guard_sink(job,self.store._motion_slicer_profile)
                 if self.observation_sink:self.observation_sink(job,status)
             elif not (self.key and stats.get('filename')==self.key[2] and stats.get('state') in ('complete','cancelled','error')):
                 self.store._motion_slicer_profile=None;self.key=None
@@ -168,5 +170,20 @@ def create_workers(owner,printer,directory):
     client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest),lambda job,status:owner.call('replacement_observe',printer['id'],job,status))
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
                           lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5)
+    def guard_check(job,profile):
+        from tracker_uid_guard import execute
+        ticket=owner.call('guard_check',printer['id'],job,profile)
+        if ticket and ticket['state']=='pause_requested':
+            # A persisted pending attempt from an earlier poll is not permission to retry.
+            attempt=ticket['attempt']
+            if attempt not in attempted:
+                attempted.add(attempt);execute(owner,printer['id'],client,ticket)
+    attempted=set()
+    owner.call('guard_arm',printer['id'])
+    # On reconnect/restart, never replay previously issued pause attempts.
+    previous=owner.call('guard_snapshot',printer['id'])['guard']
+    if previous and previous.get('attempt'):attempted.add(previous['attempt'])
+    history.status_sink=lambda status:owner.call('monitor_status',printer['id'],status)
+    history.guard_sink=guard_check
     client.stop_event=worker.stop_event
     return worker

@@ -67,6 +67,8 @@ class AccountingOwner:
             history_review = HistoryReview(service.accounting)
             from tracker_uid_tags import Tags
             tags = Tags(service.accounting)
+            from tracker_uid_guard import Guard
+            guard=Guard(library)
             self.ready.set_result(threading.get_ident())
             while True:
                 item = self.queue.get()
@@ -86,9 +88,25 @@ class AccountingOwner:
                         result = history_review.detail(*args, **kwargs)
                     elif operation == 'forecast_inventory':
                         result = library.forecast_inventory(fleet=fleet.snapshot())
+                    elif operation == 'monitor_status':result=guard.status(*args,**kwargs)
+                    elif operation == 'guard_arm':
+                        guard.armed[args[0]]=__import__('time').time();result=None
+                    elif operation == 'guard_snapshot':result=guard.snapshot(*args,**kwargs)
+                    elif operation == 'guard_check':result=guard.check(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation == 'guard_decision':result=guard.decision(*args,**kwargs)
+                    elif operation == 'guard_result':result=guard.result(*args,**kwargs)
                     elif operation == 'desktop_snapshot':
                         from tracker_desktop_model import snapshot as desktop_snapshot
                         result=desktop_snapshot(library,history_review,fleet.snapshot())
+                        observed=guard.snapshot(result['selected_printer']);live=observed['monitor']
+                        if live and result['monitor']['connected'] and 0<=__import__('time').time()-live['checked_at']<5:result['monitor'].update(live)
+                        result['last_guard']=observed['guard']
+                        if observed['guard']:
+                            from tracker_uid_migration import history_identity
+                            g=observed['guard'];j=g['job']
+                            capture=catalog.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(history_identity(result['selected_printer'],j['job_id'],j['start_time']),)).fetchone()
+                            if capture:g['job_key']=capture[0]
+                            result['last_preflight']=g
                     elif operation == 'desktop_statistics':
                         from tracker_desktop_statistics import statistics
                         result=statistics(library)
@@ -138,6 +156,7 @@ class AccountingOwner:
                         tags=Tags(service.accounting)
                         reconciliation=Reconciliation(lifecycle.recovery, service.accounting)
                         history_review=HistoryReview(service.accounting)
+                        guard=Guard(library)
                     elif operation == 'export_backup':
                         import sqlite3, tempfile, base64
                         from pathlib import Path
@@ -163,6 +182,7 @@ class AccountingOwner:
                     elif operation == 'refresh': result = service.refresh()
                     elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview', 'recovery_terminal', 'replacement_observe'):
                         result = getattr(lifecycle, operation)(*args, **kwargs)
+                        if operation=='disconnected':guard.live.pop(args[0],None)
                     else: raise ValueError('Unknown accounting operation')
                     if not future.cancelled(): future.set_result(result)
                 except Exception as exc:

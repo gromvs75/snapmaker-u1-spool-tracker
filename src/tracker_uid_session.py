@@ -63,6 +63,14 @@ class Session:
         return {'connected':True}
     def call(self, operation, *args, **kwargs):
         with self.lock:
+            if operation=='guard_action':
+                if not self.connected:raise ValueError('Подключения остановлены.')
+                from tracker_uid_collectors import ReadOnlyMoonraker
+                from tracker_uid_guard import execute
+                pid=kwargs.pop('printer_id');p=next(p for p in self.fleet.printers if p['id']==pid)
+                if self.allowed_urls is not None and p['url'] not in self.allowed_urls:raise ValueError('Адрес не разрешён.')
+                ticket=self.owner.call('guard_decision',pid,**kwargs)
+                return execute(self.owner,pid,ReadOnlyMoonraker(p['url']),ticket)
             if operation=='head_counters':
                 if not self.connected:raise ValueError('Подключения остановлены.')
                 from tracker_uid_collectors import ReadOnlyMoonraker
@@ -93,6 +101,8 @@ class Session:
                     raise ValueError('Настройки изменились. Проверьте список принтеров заново.')
                 if operation=='connect_printers':return self._connect()
                 self._stop();return {'connected':False}
+            if operation=='save_settings' and 'guard_modes' in kwargs.get('values',{}) and self.connected:
+                raise ValueError('Сначала остановите подключения для изменения режима проверки старта.')
             if operation=='save_settings' and 'printers' in kwargs.get('values',{}):
                 if self.connected:raise ValueError('Сначала остановите подключения.')
                 old=self.owner.call('settings')['values'].get('printers',[])

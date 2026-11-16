@@ -49,7 +49,7 @@ def snapshot(library, history_review, fleet):
                  accounted_by_spool=amounts,manual_consumption=amounts if source=='manual_reconciliation' else {},
                  motion_consumption=amounts if source is None else {},
                  accounting_method='manual_review' if source=='manual_reconciliation' else 'motion_estimate' if source is None else 'history_estimate',
-                 closed_without_deduction=job['state']=='resolved')
+                 closed_without_deduction=job['state']=='resolved',unlock=library.accounting.unlock_state(key))
         if profile:
             plans[key]=dict(filename=profile['filename'],weights=profile['logical_weights'],
                             sha256=profile['file_sha256'],created_at=profile['started_at'],status='saved',
@@ -75,9 +75,9 @@ def snapshot(library, history_review, fleet):
     return dict(language=settings.get('language','ru'),safety_margin_g=settings.get('safety_margin_g',5),
                 slots=slots,slot_status=slot_status,spools=spools,plans=plans,runs=runs,last_preflight=last_preflight,last_guard=None,
                 printer=dict(host=address.hostname if address else '',port=address.port or (443 if address.scheme=='https' else 80) if address else 7125,
-                             enabled=connected,guard_mode='warn'),monitor=monitor,printers=printers,selected_printer=pid,
+                             enabled=connected,guard_mode=settings.get('guard_modes',{}).get(pid,'warn')),monitor=monitor,printers=printers,selected_printer=pid,
                 settings_revision=catalog['settings']['revision'],inventory_revision=inventory['revision'],saved_history=details,
-                observations=locations)
+                observations=locations,guard_modes=settings.get('guard_modes',{}))
 
 
 def forecast_view(forecast,printer_id):

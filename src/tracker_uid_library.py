@@ -49,8 +49,9 @@ class Library:
         return {'values':data, 'revision':revision(data)}
 
     def save_settings(self, values, expected_revision):
-        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','spoolman_mode','printers','slice_root','safety_margin_g','selected_printer','language'}:
+        if not isinstance(values,dict) or set(values)-{'printer_names','spoolman_url','spoolman_mode','printers','slice_root','safety_margin_g','selected_printer','language','guard_modes'}:
             raise ValueError('Неверные настройки.')
+        if 'guard_modes' in values and (not isinstance(values['guard_modes'],dict) or any(not isinstance(k,str) or v not in ('off','warn','strict') for k,v in values['guard_modes'].items())):raise ValueError('Invalid guard modes')
         if 'language' in values and values['language'] not in ('en','ru','de','uk','es'):
             raise ValueError('Unsupported language')
         if 'spoolman_mode' in values and values['spoolman_mode'] not in ('off','read','send'):raise ValueError('Invalid Spoolman mode')

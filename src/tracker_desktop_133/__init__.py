@@ -25,6 +25,19 @@ def integration_html(token,version):
     for expression in ('spool.remaining_g','row.required_g','item.required_g','item.remaining_g','grams'):
         html=html.replace('${'+expression+'}', '${displayGrams('+expression+')}')
     html=html.replace('maximumFractionDigits:2','maximumFractionDigits:1')
+    html=html.replace("let state = null, selected = null, revision = -1, signature = '';","let state = null, selected = null, revision = -1, signature = ''; let requestSequence=0,appliedSequence=0;")
+    html=html.replace('window.refreshSliceForecast = async function(selectLatest = false) {','window.refreshSliceForecast = async function(selectLatest = false) { const request=++requestSequence;')
+    html=html.replace('const next = await response.json(); const changed',
+                      'const next = await response.json(); if(request<appliedSequence || (desktopFormData && next.printer_id!==desktopFormData.selected_printer)) return; appliedSequence=request; const changed')
+    html=html.replace('const changed = next.revision !== revision','const changed = next.slice_revision !== revision')
+    html=html.replace('revision = next.revision;','revision = next.slice_revision;')
+    html=html.replace('  const entry = entries.find(e => e.source === selected);','  const entry = entries.find(e => e.source === selected);\n  window.desktopForecastSource?.(entry,headData);')
+    html=html.replace("entry && entry.shortage ? '#ffab91' : '#82dfb0'","!entry ? '#94a3b8' : entry.shortage ? '#ffab91' : '#82dfb0'")
+    html=html.replace("} catch (e) { $('error').textContent = tr().error; }","} catch (e) { if(request<appliedSequence)return; appliedSequence=request; state={entries:[],latest:null,safety_margin_g:state?.safety_margin_g??5}; signature=''; render(); $('error').textContent = tr().error; }")
+    html=html.replace('Нет связи с наблюдателем. Показан последний полученный прогноз.','Нет связи с наблюдателем. Актуальность прогноза не подтверждена.')
+    html=html.replace('Observer unavailable. Showing the last received forecast.','Observer unavailable. Forecast freshness is unconfirmed.')
+    html=html.replace('Beobachter nicht erreichbar. Letzte empfangene Prognose wird angezeigt.','Beobachter nicht erreichbar. Aktualität der Prognose ist unbestätigt.')
+    html=html.replace('Нет актуального остатка Spoolman','Назначение или остаток не подтверждены').replace('Spoolman balance unavailable','Assignment or balance is unconfirmed')
     html=html.replace('${Math.round(grams * 1000) / 1000}','${displayGrams(grams)}')
     html=html.replace('    renderPreflight(data, true);','    window.desktopInventoryLoaded?.(data);\n    renderPreflight(data, true);')
     # This sentence is true for 1.3.3, but not for the optional RFID module in 2.0.
@@ -38,6 +51,6 @@ def integration_html(token,version):
     bootstrap=Path(__file__).with_name('bridge.js').read_text(encoding='utf-8')
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
-    extension=Path(__file__).with_name('inventory.js').read_text(encoding='utf-8')+'\n'+Path(__file__).with_name('history.js').read_text(encoding='utf-8')
+    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','forecast','history'))
     html=html.replace('</body>','<script>'+extension+'</script></body>')
     return html.replace('· 1.3.3','· '+version)

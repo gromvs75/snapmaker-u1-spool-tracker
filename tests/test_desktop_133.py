@@ -156,3 +156,99 @@ def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_
         assert owner.call('inspect')['debits']==[]
     finally:
         server.shutdown();thread.join();server.server_close();owner.close()
+
+
+def test_two_printer_context_and_preupload_forecast_preserve_viewed_plate(bench,tmp_path):
+    import os
+    from dev.observer_fixture import payload
+    from tracker_uid_forecast import SliceForecast
+    from tracker_uid_runtime import AccountingOwner
+    life,key,c=prepare(bench)
+    fleet=bench[2]
+    other=life.adapter.service.accounting.begin('b','Printer B job','1001',['1'],'test',fleet.snapshot())
+    life.adapter.service.accounting.apply(other,1,{'1':1000},state='completed',source='test',basis='motion_estimate')
+    copy=sqlite3.connect(tmp_path/'desktop.sqlite');c.db.backup(copy);copy.close()
+    owner=AccountingOwner(tmp_path/'desktop.sqlite',fleet)
+    owner.call('save_settings',values={'printers':[dict(id=p,name='Printer '+p,url='http://127.0.0.1:'+str(19860+i)) for i,p in enumerate(('a','b'))]},expected_revision=owner.call('settings')['revision'])
+    for spool in owner.call('library_snapshot')['spools']:
+        owner.call('update_spool',spool_id=spool['spool_id'],changes={'color':'#ff7f26' if spool['name']=='A' else '#2b9c70'},expected_revision=spool['revision'],request_id='color-'+spool['spool_id'],confirmed=True,note='Synthetic display fixture')
+    for ch,name,color,grams in [('0','PLA Black','#151a1c','583.217'),('2','PLA Orange','#ff7f26','833.574'),('3','PLA White','#ffffff','195.82')]:
+        owner.call('create_spool',name=name,remaining_g=grams,details={'color':color,'material':'PLA'},assignment=dict(printer_id='b',channel=ch,expected_version='',confirmed=True))
+    root=tmp_path/'slices';metadata=root/'Test project'/'Metadata';metadata.mkdir(parents=True)
+    first=metadata/'.42.0.gcode';second=metadata/'.42.1.gcode'
+    first_source=str(first.relative_to(root));second_source=str(second.relative_to(root))
+    first.write_bytes(payload('10, 0, 0, 0'));second.write_bytes(payload('0, 20, 0, 0'))
+    os.utime(first,ns=(100000000000,100000000000));os.utime(second,ns=(200000000000,200000000000))
+    forecast=SliceForecast(owner,root);forecast.poll();forecast.observer.settle=0;forecast.poll()
+    server=serve(owner,fleet,forecast=forecast,app_info={'version':'2.0.0rc1','mode':'user'})
+    thread=threading.Thread(target=server.serve_forever);thread.start();errors=[]
+    before=owner.call('inspect')['debits']
+    try:
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1050})
+            page.on('pageerror',lambda e:errors.append(str(e)))
+            page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
+            page.locator('#uid-history-dialog[open]').wait_for();page.get_by_role('button',name='Закрыть',exact=True).click()
+            page.locator('#forecast-plate').select_option(first_source)
+            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('Материала хватает')")
+            assert 'Test project · .42.0.gcode' in page.locator('#desktop-forecast-source').inner_text()
+            page.locator('#nav-spools').click()
+            owner.call('save_settings',values={'safety_margin_g':7},expected_revision=owner.call('settings')['revision'])
+            forecast.poll();page.evaluate('refreshSliceForecast(false)')
+            assert page.locator('#view-spools').is_visible()
+            assert page.locator('#forecast-plate').input_value()==first_source
+            page.evaluate('loadData()')
+            page.locator('#desktop-printer-picker').select_option('b')
+            page.wait_for_function("desktopFormData.selected_printer==='b'")
+            assert page.locator('#view-spools').is_visible()
+            assert page.locator('#forecast-plate').input_value()==first_source
+            assert owner.call('settings')['values']['selected_printer']=='b'
+            page.locator('#nav-history').click()
+            assert 'Printer B job' in page.locator('#view-history').inner_text()
+            assert 'job.gcode' not in page.locator('#view-history').inner_text()
+            page.locator('#nav-overview').click();page.locator('#forecast-plate').select_option(second_source)
+            assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+            assert '299' in page.locator('.head-remaining').nth(1).inner_text()
+            # A late old reply/failure cannot overwrite a newer rendered result.
+            for failure in (False,True):
+                page.evaluate('''async failure=>{
+                    const original=window.fetch;
+                    const current=await (await original('/api/forecast')).json();
+                    let release,count=0;
+                    window.fetch=(url,options)=>{
+                        if(url!=='/api/forecast')return original(url,options);
+                        if(++count===1)return new Promise((resolve,reject)=>{
+                            release=()=>failure?reject(Error('late failed response')):
+                                resolve(new Response(JSON.stringify({...current,printer_id:'a',entries:[]})));
+                        });
+                        return Promise.resolve(new Response(JSON.stringify(current)));
+                    };
+                    try{const old=refreshSliceForecast(false);await refreshSliceForecast(false);release();await old}
+                    finally{window.fetch=original}
+                }''',failure)
+                assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+            page.screenshot(path='output/full-133-integration-ui/two-printers-forecast.png',full_page=True)
+            # Simulate a failed observer request: no stale green assurance remains.
+            page.route('**/api/desktop/forecast',lambda route:route.abort())
+            page.evaluate('refreshSliceForecast(false)')
+            assert 'Материала хватает' not in page.locator('#forecast-status').inner_text()
+            assert page.locator('#desktop-forecast-source').inner_text()==''
+            page.unroute('**/api/desktop/forecast');page.evaluate('refreshSliceForecast(false)')
+            assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+            # A .tmp result invalidates the last completed version before upload.
+            Path(str(second)+'.tmp').write_bytes(payload('0, 500, 0, 0'));forecast.poll()
+            page.evaluate('refreshSliceForecast(false)')
+            assert '.42.1.gcode' not in page.locator('#desktop-forecast-source').inner_text()
+            Path(str(second)+'.tmp').replace(second);forecast.poll();forecast.poll()
+            page.evaluate('refreshSliceForecast(false)')
+            assert 'Материала не хватает' in page.locator('#forecast-status').inner_text()
+            assert not errors,errors
+            assert owner.call('inspect')['debits']==before
+            browser.close()
+    finally:
+        server.shutdown();thread.join();server.server_close();owner.close()
+    owner=AccountingOwner(tmp_path/'desktop.sqlite',fleet)
+    try:
+        assert owner.call('settings')['values']['selected_printer']=='b'
+        assert owner.call('inspect')['debits']==before
+    finally:owner.close()

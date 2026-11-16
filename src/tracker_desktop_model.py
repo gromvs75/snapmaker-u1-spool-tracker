@@ -4,6 +4,7 @@ This translates presentation shapes only. It never creates a legacy Store,
 reconciles historical usage, submits Spoolman requests or contacts devices.
 """
 import json
+from pathlib import Path
 from datetime import datetime,timezone
 from urllib.parse import urlsplit
 
@@ -11,7 +12,7 @@ from urllib.parse import urlsplit
 def snapshot(library, history_review, fleet):
     db=library.db
     catalog=library.snapshot();settings=catalog['settings']['values']
-    printers=settings.get('printers',[])
+    printers=[dict(p,name=settings.get('printer_names',{}).get(p['id'],p['name'])) for p in settings.get('printers',[])]
     pid=settings.get('selected_printer')
     if pid not in {p['id'] for p in printers}:pid=printers[0]['id'] if printers else ''
     printer=next((p for p in printers if p['id']==pid),None)
@@ -87,9 +88,13 @@ def forecast_view(forecast,printer_id):
         rows=[dict(tool='T'+r['channel'],spool_id=(r['spool'] or {}).get('spool_id'),
                    name=(r['spool'] or {}).get('name',''),used=r['used'],remaining=r['remaining'],
                    after=r['after'],enough=r['enough'],unknown=r['unknown']) for r in e['rows']]
-        entries.append(dict(e,rows=rows,label='Plate '+str(e['plate'] or '?'),unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
-    value=dict(entries=entries,latest=forecast.get('latest'),safety_margin_g=forecast.get('safety_margin_g',5),
+        source=Path(e['source'])
+        entries.append(dict(e,rows=rows,label='Plate '+str(e['plate'] or '?'),source_label=source.parent.parent.name+' · '+source.name,
+                            unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
+    value=dict(entries=entries,printer_id=printer_id,latest=forecast.get('latest'),safety_margin_g=forecast.get('safety_margin_g',5),
                project=forecast.get('project'),error=forecast.get('error',''),mapping=[0,1,2,3],mapping_assumed=True)
     from tracker_uid_library import revision
     value['revision']=revision(value)
+    # Inventory changes update the forecast but are not a newly completed slice.
+    value['slice_revision']=revision([value['latest'],[(e['source'],e.get('sha256'),e.get('completed_at_ns')) for e in entries]])
     return value

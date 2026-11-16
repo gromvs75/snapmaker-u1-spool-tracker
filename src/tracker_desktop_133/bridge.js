@@ -22,7 +22,7 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
     }
     options2.body=JSON.stringify(pending);
    }
-   if(options2.body){const body=JSON.parse(options2.body);body._settings_revision=desktopRevision;options2.body=JSON.stringify(body)}
+   if(options2.body){const body=JSON.parse(options2.body);body._settings_revision=resource==='/api/select_printer'?desktopFormData?.settings_revision:desktopRevision;options2.body=JSON.stringify(body)}
    resource=resource.replace('/api/','/api/desktop/');
   }
   const response=await original(resource,options2);

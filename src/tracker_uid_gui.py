@@ -77,7 +77,8 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                         return self.reply(200,owner.call('desktop_inventory',action=action,
                             expected_revision=data.pop('_inventory_revision',None),
                             request_id=data.pop('_request_id',None),confirmed=data.pop('_confirmed',False),data=data))
-                    key={'/api/desktop/lang':'language','/api/desktop/settings':'safety_margin_g'}.get(self.path)
+                    key={'/api/desktop/lang':'language','/api/desktop/settings':'safety_margin_g',
+                         '/api/desktop/select_printer':'selected_printer'}.get(self.path)
                     if key and set(data)=={key}:
                         return self.reply(200,owner.call('save_settings',values=data,expected_revision=expected))
                     return self.reply(409,{'error':'Этот маршрут полной оболочки ещё не подключён к ядру 2.0. Изменений нет.'})

@@ -193,6 +193,7 @@ def test_accessory_policy_is_set_after_cocoa_import_and_before_gui(tmp_path,monk
     monkeypatch.setitem(sys.modules,'webview.platforms',SimpleNamespace(cocoa=object()))
     monkeypatch.setitem(sys.modules,'AppKit',SimpleNamespace(NSApplicationActivationPolicyAccessory=1,
         NSApplication=SimpleNamespace(sharedApplication=lambda:SimpleNamespace(setActivationPolicy_=lambda v:calls.append(('policy',v))))))
+    monkeypatch.setattr('tracker_macos.configure_navigation',lambda cocoa:None)
     monkeypatch.setattr('macos_menu.configure_accessory_panel',lambda cocoa:calls.append('panel'))
     monkeypatch.setattr(sys,'platform','darwin')
     UidWindow('http://127.0.0.1:1',tmp_path,webview_module=webview).run()

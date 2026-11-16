@@ -63,9 +63,15 @@ def main():
         return native and native.activationPolicy()==AppKit.NSApplicationActivationPolicyAccessory
     def launch():
         nonlocal app
+        log_path=data/'logs/tracker.log'
+        previous=log_path.read_text().count('Native DOM probe result=') if log_path.exists() else 0
         app=subprocess.Popen([str(exe)],env=env,stdout=log,stderr=subprocess.STDOUT)
         wait(lambda:(data/'instance.json').exists() or (app.poll() is not None and (_ for _ in ()).throw(RuntimeError('Application exited'))))
         wait(policy)
+        wait(lambda:log_path.exists() and log_path.read_text().count('Native DOM probe result=')>previous)
+        probe=log_path.read_text().split('Native DOM probe result=')[-1]
+        check('native document loaded and attached', '"nav":true' in probe and 'attached=True' in probe)
+        check('WebKit uses private store', 'Native WebKit private store=True' in log_path.read_text())
         return app
     def stop():
         nonlocal app

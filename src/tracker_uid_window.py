@@ -158,7 +158,9 @@ class UidWindow:
                 # Match 1.3.3: Cocoa imports set Regular, so override afterwards.
                 from webview.platforms import cocoa
                 from macos_menu import configure_accessory_panel
+                from tracker_macos import configure_navigation
                 import AppKit
+                configure_navigation(cocoa)
                 configure_accessory_panel(cocoa)
                 AppKit.NSApplication.sharedApplication().setActivationPolicy_(
                     AppKit.NSApplicationActivationPolicyAccessory)

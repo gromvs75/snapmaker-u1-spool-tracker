@@ -62,7 +62,7 @@ def integration_html(token,version):
     bootstrap=Path(__file__).with_name('bridge.js').read_text(encoding='utf-8')
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
-    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history','maintenance','operations','monitor','overview','graphite'))
+    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history','maintenance','operations','monitor','overview','graphite','graphite_layout'))
     style=Path(__file__).with_name('graphite.css').read_text(encoding='utf-8')
     html=html.replace('</body>','<script>'+extension+'</script><style>'+style+'</style></body>')
     return html.replace('· 1.3.3','· '+version)

@@ -38,7 +38,7 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
             page.locator('#desktop-forecast-details summary').click()
             page.screenshot(path=str(screens/'forecast.png'),full_page=True)
             page.locator('#nav-spools').click()
-            page.locator('#spools-table input').first.wait_for()
+            page.locator('#spools-table .graphite-balance').first.wait_for()
             for lang in ('ru','en','de','uk','es'):
                 page.locator('#lang-picker').select_option(lang)
                 page.wait_for_function('(lang)=>currentLang===lang',arg=lang)

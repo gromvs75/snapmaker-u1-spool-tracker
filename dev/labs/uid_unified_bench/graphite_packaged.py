@@ -41,6 +41,10 @@ def main():
         for i in range(4):
             d['spools'][str(i)]=dict(name=names[i],color=colors[i],material='PLA',remaining_g=masses[i])
             d['slots'][str(i+1)]=str(i)
+        for i,grams in enumerate([11.62,34.46,9.125]):
+            pid='layout-plan-'+str(i);filename=['plate_PLA_19m53s.gcode','Korper3_PLA_1h2m.gcode','shell_PLA_7h27m.gcode'][i]
+            d['plans'][pid]=dict(filename=filename,sha256=str(i)*64,size=10,weights=[grams,0,0,0],spool_ids=['0','','',''],created_at=1794825600+i,status='committed',printer=dict(d['printer']))
+            d['runs']['layout-run-'+str(i)]=dict(job_id='layout-history-'+str(i),plan_id=pid,start_time=1794829200+i*600,status='committed',filename=filename,physical_weights=[grams,0,0,0],physical_spool_ids=['0','','',''],tool_mapping=[0,1,2,3])
     old.update(seed);package=create_backup(old,'1.3.3')
     writes=[]
     class FakeSpoolman(BaseHTTPRequestHandler):
@@ -77,7 +81,7 @@ def main():
         descriptor=json.loads((data/'instance.json').read_text())
         url=f'http://127.0.0.1:{descriptor["port"]}/desktop'
         with sync_playwright() as p:
-            browser=p.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1000});errors=[]
+            browser=p.chromium.launch();page=browser.new_page(viewport={'width':945,'height':800});errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
             page.goto(url);page.wait_for_selector('.graphite-head-art')
             assert page.locator('body.graphite').count()==1
@@ -87,6 +91,14 @@ def main():
                 page.locator('#lang-picker').select_option(language);page.wait_for_function('(l)=>currentLang===l',arg=language)
             page.screenshot(path=str(out/'overview.png'),full_page=True);checks.append('packaged Graphite, five languages, heads above live synthetic forecast')
             page.locator('#nav-spools').click();page.screenshot(path=str(out/'library.png'),full_page=True)
+            assert page.locator('.spool-inventory th').count()==5
+            assert page.locator('.graphite-balance').first.inner_text()=='571,6 гр.'
+            assert page.locator('#spools-table input').first.input_value()=='571.597'
+            assert all(r.bounding_box()['height']<85 for r in page.locator('#spools-table tr').all())
+            page.locator('#nav-history').click();page.screenshot(path=str(out/'history.png'),full_page=True)
+            assert page.locator('.history-row').count()==3
+            assert page.locator('.history-usage').first.inner_text()=='9,1 гр.'
+            page.locator('#nav-spools').click()
             page.locator('#inventory-create').click();page.screenshot(path=str(out/'add.png'),full_page=True);page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('#desktop-tags-open').click()
             page.wait_for_function('document.getElementById("desktop-tags-message").textContent.length>0 && !document.getElementById("desktop-tags-refresh").disabled')
@@ -99,10 +111,20 @@ def main():
             for row,color in zip(page.locator('.sm-spool-row').all(),colors):assert color in row.locator('svg').inner_html()
             page.locator('.sm-spool-row').first.click();page.screenshot(path=str(out/'spoolman.png'),full_page=True)
             checks.append('packaged Spoolman catalog shows all four real fixture colors without writes')
-            page.locator('[data-settings-section=printer]').click();page.screenshot(path=str(out/'settings.png'),full_page=True)
+            page.locator('[data-settings-section=printer]').click()
+            assert page.locator('.graphite-connection-section #desktop-connections-toggle').is_visible()
+            for width in [945,800,1280]:
+                page.set_viewport_size({'width':width,'height':800})
+                boxes=[page.locator(q).bounding_box() for q in ['.graphite-brand','.top-nav','#lang-picker']]
+                assert max(b['y']+b['height']/2 for b in boxes)-min(b['y']+b['height']/2 for b in boxes)<2
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            page.set_viewport_size({'width':945,'height':800})
+            checks.append('packaged library, history and settings at reference width; single-line navigation at 800–1280 px')
+            page.screenshot(path=str(out/'settings.png'),full_page=True)
             assert not errors,errors
             browser.close()
-        assert not api('state')['connections']['connected'] and not writes and not api('state')['debits']
+        assert not api('state')['connections']['connected'] and not writes
+        assert sum(d['delta_mg'] for d in api('state')['debits'])==55205
         # Capture only this child PID's native window, not the user's desktop.
         import AppKit,Quartz
         app=AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(child.pid)
@@ -111,7 +133,7 @@ def main():
         windows=[w for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll,0) if w.get('kCGWindowOwnerPID')==child.pid and w.get('kCGWindowLayer')==0]
         window=max(windows,key=lambda w:w['kCGWindowBounds']['Width']*w['kCGWindowBounds']['Height'])
         subprocess.run(['screencapture','-x','-o','-l',str(window['kCGWindowNumber']),str(out/'native-overview.png')],check=True)
-        checks.append('native child window captured, Accessory policy, no real connections or debits')
+        checks.append('native child window captured, Accessory policy, no real connections or new debits')
         child.send_signal(signal.SIGTERM);child.wait(20)
         assert child.returncode==0 and not (data/'instance.json').exists();checks.append('clean packaged exit')
         (out/'results.json').write_text(json.dumps(dict(version=info['CFBundleShortVersionString'],commit=info['TrackerSourceCommit'],dirty=info['TrackerBuildDirty'],profile=str(data),bundle=str(bundle),checks=checks),indent=2))

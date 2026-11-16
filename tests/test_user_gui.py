@@ -49,7 +49,7 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             page.locator('#nav-settings').click()
             assert page.locator('.settings-nav button').all_text_contents()==['Принтер','Spoolman','Учёт','Резервная копия']
             page.screenshot(path=str(screenshots/'settings.png'),full_page=True)
-            page.locator('#nav-history').click();page.get_by_role('button',name='Раскрыть задание',exact=True).click()
+            page.locator('#nav-history').click();page.locator('#history-content .uid-expand').click()
             assert '1 г' in page.locator('.uid-saved-plan').inner_text()
             page.screenshot(path=str(screenshots/'history.png'),full_page=True)
             page.get_by_role('button',name='Да — проверить списание',exact=True).click()

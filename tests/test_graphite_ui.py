@@ -19,13 +19,18 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
         for i,(name,color,mass) in enumerate([('Generic Basis','#151a1c',571.597),('Generic Basic','#ffffff',195.82),('Generic Orange','#ff7f26',833.574),('Generic PLA','#2b9c70',886.58)]):
             d['spools'][str(i)]=dict(name=name,color=color,material='PLA',remaining_g=mass)
             d['slots'][str(i+1)]=str(i)
+        for i,grams in enumerate([11.62,34.46,9.125]):
+            pid='plan-'+str(i)
+            filename=['plate_PLA_19m53s.gcode','Korper3_PLA_1h2m.gcode','shell_PLA_7h27m.gcode'][i]
+            d['plans'][pid]=dict(filename=filename,sha256=str(i)*64,size=10,weights=[grams,0,0,0],spool_ids=['0','','',''],created_at=1000+i,status='committed',printer=dict(d['printer']))
+            d['runs']['run-'+str(i)]=dict(job_id='history-'+str(i),plan_id=pid,start_time=2000+i,status='committed',filename=filename,physical_weights=[grams,0,0,0],physical_spool_ids=['0','','',''],tool_mapping=[0,1,2,3])
     legacy.update(seed)
     app=Session(tmp_path/'profile',allowed_urls=[])
     package=create_backup(legacy,'1.3.3');preview=app.call('validate_backup',package=package)
     app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     remote_state,url=remote
     sender=Sender(app,[url])
-    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc9'})
+    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc10'})
     thread=threading.Thread(target=server.serve_forever);thread.start()
     out=Path('output/graphite-ui');out.mkdir(parents=True,exist_ok=True)
     try:
@@ -53,13 +58,40 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             page.locator('.sm-spool-row').click()
             assert page.locator('#sm-assign').is_enabled()
             page.screenshot(path=str(out/'spoolman.png'),full_page=True)
-            for width in [1280,1024,800]:
+            for width in [1280,945,800]:
                 page.set_viewport_size({'width':width,'height':1000})
                 for nav in ['overview','spools','history','settings']:
                     page.locator('#nav-'+nav).click()
                     assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),(width,nav)
-            page.set_viewport_size({'width':1280,'height':1000})
-            page.locator('#nav-spools').click();page.screenshot(path=str(out/'library.png'),full_page=True)
+            # Same client width as the approved reference, not a wider test-only page.
+            page.set_viewport_size({'width':945,'height':800})
+            for language in ['en','de','uk','es','ru']:
+                page.locator('#lang-picker').select_option(language)
+                page.wait_for_function('(l)=>currentLang===l',arg=language)
+                boxes=[page.locator(q).bounding_box() for q in ['.graphite-brand','.top-nav','#lang-picker']]
+                assert max(b['y']+b['height']/2 for b in boxes)-min(b['y']+b['height']/2 for b in boxes)<2
+                assert boxes[0]['x']+boxes[0]['width']<boxes[1]['x']
+                assert boxes[1]['x']+boxes[1]['width']<boxes[2]['x']
+            page.locator('#nav-spools').click()
+            assert page.locator('.spool-inventory thead th').count()==5
+            assert page.locator('.graphite-balance').first.inner_text()=='571,6 гр.'
+            assert page.locator('#spools-table input').first.input_value()=='571.597'
+            for row in page.locator('#spools-table tr').all():
+                assert row.bounding_box()['height']<85
+                assert row.locator('.graphite-assignments').is_visible()
+                assert not row.locator('.delete-spool').is_visible()
+            assert page.locator('.inventory-tabs button').first.bounding_box()['height']<45
+            page.locator('.graphite-row-menu>summary').first.click()
+            assert page.locator('.delete-spool').first.is_visible()
+            page.keyboard.press('Escape')
+            assert not page.locator('.delete-spool').first.is_visible()
+            page.screenshot(path=str(out/'library.png'),full_page=True)
+            page.locator('#nav-history').click()
+            assert page.locator('.history-row').count()==3
+            assert '9,1' in page.locator('.history-usage').first.inner_text()
+            assert page.locator('.graphite-history-job .history-date').count()==3
+            page.screenshot(path=str(out/'history.png'),full_page=True)
+            page.locator('#nav-spools').click()
             page.locator('#inventory-create').click();page.screenshot(path=str(out/'add-spool.png'),full_page=True)
             page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('.inventory-param-button').first.click();page.screenshot(path=str(out/'parameters.png'),full_page=True)
@@ -67,6 +99,11 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             page.locator('#desktop-tags-open').click();page.screenshot(path=str(out/'uid.png'),full_page=True)
             page.locator('#desktop-tags-close').click()
             page.locator('#nav-settings').click();page.locator('[data-settings-section=printer]').click();page.screenshot(path=str(out/'printer.png'),full_page=True)
+            # Main navigation stays reachable when long content is scrolled.
+            page.set_viewport_size({'width':945,'height':430})
+            page.evaluate('window.scrollTo(0, document.body.scrollHeight)')
+            assert page.locator('.graphite-chrome').bounding_box()['y']==0
+            page.locator('#nav-history').click()
             assert not errors,errors
             assert not app.connected and not remote_state['writes']
             browser.close()

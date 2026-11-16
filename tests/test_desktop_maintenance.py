@@ -133,6 +133,7 @@ def test_full_shell_parameters_archive_statistics_backup_and_restart(tmp_path,de
             assert r.value.ok
             page.locator('#inventory-param-dialog').wait_for(state='hidden')
             row=page.locator(f'#spools-table tr[data-spool-id="{sid}"]')
+            row.locator('.graphite-row-menu > summary').click()
             with page.expect_response('**/api/desktop/spools/archive') as r:row.locator('.desktop-archive-action').click()
             assert r.value.ok
             page.wait_for_function('(sid)=>desktopFormData.spools[sid].archived===true',arg=sid)

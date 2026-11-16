@@ -60,7 +60,7 @@ def test_full_frontend_languages_offline_plan_manual_account_and_restart(bench,t
             before=session.call('library_snapshot')['spools']
             status=page.evaluate("async id=>(await fetch('/api/spools/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})})).status",before[0]['spool_id'])
             assert status==409 and session.call('library_snapshot')['spools']==before
-            page.locator('#nav-history').click();page.get_by_role('button',name='Раскрыть задание',exact=True).click()
+            page.locator('#nav-history').click();page.locator('#history-content .uid-expand').click()
             page.screenshot(path=str(screens/'history-plan.png'),full_page=True)
             page.get_by_role('button',name='Да — проверить списание',exact=True).click()
             page.locator('.uid-extra-amount').fill('0.750');page.locator('#uid-review-note').fill('Проверено завершённое задание')
@@ -128,6 +128,7 @@ def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_
             spools=owner.call('library_snapshot')['spools'];assert len(spools)==1
             sid=spools[0]['spool_id'];assert spools[0]['remaining_mg']==125259
             field=page.locator('#spools-table input[type=number]');assert field.input_value()=='125.259'
+            page.locator('.graphite-row-menu > summary').click()
             field.fill('124.987')
             with page.expect_response('**/api/desktop/spools/update') as response:field.press('Tab')
             assert response.value.ok

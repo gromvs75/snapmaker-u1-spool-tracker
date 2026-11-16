@@ -178,3 +178,117 @@ body.graphite{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system
 .graphite #sm-head{grid-column:2;grid-row:3}
 .graphite #sm-inspector-actions{grid-column:3;grid-row:2/5;gap:8px;margin:0}
 @media(max-width:760px){.graphite .graphite-catalog-columns{grid-template-columns:minmax(0,1fr) 70px 80px;gap:8px}.graphite .sm-spool-row{grid-template-columns:32px minmax(0,1fr) 70px 80px;gap:8px}.graphite #sm-inspector{grid-template-columns:minmax(0,1fr) 150px}.graphite #sm-inspector-actions{grid-column:1/-1;grid-row:5;display:flex;flex-wrap:wrap}.graphite #sm-inspector-actions button{width:auto}.graphite .sm-spool-row .sm-art{width:30px;height:30px}}
+/* Structural parity with the approved atlas, including a stable application bar. */
+body.graphite{padding:0;margin:0}
+.graphite .container{max-width:none;min-height:100vh;display:flex;flex-direction:column;margin:0}
+.graphite .graphite-chrome{position:sticky;top:0;z-index:20;background:var(--bg)}
+.graphite .header-bar{display:grid;grid-template-columns:minmax(165px,1fr) auto minmax(126px,1fr);align-items:center;gap:20px;padding:18px 24px;margin:0;min-height:74px;box-sizing:border-box;border-color:#252a32}
+.graphite .header-bar>div.graphite-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.graphite .graphite-brand>strong{font-size:16px;font-weight:650;letter-spacing:-.3px;white-space:nowrap}
+.graphite .header-bar .brand-logo{width:33px;height:33px;flex:0 0 33px;font-size:13px}
+.graphite .top-nav{margin:0;justify-self:center;display:flex;gap:3px}
+.graphite .top-nav button{font-size:14px;padding:9px 12px;min-height:36px}
+.graphite #lang-picker{justify-self:end;width:114px;padding:7px 10px;min-height:34px;background:transparent;font-size:12px}
+.graphite #desktop-printer-context{margin:0!important;padding:12px 24px;min-height:56px;box-sizing:border-box;border-color:#252a32;gap:10px!important}
+.graphite #desktop-printer-context>svg{width:16px;height:16px;color:var(--muted);flex:none}
+.graphite #desktop-printer-context .graphite-printer-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.graphite #desktop-printer-picker{flex:0 1 180px!important;max-width:210px;min-width:80px;width:auto!important;padding:4px!important;font-size:13px}
+.graphite #desktop-printer-add{color:var(--muted);font-weight:400}
+.graphite #desktop-printer-add::before{content:'＋';margin-right:5px}
+.graphite .workspace{flex:1;margin:0;display:block!important;min-width:0}
+.graphite .main-content{width:100%;min-width:0}
+.graphite #view-overview,.graphite #view-history{padding:24px}
+.graphite #view-settings:not([hidden]),.graphite #view-spools:not([hidden]){display:grid;grid-template-columns:156px minmax(0,1fr);gap:0;padding:0;min-height:520px}
+.graphite .settings-nav,.graphite .inventory-tabs{padding:24px 12px;border-right:1px solid #252a32;gap:5px;align-self:stretch;position:static}
+.graphite .settings-nav button,.graphite .inventory-tabs button{display:flex;align-items:center;gap:8px;padding:9px 10px;min-height:36px;font-size:13px;line-height:1.5}
+.graphite .inventory-tabs button>svg{width:16px;height:16px;flex:none}
+.graphite .settings-body,.graphite .inventory-body{padding:24px;min-width:0}
+.graphite .graphite-pagehead{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin:0 0 28px}
+.graphite .graphite-pagehead h2,.graphite #printer-title{font-size:24px;font-weight:650;line-height:1.3;margin:0 0 8px;letter-spacing:-.5px}
+.graphite .graphite-pagehead p,.graphite #printer-help{margin:0;font-size:12px;color:var(--muted);line-height:1.6}
+.graphite #graphite-library-heading #inventory-create{white-space:nowrap;padding:8px 12px;min-height:36px;font-size:13px}
+.graphite #inventory-toolbar{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 20px;align-items:center}
+.graphite #inventory-search{flex:1;min-width:160px;height:38px}
+.graphite #inventory-toolbar label{font-size:12px;color:var(--muted)}
+.graphite #view-spools .spool-inventory{table-layout:fixed}
+.graphite #view-spools .spool-inventory td,.graphite #view-spools .spool-inventory th{padding:11px 6px;line-height:1.5;border-color:#252a32;font-size:12px;text-align:left}
+.graphite #view-spools .spool-inventory th{font-size:10px;letter-spacing:.06em;padding-bottom:12px;border-color:var(--border)}
+.graphite #view-spools .spool-inventory td:nth-child(3),.graphite #view-spools .spool-inventory th:nth-child(3){text-align:right;padding-right:12px}
+.graphite .inventory-name{gap:0;display:block}
+.graphite .inventory-name .sm-art{display:none}
+.graphite .inventory-name strong{font-size:13px;font-weight:500;line-height:1.4}
+.graphite .inventory-name small{display:block;margin-top:2px;font-size:11px;color:var(--muted);line-height:1.5}
+.graphite .graphite-assignments>div+div{margin-top:6px}
+.graphite .graphite-assignments small{display:block;margin-top:2px;font-size:11px;line-height:1.5}
+.graphite .graphite-balance{white-space:nowrap;font-size:13px}
+.graphite .graphite-row-actions{display:flex;align-items:center;gap:6px;position:relative}
+.graphite #view-spools .spool-inventory td:last-child .inventory-param-button{display:inline-block;min-height:29px;padding:6px 8px;margin:0;font-size:11px;line-height:1.4;white-space:nowrap;font-weight:400}
+.graphite .graphite-row-menu{position:relative;min-width:25px;margin:0}
+.graphite .graphite-row-menu>summary{list-style:none;display:grid;place-items:center;font-size:20px;line-height:1;min-height:32px;width:26px;border-radius:6px}
+.graphite .graphite-row-menu>summary::-webkit-details-marker{display:none}
+.graphite .graphite-row-menu[open]>summary{background:#303641}
+.graphite .graphite-menu-items{position:absolute;right:0;top:36px;width:235px;max-width:70vw;padding:12px;box-sizing:border-box;background:#22262d;border:1px solid #434b58;border-radius:10px;box-shadow:0 12px 32px #0007;z-index:15;display:grid;gap:8px;text-align:left}
+.graphite #view-spools .graphite-menu-items button{margin:0!important;width:100%;padding:7px 10px!important;font-size:12px!important;min-height:32px;line-height:1.5;text-align:left}
+.graphite .graphite-menu-items label{font-size:12px;color:var(--muted)}
+.graphite #view-spools .graphite-menu-items input[type=number]{display:block;width:100%!important;margin-top:6px;background:var(--input);padding:8px}
+.graphite #view-spools .spool-inventory .graphite-menu-items .color-picker{margin:0}
+.graphite #view-spools .graphite-menu-items .color-grid{grid-template-columns:repeat(6,1fr);gap:4px}
+.graphite #inventory-count{font-size:11px;margin-top:16px}
+.graphite #printer-form{margin-top:28px;max-width:760px}
+.graphite #printer-form>label:has(#desktop-printer-name){display:flex!important;flex-direction:column;align-items:stretch!important;gap:8px!important;margin-bottom:20px!important;font-size:12px;color:var(--muted)}
+.graphite #desktop-printer-name{max-width:none;flex:auto;width:100%;height:38px}
+.graphite #printer-form .printer-address{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.graphite .printer-address label{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--muted);min-width:0}
+.graphite .printer-address input{width:100%;height:38px}
+.graphite #printer-form .printer-actions{border:0;padding:18px 0 0;margin:0;display:flex;gap:12px;flex-wrap:wrap}
+.graphite .graphite-connection-section{border-top:1px solid var(--border);padding-top:20px;margin-top:22px}
+.graphite .graphite-connection-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.graphite .graphite-connection-heading h3{font-size:16px;margin:0;font-weight:600}
+.graphite #printer-status{position:static!important;margin:0;font-size:11px;line-height:1.5;max-width:65%;padding:4px 9px;white-space:normal}
+.graphite #desktop-connections-message{margin:22px 0;font-size:12px;line-height:1.65;max-width:660px}
+.graphite .graphite-connection-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.graphite .graphite-connection-actions #heads-read{background:transparent;border-color:transparent;color:var(--muted);font-size:12px}
+.graphite #desktop-statistics{background:none;border:0;border-radius:0;padding:0;margin:28px 0 20px}
+.graphite #desktop-statistics summary{font-size:12px;font-weight:400;color:var(--muted)}
+.graphite #desktop-statistics-body{padding-top:16px}
+.graphite .graphite-history-columns,.graphite #history-content .history-row{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(135px,1.3fr) minmax(80px,.7fr) minmax(110px,.8fr);gap:16px;align-items:center}
+.graphite .graphite-history-columns{padding:12px 6px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.graphite #history-content .history-row{margin:0;padding:11px 6px;border-color:#252a32;line-height:1.5;font-size:13px}
+.graphite .graphite-history-job{display:grid;gap:3px;min-width:0}
+.graphite .history-name{font-size:13px;font-weight:500}
+.graphite .history-date{font-size:11px;line-height:1.5;color:var(--muted);font-weight:400}
+.graphite .history-usage{font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.graphite .graphite-history-columns>span:nth-child(3){text-align:right}
+.graphite .history-row .head-status{justify-self:start;white-space:normal;max-width:100%;border-radius:20px;font-size:11px;line-height:1.4;padding:3px 8px;background:#2a2f38;color:#afb7c5}
+.graphite .history-row .head-status[data-state=active]{background:#29364d;color:#b1c5ff}
+.graphite .history-row .head-status[data-state=committed]{background:#1d3d30;color:#86d5b3}
+.graphite .history-row .head-status[data-state=review]{background:#443823;color:#efc47d}
+.graphite .graphite-history-actions{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.graphite #history-content .uid-expand,.graphite #history-content .desktop-unlock{background:transparent;border-color:transparent;color:var(--muted);font-weight:400;font-size:12px;padding:4px 6px;min-height:28px;line-height:1.4}
+.graphite .graphite-history-explanation{margin-top:20px;color:var(--muted);font-size:12px}
+.graphite .graphite-history-explanation>summary{font-size:11px}
+.graphite .graphite-footer{margin:0;padding:12px 24px;border-color:#252a32;min-height:40px;box-sizing:border-box;align-items:center;justify-content:flex-start;gap:20px;font-size:10px}
+.graphite .graphite-footer button{font-size:10px}
+.graphite .graphite-about{margin-left:auto;position:relative}
+.graphite .graphite-about>summary{font-size:11px;list-style:none;white-space:nowrap}
+.graphite .graphite-about .brand-text{position:absolute;right:0;bottom:28px;width:280px;background:var(--card);padding:16px;border:1px solid var(--border);border-radius:10px;z-index:22;box-shadow:0 10px 35px #0008}
+.graphite .graphite-about .brand-text h1{font-size:14px}
+@media(max-width:900px){.graphite .header-bar{grid-template-columns:auto 1fr auto;gap:12px}.graphite .top-nav button{font-size:12px;padding:9px}.graphite #view-settings:not([hidden]),.graphite #view-spools:not([hidden]){grid-template-columns:142px minmax(0,1fr)}.graphite .settings-body,.graphite .inventory-body{padding:20px}.graphite #view-spools .spool-inventory .inventory-param-button{white-space:normal!important}.graphite .graphite-row-actions{gap:2px}.graphite .graphite-history-columns,.graphite #history-content .history-row{gap:10px;grid-template-columns:minmax(0,1.8fr) minmax(110px,1.1fr) 80px 90px}}
+@media(max-width:700px){.graphite .header-bar{padding:12px 16px;gap:8px;grid-template-columns:auto 1fr auto}.graphite .graphite-brand>strong{display:none}.graphite #lang-picker{width:96px;font-size:11px}.graphite .top-nav button{font-size:11px;padding:8px 6px}.graphite #desktop-printer-context{padding:10px 16px}.graphite #view-settings:not([hidden]),.graphite #view-spools:not([hidden]){display:block}.graphite .settings-nav,.graphite .inventory-tabs{display:flex;border-right:0;border-bottom:1px solid var(--border);padding:12px 16px}.graphite #printer-form .printer-address{grid-template-columns:1fr}.graphite .graphite-history-columns{display:none}.graphite #history-content .history-row{grid-template-columns:minmax(0,1fr) auto}.graphite .graphite-history-job{grid-column:1/-1}.graphite .graphite-history-actions{grid-column:1/-1}.graphite .graphite-pagehead{gap:10px}.graphite #desktop-printer-context .subtitle{font-size:11px}.graphite .graphite-footer{flex-wrap:wrap}}
+.graphite .settings-nav,.graphite .inventory-tabs{align-content:start}
+.graphite .settings-nav button>svg{width:16px;height:16px;flex:none}
+.graphite #printer-form .printer-address{max-width:none}
+.graphite #printer-form .printer-actions button{font-weight:400}
+.graphite #printer-form #printer-save{font-weight:600}
+.graphite .workspace{display:flex!important;align-items:stretch}
+.graphite .main-content{display:flex;flex-direction:column}
+.graphite .main-content>section:not([hidden]){flex:1}
+.graphite .graphite-history-explanation>summary{text-transform:none;letter-spacing:0;font-weight:400}
+.graphite #history-content .history-row{border-top:0}
+.graphite .graphite-history-list>summary{display:none}
+.graphite .graphite-footer>span::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:#86d5b3;margin-right:6px}
+.graphite #graphite-overview-heading{margin-bottom:28px}
+.graphite .graphite-heads-heading{display:flex;align-items:center;justify-content:space-between;margin:0 0 16px;gap:16px}
+.graphite .graphite-heads-heading h3{margin:0;font-size:14px;font-weight:500}
+.graphite .graphite-heads-heading button{background:transparent;border-color:transparent;color:var(--muted);font-size:12px;padding:0;min-height:24px}
+.graphite .overview-card #overview-connection{font-size:18px}

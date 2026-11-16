@@ -233,7 +233,7 @@ def test_legacy_backup_full_shell_preview_languages_and_history(tmp_path,old_bac
             page.locator('#nav-history').click()
             page.wait_for_function("Object.values(desktopFormData.runs).some(r=>r.filename==='saved-2.gcode')")
             # Open the actual history row, using its saved key rather than a live printer.
-            page.get_by_role('button',name='Раскрыть задание').first.click()
+            page.locator('#history-content .uid-expand').first.click()
             page.locator('#uid-history-dialog').wait_for(state='visible')
             assert page.locator('#uid-history-dialog').inner_text().find('12')>=0
             page.screenshot(path=str(screens/'imported-history.png'),full_page=True)

@@ -73,6 +73,12 @@ def main():
             register(pid,3,old,20);register(pid,2,new,100)
             http(cfg['printers'][pid],'/printer/bench_radio/clear',dict(channel=2))
         wait(lambda:len(api('state')['spools'])==4)
+        def assignments_ready():
+            rows=api('state')['occupied']
+            return len(rows)==2 and {(r['printer_id'],r['channel'],r['uid']) for r in rows}=={('a','3','04112233'),('b','3','04112244')} and all(r['usable'] for r in rows)
+        # clear() is queued by the RF process. Do not start while the old
+        # channel-2 observation is still being removed from the owner's view.
+        wait(assignments_ready)
         wait(lambda:all(all(http(port,'/printer/objects/query?bench_transition')['result']['status']['bench_transition']['subscribers']) for port in cfg['printers'].values()))
         for pid in cfg['printers']:event(pid,'start',filename='recovery.gcode')
         wait(lambda:len(api('state')['recovery_plans'])==2)

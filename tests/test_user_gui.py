@@ -59,6 +59,10 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             assert sum(d['delta_mg'] for d in session.call('inspect')['debits'])==750
             assert not errors,errors
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            page.set_viewport_size({'width':700,'height':900})
+            for label in ['Обзор','Катушки','История','Настройки']:
+                page.get_by_role('button',name=label,exact=True).click()
+                assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),label
             browser.close()
     finally:
         server.shutdown();thread.join();server.server_close();session.close()

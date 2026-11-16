@@ -32,8 +32,11 @@ def build_info():
 
 def main(argv=None):
     # Never silently ignore --data/--allow-url intended for the lab launcher.
-    if (sys.argv[1:] if argv is None else argv):
-        return 2
+    arguments=sys.argv[1:] if argv is None else argv
+    if arguments:
+        if len(arguments)!=1 or arguments[0].startswith('-'):return 2
+        from tracker_user_hook import handle_slicer_hook
+        return handle_slicer_hook(data_directory(),arguments[0],output_name=os.environ.get('SLIC3R_PP_OUTPUT_NAME'))
     from tracker_uid_session import Session
     from tracker_uid_catalog import CatalogBusyError
     from tracker_uid_collectors import create_workers, ReadOnlyMoonraker
@@ -45,6 +48,10 @@ def main(argv=None):
         session = Session(directory, worker_factory=create_workers)
     except CatalogBusyError:
         # Expected rejection must not open a PyInstaller exception dialog.
+        try:
+            from tracker_user_hook import instance_call
+            instance_call(directory,'window',{'action':'show'})
+        except (ValueError,OSError,KeyError):pass
         return 2
     directory.joinpath('logs').mkdir(exist_ok=True)
     handler = RotatingFileHandler(directory/'logs'/'tracker.log', maxBytes=2_000_000, backupCount=5, encoding='utf-8')
@@ -58,6 +65,7 @@ def main(argv=None):
     forecast = SliceForecast(session, directory/'slices' if os.environ.get('TRACKER20_DATA_DIR') else Path(tempfile.gettempdir())/'snapmaker_orca_model')
     server = thread = shell = None
     previous_signals = {}
+    descriptor=directory/'instance.json'
     try:
         def status_reader(pid):
             printer = next(p for p in session.call('settings')['values']['printers'] if p['id']==pid)
@@ -71,6 +79,10 @@ def main(argv=None):
         url = f'http://127.0.0.1:{server.server_port}'
         logger.info('GUI %s', url)
         shell = UidWindow(url,directory/'webview',title=f'Snapmaker U1 Spool Tracker {VERSION} · кандидат',tray_title=f'Tracker {VERSION} · кандидат',forecast=forecast)
+        # Per-profile IPC capability, never a public fixed-port write endpoint.
+        from tracker_uid_migration import atomic
+        atomic(descriptor,json.dumps(dict(port=server.server_port,token=server.tracker_token)).encode())
+        descriptor.chmod(0o600)
         def stop(signum, frame):
             logger.info('Exit requested signal=%s', signum)
             shell.quit()
@@ -88,6 +100,7 @@ def main(argv=None):
         logger.exception('Application failed')
         raise
     finally:
+        descriptor.unlink(missing_ok=True)
         for signum, previous in previous_signals.items(): signal.signal(signum,previous)
         if server:
             server.shutdown()

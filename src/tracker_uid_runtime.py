@@ -86,6 +86,8 @@ class AccountingOwner:
                         result = history_review.detail(*args, **kwargs)
                     elif operation == 'forecast_inventory':
                         result = library.forecast_inventory(fleet=fleet.snapshot())
+                    elif operation in ('export_preview','export_save'):
+                        result=getattr(library,operation)(*args,fleet=fleet.snapshot(),**kwargs)
                     elif operation == 'history_decide':
                         result = history_review.decide(*args, fleet=self.fleet.snapshot(), **kwargs)
                     elif operation == 'reconcile_preview':

@@ -110,7 +110,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     if data.get('confirmed') is not True or set(data)-{'confirmed','operation_id','expected_revision'}:raise ValueError('Explicit send confirmation required')
                     if ('operation_id' in data)!=('expected_revision' in data):raise ValueError('Operation and revision required together')
                     return self.reply(200,{'status':sender.send_one(data.get('operation_id'),data.get('expected_revision'))})
-                commands={'/api/history_detail':'history_detail','/api/history_decide':'history_decide','/api/reconcile_preview':'reconcile_preview','/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
+                commands={'/api/export_preview':'export_preview','/api/export_save':'export_save','/api/history_detail':'history_detail','/api/history_decide':'history_decide','/api/reconcile_preview':'reconcile_preview','/api/connections_start':'connect_printers','/api/connections_stop':'disconnect_printers','/api/backup_package':'backup_package','/api/validate_backup':'validate_backup','/api/restore_backup':'restore_backup','/api/delivery_decide':'delivery_decide','/api/delivery_audit':'delivery_audit','/api/create':'create_spool','/api/detach':'detach_spool','/api/settings':'save_settings',
                           '/api/compare':'compare_name','/api/rename':'rename_from_remote','/api/catalog':'remote_catalog',
                           '/api/backup':'export_backup'}
                 if self.path=='/api/restore_backup' and sender is not None:
@@ -137,4 +137,6 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 result=owner.call(command,**data)
                 self.reply(200,result)
             except (ValueError,TypeError,KeyError,OSError,TimeoutError) as exc:self.reply(409,{'error':str(exc)})
-    return ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+    server.tracker_token=token
+    return server

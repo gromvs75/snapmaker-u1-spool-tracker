@@ -7,6 +7,8 @@ import hashlib
 import json
 import time
 import uuid
+import math
+import re
 from tracker_uid_accounting import AccountingConflict, mg
 from tracker_uid_spoolman import endpoint
 
@@ -36,6 +38,8 @@ class Library:
                 spool_id TEXT NOT NULL, url TEXT NOT NULL, remote_id INTEGER NOT NULL,
                 delta_mg INTEGER NOT NULL, state TEXT NOT NULL,
                 PRIMARY KEY(job_key,sequence,spool_id));
+            CREATE TABLE IF NOT EXISTS uid_export_plans (plan_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL, created_at REAL NOT NULL);
         ''')
 
     def settings(self):
@@ -90,6 +94,37 @@ class Library:
             if digest:accounted[digest]=max(accounted.get(digest,0),profile.get('started_at',0))
         return dict(printers=printers,selected_printer=settings.get('selected_printer'),
                     safety_margin_g=settings.get('safety_margin_g',5),accounted=accounted)
+
+    def export_preview(self, plan, *, fleet):
+        from tracker_uid_forecast import forecast_entry
+        if (not isinstance(plan,dict) or set(plan)!={'filename','file_sha256','weights','source','completed_at_ns'}
+                or not isinstance(plan['filename'],str) or not 0<len(plan['filename'])<=500
+                or not isinstance(plan['source'],str) or len(plan['source'])>4096
+                or not isinstance(plan['file_sha256'],str) or not re.fullmatch('[0-9a-f]{64}',plan['file_sha256'])
+                or type(plan['completed_at_ns']) is not int or plan['completed_at_ns']<=0
+                or not isinstance(plan['weights'],list) or len(plan['weights'])!=4
+                or any(type(v) not in (int,float) or not math.isfinite(v) or not 0<=v<=100000 for v in plan['weights'])):
+            raise ValueError('Неверный план экспорта.')
+        inventory=self.forecast_inventory(fleet=fleet)
+        pid=inventory['selected_printer']
+        if pid not in inventory['printers']:pid=next(iter(inventory['printers']),'')
+        heads=inventory['printers'].get(pid,{}).get('heads',[
+            dict(channel=str(i),spool=None,usable=False,reason='Принтер и катушка не выбраны') for i in range(4)])
+        forecast=forecast_entry(dict(plan,state='ready'),heads,inventory['safety_margin_g'])
+        context=dict(printer_id=pid,forecast=forecast,reserve=inventory['safety_margin_g'])
+        return dict(context,revision=revision([plan,context]))
+
+    def export_save(self, plan, expected_revision, confirmed, *, fleet):
+        if confirmed is not True:raise ValueError('Подтвердите экспорт.')
+        with self.accounting.transaction():
+            preview=self.export_preview(plan,fleet=fleet)
+            if preview['revision']!=expected_revision:
+                raise AccountingConflict('Назначение или остаток изменились. Повторите экспорт.')
+            payload=dict(plan,**preview,mapping_assumed=True)
+            key=revision(payload)
+            old=self.db.execute('SELECT 1 FROM uid_export_plans WHERE plan_id=?',(key,)).fetchone()
+            self.db.execute('INSERT OR IGNORE INTO uid_export_plans VALUES(?,?,?)',(key,json.dumps(payload),time.time()))
+        return dict(plan_id=key,status='duplicate' if old else 'saved')
 
     def cache_catalog(self, url, items=None):
         url=endpoint(url)
@@ -175,4 +210,5 @@ class Library:
             link=self.db.execute('SELECT url,remote_id FROM uid_remote_links WHERE spool_id=?',(row['spool_id'],)).fetchone()
             row['remote']=dict(link) if link else None;rows.append(row)
         return {'spools':rows,'settings':self.settings(),
+                'export_plans':[dict(plan_id=r['plan_id'],created_at=r['created_at'],**json.loads(r['payload'])) for r in self.db.execute('SELECT * FROM uid_export_plans ORDER BY created_at DESC LIMIT 20')],
                 'remote_outbox':[dict(r) for r in self.db.execute('SELECT * FROM uid_remote_outbox')]}

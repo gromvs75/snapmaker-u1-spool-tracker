@@ -114,3 +114,36 @@ def test_manual_receipt_restore_keeps_idempotency_and_holds_remote(bench):
     life.history('a',[history('completed')])
     assert review.detail(key)['accounted_mg']==750
     assert c.db.execute('SELECT state FROM uid_remote_outbox').fetchone()[0]=='uncertain'
+
+
+def test_closed_without_debit_can_be_manually_accounted_once(bench):
+    life,key,c,review=setup_review(bench)
+    review.decide(**args(review,key,'close',0))
+    assert review.detail(key)['can_review']
+    life.history('a',[history('completed')])
+    assert review.detail(key)['accounted_mg']==0
+    request=args(review,key,amount=650);request['request_id']='after-close-0001'
+    assert review.decide(**request)['additional_mg']==650
+    assert review.decide(**request)['status']=='duplicate'
+    assert not review.detail(key)['can_review']
+    assert review.detail(key)['review_block']=='already_accounted'
+    with pytest.raises(ValueError):review.decide(**dict(args(review,key),request_id='second-correction'))
+    life.history('a',[history('completed')])
+    assert review.detail(key)['accounted_mg']==650
+
+
+def test_cancelled_partial_can_add_remainder_but_final_receipt_cannot(bench):
+    life,key,c,review=setup_review(bench)
+    sid=review.detail(key)['candidates'][0]['spool_id']
+    with c.db:
+        c.db.execute('INSERT INTO uid_debits VALUES(?,?,?,?)',(key,3,sid,300))
+        c.db.execute("UPDATE uid_jobs SET last_sequence=3,state='cancelled',mapping_valid=1 WHERE job_key=?",(key,))
+        c.db.execute('UPDATE uid_spools SET remaining_mg=remaining_mg-300 WHERE spool_id=?',(sid,))
+    assert review.detail(key)['can_review']
+    assert review.detail(key)['candidates'][0]['suggested_additional_mg']==700
+    request=args(review,key,amount=350)
+    assert review.decide(**request)['additional_mg']==350
+    assert review.detail(key)['accounted_mg']==650
+    with c.db:c.db.execute("UPDATE uid_jobs SET state='cancelled' WHERE job_key=?",(key,))
+    assert not review.detail(key)['can_review']
+    with pytest.raises(ValueError):review.decide(**dict(args(review,key),request_id='cannot-repeat-receipt'))

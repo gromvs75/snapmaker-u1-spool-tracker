@@ -65,6 +65,15 @@ class HistoryReview:
             accounted_mg=sum(amounts.values()),debits=debits,replacements=events,reasons=reasons,remote_operations=remote,
             decisions=decisions,receipt=json.loads(receipt[0]) if receipt else None,
             uncertain=any(r['state'] in ('sending','uncertain') for r in remote))
+        # Closing without a debit fences automatic replay, but does not prevent
+        # a later explicit correction. A final accounting receipt is immutable.
+        value['can_review'] = bool(not value['receipt'] and (
+            job['state'] in ('resolved','cancelled') or
+            job['state']=='active' and not job['mapping_valid'] or
+            job['state']=='review' and job['source']=='legacy_import'))
+        value['review_block'] = ('already_accounted' if value['receipt'] or job['state']=='completed'
+                                else 'observing' if job['state']=='active' and job['mapping_valid']
+                                else '' if value['can_review'] else 'unavailable')
         value['revision'] = hashlib.sha256(encoded(value).encode()).hexdigest()
         return value
 
@@ -81,11 +90,11 @@ class HistoryReview:
                 return dict(json.loads(old['result']),status='duplicate')
             detail = self.detail(job_key)
             if detail['revision']!=expected_revision: raise ValueError('Данные изменились. Откройте задание заново.')
-            if not (detail['job']['state']=='active' or (detail['job']['state']=='review' and detail['job']['source']=='legacy_import')):
+            if not detail['can_review']:
                 raise ValueError('Задание уже закрыто или учтено.')
             if action!='defer':
                 if confirmed is not True: raise ValueError('Подтвердите завершение задания и выбранное действие.')
-                if detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')
+                if detail['job']['state']=='active' and detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')
                 # Live collector evidence wins over a stale UI confirmation.
                 snapshot=fleet.get(detail['job']['printer_id'],{})
                 if snapshot.get('state')=='ready':

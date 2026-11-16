@@ -23,9 +23,15 @@ def configure_navigation(cocoa):
                 if webview.window():webview.window().displayIfNeeded()
             AppHelper.callAfter(layout)
             def inspected(value, error):
-                logger.info('Native DOM probe result=%s error=%s frame=%s attached=%s',value,error,webview.frame(),bool(webview.window()))
+                window = webview.window()
+                logger.info('Native DOM probe result=%s error=%s frame=%s attached=%s window_id=%s visible=%s minimized=%s occlusion=%s',
+                            value, error, webview.frame(), bool(window),
+                            window.windowNumber() if window else None,
+                            bool(window.isVisible()) if window else None,
+                            bool(window.isMiniaturized()) if window else None,
+                            int(window.occlusionState()) if window else None)
             webview.evaluateJavaScript_completionHandler_(
-                'JSON.stringify({ready:document.readyState,body:document.body?.innerText.length,nav:!!document.getElementById("nav-overview"),width:innerWidth,height:innerHeight})', inspected)
+                'JSON.stringify({ready:document.readyState,body:document.body?.innerText.length,nav:!!document.getElementById("nav-overview"),width:innerWidth,height:innerHeight,visibility:document.visibilityState,background:document.body?getComputedStyle(document.body).backgroundColor:null})', inspected)
 
         def webView_didFailProvisionalNavigation_withError_(self, webview, navigation, error):
             logger.error('Native navigation failed domain=%s code=%s description=%s',

@@ -1,6 +1,7 @@
 """Native shell for the isolated UID application; never exposes native objects to JS."""
 import sys
 import threading
+import time
 
 
 class UidWindow:
@@ -14,6 +15,7 @@ class UidWindow:
         self._storage_path = str(storage_path)
         self._tray_title = tray_title
         self._forecast = forecast
+        self._started_at_ns = time.time_ns()
         self._tray_stop = threading.Event()
         self._menu_presented = False
         self._ready = False
@@ -86,9 +88,10 @@ class UidWindow:
             if self._quitting or self._menu_presented:return
             tray.menu=build_menu(model,self.show,self.show_forecast,self.quit)
             tray.icon=create_tray_icon(model['status'])
-            if popup and sys.platform=='darwin':
+            if popup and sys.platform=='darwin' and self._can_popup_forecast():
                 self._menu_presented=True
                 try:
+                    logging.getLogger('tracker20').info('Opening tray for newly completed slice')
                     tray.visible=True
                     tray._status_item.button().performClick_(None)
                 except Exception:logging.getLogger('tracker20').exception('Slice menu could not open')
@@ -97,7 +100,12 @@ class UidWindow:
             try:
                 model=tray_model(self._forecast.snapshot())
                 if model!=last:
-                    popup=not first and model['event'] is not None and model['event']!=last_event
+                    # Rediscovery goes pending -> ready after startup as well.
+                    # It is not a new slicing event and must not open a modal
+                    # NSMenu during the window's first presentation.
+                    popup=(not first and model['event'] is not None
+                           and model['event']!=last_event
+                           and model['event'][1] > self._started_at_ns)
                     if sys.platform=='darwin':
                         from PyObjCTools import AppHelper
                         AppHelper.callAfter(refresh,model,popup)
@@ -106,6 +114,19 @@ class UidWindow:
                     first=False;last=model
             except Exception:logging.getLogger('tracker20').exception('Tray forecast refresh failed')
             self._tray_stop.wait(1)
+
+    def _can_popup_forecast(self):
+        """Called on Cocoa's main thread immediately before opening NSMenu.
+
+        The visible dashboard already displays the forecast. Modal menu tracking
+        can interrupt its initial window animation/paint, so only auto-open the
+        menu when the dashboard is hidden or minimized. Manual tray clicks are
+        unaffected. Check here, not in the worker: visibility can change while
+        the refresh is queued.
+        """
+        native = getattr(self._window, 'native', None)
+        return bool(self._ready and not self._quitting and native is not None
+                    and (not native.isVisible() or native.isMiniaturized()))
 
     def _route_macos_quit(self):
         if hasattr(self, '_quit_target'):

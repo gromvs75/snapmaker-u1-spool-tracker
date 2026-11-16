@@ -50,6 +50,9 @@ def main():
     info = build_info()
     logger.info('START version=%s commit=%s data=%s connections=stopped', info['version'], info['commit'], directory)
     sender = Sender(session, lambda: [session.call('settings')['values'].get('spoolman_url','')])
+    from tracker_uid_forecast import SliceForecast
+    import tempfile
+    forecast = SliceForecast(session, directory/'slices' if os.environ.get('TRACKER20_DATA_DIR') else Path(tempfile.gettempdir())/'snapmaker_orca_model')
     server = thread = shell = None
     previous_signals = {}
     try:
@@ -58,7 +61,8 @@ def main():
             if not session.connected:
                 raise ValueError('Подключения остановлены.')
             return ReadOnlyMoonraker(printer['url']).status()['print_stats']['state']
-        server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info)
+        forecast.start()
+        server = serve(session,session.fleet,status_reader=status_reader,sender=sender,app_info=info,forecast=forecast)
         thread = threading.Thread(target=server.serve_forever,name='tracker20-http'); thread.start()
         url = f'http://127.0.0.1:{server.server_port}'
         logger.info('GUI %s', url)
@@ -79,6 +83,7 @@ def main():
             if thread: thread.join()
             server.server_close()
         sender.stop()
+        forecast.stop()
         session.close()
         logger.info('STOP clean shutdown')
         handler.close(); logger.removeHandler(handler)

@@ -1,17 +1,17 @@
 """Current EXE + two real process printers: UID swap, sleep, GUI review, restore."""
-import argparse,json,re,subprocess,tempfile,time,urllib.request
+import argparse,json,os,re,subprocess,tempfile,time,urllib.request
 from pathlib import Path
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--manifest',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--browser',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--manifest',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--browser',action='store_true');p.add_argument('--user',action='store_true',help='Ordinary user executable: no arguments, temporary data via environment');a=p.parse_args()
     cfg=json.loads(a.manifest.read_text(encoding='utf-8'))
     assert cfg['kind']=='tracker-process-bench' and cfg['printers']=={'a':18781,'b':18782}
-    a.output.mkdir(parents=True,exist_ok=True);root=Path(tempfile.mkdtemp(prefix='uid-recovery-exe-'));checks=[];app=None;token=None
+    a.output.mkdir(parents=True,exist_ok=True);root=Path(tempfile.mkdtemp(prefix='uid-recovery-exe-'));checks=[];app=None;token=None;api_port=18783
     def http(port,path,data=None,headers=None):
         r=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json',**(headers or {})})
         with urllib.request.urlopen(r,timeout=30) as response:return json.load(response)
-    def api(route,data=None):return http(18783,'/api/'+route,data,{'X-Tracker-Token':token})
+    def api(route,data=None):return http(api_port,'/api/'+route,data,{'X-Tracker-Token':token})
     def wait(fn,timeout=90):
         end=time.monotonic()+timeout;last=None
         while time.monotonic()<end:
@@ -23,11 +23,14 @@ def main():
         raise AssertionError('Timed out: '+str(last))
     def check(name,ok):assert ok,name;checks.append(name);print('PASS '+name,flush=True)
     def launch():
-        nonlocal token
-        proc=subprocess.Popen([str(a.exe.resolve()),'--data',str(root),'--port','18783','--allow-url','http://127.0.0.1:18781','--allow-url','http://127.0.0.1:18782'],cwd=root)
+        nonlocal token,api_port
+        proc=subprocess.Popen([str(a.exe.resolve())] if a.user else [str(a.exe.resolve()),'--data',str(root),'--port','18783','--allow-url','http://127.0.0.1:18781','--allow-url','http://127.0.0.1:18782'],cwd=root,env=dict(os.environ,TRACKER20_DATA_DIR=str(root)) if a.user else None)
         def ready():
-            nonlocal token
-            with urllib.request.urlopen('http://127.0.0.1:18783',timeout=2) as r:html=r.read().decode()
+            nonlocal token,api_port
+            if a.user:
+                log=(root/'logs/tracker.log').read_text()
+                api_port=int(re.findall(r'GUI http://127.0.0.1:(\d+)',log)[-1])
+            with urllib.request.urlopen(f'http://127.0.0.1:{api_port}',timeout=2) as r:html=r.read().decode()
             token=json.loads(re.search(r'const TOKEN=("[^"]+");',html)[1]);return True
         try:wait(ready)
         except BaseException:proc.terminate();proc.wait(15);raise
@@ -43,7 +46,12 @@ def main():
         preview=wait(lambda:api('tag_preview',dict(printer_id=pid,channel=str(ch),uid=uid)))
         return api('tag_register',dict(printer_id=pid,channel=str(ch),uid=uid,expected_observation=preview['observation_revision'],request_id='register-'+uid,confirmed=True,name='Bench '+uid,remaining_g=grams,material='PLA'))
     try:
-        app=launch();s=api('state');api('settings',dict(values={'printers':[dict(id=pid,name='Process '+pid,url=f'http://127.0.0.1:{port}') for pid,port in cfg['printers'].items()]},expected_revision=s['settings']['revision']))
+        app=launch();s=api('state')
+        if a.user:
+            assert not s['connections']['connected']
+            second=subprocess.run([str(a.exe.resolve())],env=dict(os.environ,TRACKER20_DATA_DIR=str(root)),timeout=20)
+            check('ordinary user launch rejects second SQLite writer',second.returncode==2)
+        api('settings',dict(values={'printers':[dict(id=pid,name='Process '+pid,url=f'http://127.0.0.1:{port}') for pid,port in cfg['printers'].items()]},expected_revision=s['settings']['revision']))
         api('connections_start',{'confirmed':True});wait(connected)
         for pid,old,new in [('a','04112233','04CCCCDD'),('b','04112244','04EEEEFF')]:
             event(pid,'auto_mode',enabled=0)
@@ -74,7 +82,7 @@ def main():
             with sync_playwright() as pw:
                 browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1200,'height':900});errors=[]
                 page.on('pageerror',lambda e:errors.append(str(e)))
-                page.goto('http://127.0.0.1:18783');page.locator('#navHistory').click();page.get_by_role('button',name='Сверить расход',exact=True).click()
+                page.goto(f'http://127.0.0.1:{api_port}');page.locator('#navHistory').click();page.get_by_role('button',name='Сверить расход',exact=True).click()
                 page.locator('#recoveryApply').wait_for();assert page.locator('#recoveryApply').is_disabled()
                 for uid,value in [('04112244','0.500'),('04EEEEFF','2.483')]:page.locator('.recovery-spool').filter(has_text='UID '+uid).locator('input').fill(value)
                 page.locator('#recoveryNote').fill(request['note']);assert page.locator('#recoveryApply').is_disabled()
@@ -106,7 +114,7 @@ def main():
         check('restored receipt and repeated process history do not debit again',len(api('state')['debits'])==4 and balances()['04EEEEFF']==97517)
         api('connections_stop',{'confirmed':True});app.terminate();app.wait(15);app=launch();api('connections_start',{'confirmed':True});wait(connected);time.sleep(5)
         check('second EXE restart keeps ledger and manual decision',len(api('state')['debits'])==4 and api('reconcile_apply',request)['status']=='duplicate')
-        (a.output/'recovery-exe-result.json').write_text(json.dumps(dict(success=True,checks=checks,state=api('state'),browser_checked=a.browser),indent=2),encoding='utf-8')
+        (a.output/'recovery-exe-result.json').write_text(json.dumps(dict(success=True,checks=checks,state=api('state'),browser_checked=a.browser,user_candidate=a.user,data=str(root)),indent=2),encoding='utf-8')
     finally:
         if app and app.poll() is None:app.terminate();app.wait(15)
 if __name__=='__main__':main()

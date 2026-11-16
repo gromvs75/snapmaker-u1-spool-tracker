@@ -11,7 +11,7 @@ metadata=Path(workpath)/'tracker_build.json'
 metadata.parent.mkdir(parents=True,exist_ok=True)
 metadata.write_text(json.dumps(dict(commit=commit,dirty=dirty,built_at=datetime.datetime.now(datetime.timezone.utc).isoformat())))
 analysis=Analysis([str(ROOT/'src/tracker_app.py')],pathex=[str(ROOT/'src')],
-    datas=[(str(ROOT/'src/tracker_uid_gui.html'),'.'),(str(metadata),'.')],
+    datas=[(str(ROOT/'src'/name),'.') for name in ('tracker_uid_gui.html','tracker_user_ui.css','tracker_user_ui.js')]+[(str(metadata),'.')],
     hiddenimports=['websocket','pystray._darwin'] if sys.platform=='darwin' else ['websocket','pystray._win32','webview.platforms.winforms','webview.platforms.edgechromium'],
     excludes=['pytest','tkinter','PyQt5','PyQt6','PySide2','PySide6'],noarchive=False)
 pyz=PYZ(analysis.pure)

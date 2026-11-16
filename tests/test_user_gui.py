@@ -38,6 +38,7 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             assert page.locator('#lang-picker option').count()==5
             page.locator('#nav-overview').click()
             page.get_by_text('Прогноз после нарезки',exact=True).wait_for()
+            assert 'Уже учтено: 0' in page.locator('#review-content').inner_text()
             page.screenshot(path=str(screenshots/'overview.png'),full_page=True)
             page.locator('#nav-spools').click()
             assert page.locator('.inventory-tabs button').all_text_contents()==['Библиотека','Головки T0–T3']
@@ -53,6 +54,13 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             page.locator('.uid-extra-amount').fill('0.750');page.locator('#uid-review-note').fill('Проверена фактически завершённая печать');page.locator('#uid-review-ack').check()
             page.locator('#uid-review-apply').click();page.locator('#uid-history-dialog').wait_for(state='hidden')
             assert sum(d['delta_mg'] for d in session.call('inspect')['debits'])==750
+            page.locator('#nav-overview').click()
+            assert 'Подтверждено вручную' in page.locator('#latest-accounting').inner_text()
+            assert '0,8' in page.locator('#latest-accounting').inner_text()
+            page.locator('#latest-accounting').get_by_role('button',name='Раскрыть задание').click()
+            page.locator('#uid-history-dialog[open]').wait_for()
+            assert '0,8' in page.locator('.uid-saved-plan').inner_text()
+            page.get_by_role('button',name='Закрыть',exact=True).click()
             assert not errors,errors
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
             page.set_viewport_size({'width':700,'height':900})

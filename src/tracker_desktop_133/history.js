@@ -59,8 +59,34 @@
   });apply.id='uid-review-apply';dialog.append(apply,node('p',text('Для связанной катушки Spoolman расход попадёт в очередь. Неопределённая отправка автоматически не повторяется.','For a linked Spoolman spool, usage enters the queue. Uncertain delivery is never retried automatically.','Bei verknüpften Spoolman-Spulen kommt der Verbrauch in die Warteschlange. Unklare Übertragungen werden nicht automatisch wiederholt.','Для пов’язаної котушки Spoolman витрати потраплять до черги. Невизначена відправка автоматично не повторюється.','Para bobinas de Spoolman, el consumo entra en la cola. Los envíos inciertos nunca se repiten automáticamente.')));
  }
  let initial=true;
+ renderReviews=function(data){
+  const content=el('review-content');content.replaceChildren();
+  const pending=Object.values(data.runs||{}).filter(r=>!r.closed_without_deduction&&(r.status==='review'||r.status==='cancelled')).sort((a,b)=>b.start_time-a.start_time);
+  content.hidden=!pending.length;
+  if(!pending.length)return;
+  content.append(node('h2',text('Задания для проверки','Jobs to review','Aufträge zur Prüfung','Завдання для перевірки','Trabajos para revisar')));
+  content.append(node('p',text('Откройте сохранённый план и уже учтённый расход. Дополнительное списание требует подтверждения.','Review the saved plan and usage already accounted. Additional deductions require confirmation.','Gespeicherten Plan und erfassten Verbrauch prüfen. Weitere Abbuchungen müssen bestätigt werden.','Перегляньте збережений план і вже враховані витрати. Додаткове списання потребує підтвердження.','Revise el plan guardado y el consumo ya contabilizado. Los descuentos adicionales requieren confirmación.'),'subtitle'));
+  for(const run of pending.slice(0,3)){
+   const row=node('p',run.filename+' · '+new Date(run.start_time*1000).toLocaleString(currentLang),'unaccounted-print');
+   row.append(node('span',' · '+text('Уже учтено: ','Already accounted: ','Bereits erfasst: ','Вже враховано: ','Ya contabilizado: ')+displayGrams(run.accounted_g)+' '+gramUnit()),historyButton(labels.expand(),()=>open(run.job_key,data)));
+   content.append(row);
+  }
+ };
  renderHistory=function(data,force=false){
   base(data,force);
+  // The legacy panel only selected automatic motion/G-code records. The UID
+  // ledger also contains manual, calculated and partial accounting.
+  const latestBox=el('latest-accounting');latestBox.replaceChildren();
+  el('latest-heading').textContent=text('Последняя учтённая печать','Latest accounted print','Zuletzt erfasster Druck','Останній врахований друк','Última impresión contabilizada');
+  const latest=Object.values(data.runs||{}).sort((a,b)=>b.start_time-a.start_time).find(r=>r.accounted_g>0);
+  if(latest){
+   latestBox.append(node('strong',latest.filename));
+   for(const [id,grams] of Object.entries(latest.accounted_by_spool||{}))latestBox.append(node('p',(data.spools[id]?.name||id)+': '+displayGrams(grams)+' '+gramUnit(),'latest-amount'));
+   const label=latest.accounting_method==='manual_review'?text('Подтверждено вручную','Confirmed manually','Manuell bestätigt','Підтверджено вручну','Confirmado manualmente'):latest.accounting_method==='motion_estimate'?text('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'):text('Расчёт по сохранённому плану и истории','Estimate from saved plan and history','Berechnung aus gespeichertem Plan und Verlauf','Розрахунок за збереженим планом та історією','Cálculo del plan guardado y el historial');
+   latestBox.append(node('p',label,'subtitle'));
+   if(latest.status!=='committed')latestBox.append(node('p',text('Частичный учёт — требуется проверка','Partial accounting — review required','Teilweise erfasst — Prüfung erforderlich','Частковий облік — потрібна перевірка','Contabilización parcial — requiere revisión'),'subtitle'));
+   latestBox.append(historyButton(labels.expand(),()=>open(latest.job_key,data)));
+  }else latestBox.append(node('p',text('Учтённых печатей пока нет.','No accounted prints yet.','Noch keine erfassten Drucke.','Врахованих друків поки немає.','Todavía no hay impresiones contabilizadas.'),'subtitle'));
   const runs=Object.values(data.runs||{}).sort((a,b)=>b.start_time-a.start_time).slice(0,20);
   const rows=[...document.querySelectorAll('#history-content .history-row')];
   rows.forEach((row,i)=>{if(row.querySelector('.uid-expand')||!runs[i])return;const b=historyButton(labels.expand(),()=>open(runs[i].job_key,data));b.className='uid-expand';row.append(b)});

@@ -37,8 +37,8 @@ def test_user_shell_offline_plan_manual_confirmation_and_screens(bench,tmp_path)
             page.get_by_role('button',name='Закрыть',exact=True).click()
             assert page.locator('#lang-picker option').count()==5
             page.locator('#nav-overview').click()
-            page.get_by_text('Прогноз после нарезки',exact=True).wait_for()
-            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('?')")
+            page.get_by_text('Прогноз нарезки',exact=True).wait_for()
+            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('Назначение или остаток не подтверждены')")
             assert page.locator('#forecast-status').evaluate('(e)=>getComputedStyle(e).color')=='rgb(148, 163, 184)'
             assert 'Уже учтено: 0' in page.locator('#review-content').inner_text()
             page.screenshot(path=str(screenshots/'overview.png'),full_page=True)

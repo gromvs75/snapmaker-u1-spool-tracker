@@ -45,7 +45,7 @@ def test_full_frontend_languages_offline_plan_manual_account_and_restart(bench,t
             assert 'Печать завершилась успешно?' in page.locator('#uid-history-dialog').inner_text()
             assert '1 г' in page.locator('.uid-saved-plan').inner_text()
             page.get_by_role('button',name='Закрыть',exact=True).click()
-            for language,overview,forecast_title in [('en','Overview','Slice forecast'),('de','Übersicht','Prognose nach dem Slicen'),('uk','Огляд','Slice forecast'),('es','Resumen','Slice forecast'),('ru','Обзор','Прогноз после нарезки')]:
+            for language,overview,forecast_title in [('en','Overview','Slice forecast'),('de','Übersicht','Slicing-Prognose'),('uk','Огляд','Прогноз нарізки'),('es','Resumen','Previsión del laminado'),('ru','Обзор','Прогноз нарезки')]:
                 page.locator('#lang-picker').select_option(language)
                 page.wait_for_function('(value)=>currentLang===value',arg=language)
                 assert page.locator('#nav-overview').inner_text()==overview
@@ -142,7 +142,7 @@ def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_
             assert 'Printer a · T0' in page.locator('.uid-inventory-assignments').inner_text()
             page.locator('#nav-overview').click()
             assert '125' in page.locator('.head-remaining').first.inner_text()
-            page.wait_for_function("document.getElementById('forecast-heading').textContent==='Прогноз после нарезки'")
+            page.wait_for_function("document.getElementById('forecast-heading').textContent==='Прогноз нарезки'")
             page.screenshot(path='output/full-133-integration-ui/inventory-connected.png',full_page=True)
             page.reload();page.locator('#nav-spools').click()
             page.wait_for_function("document.querySelector('#spools-table input').value==='124.987'")
@@ -190,7 +190,8 @@ def test_two_printer_context_and_preupload_forecast_preserve_viewed_plate(bench,
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.locator('#uid-history-dialog[open]').wait_for();page.get_by_role('button',name='Закрыть',exact=True).click()
             page.locator('#forecast-plate').select_option(first_source)
-            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('Материала хватает')")
+            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('По расчёту материала хватит')")
+            page.locator('#desktop-forecast-details summary').click()
             assert 'Test project · .42.0.gcode' in page.locator('#desktop-forecast-source').inner_text()
             page.locator('#nav-spools').click()
             owner.call('save_settings',values={'safety_margin_g':7},expected_revision=owner.call('settings')['revision'])
@@ -207,7 +208,7 @@ def test_two_printer_context_and_preupload_forecast_preserve_viewed_plate(bench,
             assert 'Printer B job' in page.locator('#view-history').inner_text()
             assert 'job.gcode' not in page.locator('#view-history').inner_text()
             page.locator('#nav-overview').click();page.locator('#forecast-plate').select_option(second_source)
-            assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+            assert 'По расчёту материала хватит' in page.locator('#forecast-status').inner_text()
             assert '299' in page.locator('.head-remaining').nth(1).inner_text()
             # A late old reply/failure cannot overwrite a newer rendered result.
             for failure in (False,True):
@@ -226,15 +227,15 @@ def test_two_printer_context_and_preupload_forecast_preserve_viewed_plate(bench,
                     try{const old=refreshSliceForecast(false);await refreshSliceForecast(false);release();await old}
                     finally{window.fetch=original}
                 }''',failure)
-                assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+                assert 'По расчёту материала хватит' in page.locator('#forecast-status').inner_text()
             page.screenshot(path='output/full-133-integration-ui/two-printers-forecast.png',full_page=True)
             # Simulate a failed observer request: no stale green assurance remains.
             page.route('**/api/desktop/forecast',lambda route:route.abort())
             page.evaluate('refreshSliceForecast(false)')
-            assert 'Материала хватает' not in page.locator('#forecast-status').inner_text()
+            assert 'По расчёту материала хватит' not in page.locator('#forecast-status').inner_text()
             assert page.locator('#desktop-forecast-source').inner_text()==''
             page.unroute('**/api/desktop/forecast');page.evaluate('refreshSliceForecast(false)')
-            assert 'Материала хватает' in page.locator('#forecast-status').inner_text()
+            assert 'По расчёту материала хватит' in page.locator('#forecast-status').inner_text()
             # A .tmp result invalidates the last completed version before upload.
             Path(str(second)+'.tmp').write_bytes(payload('0, 500, 0, 0'));forecast.poll()
             page.evaluate('refreshSliceForecast(false)')

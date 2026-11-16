@@ -18,6 +18,27 @@ class Client:
         return dict(logical_weights=[1]*4,parameters=[dict(diameter_mm=1.75,density_g_cm3=1.24)]*4,filament_type='PLA;PLA;PLA;PLA',file_sha256='test')
 
 
+def test_history_before_start_status_after_start_is_rechecked():
+    from types import SimpleNamespace
+    client=Client();calls=[]
+    def history():
+        calls.append(True)
+        return [] if len(calls)==1 else [dict(client.job)]
+    client.history=history
+    store=SimpleNamespace();reader=ProfileHistory(client,store)
+    assert reader()==[client.job]
+    assert store._motion_slicer_profile['started_at']==100
+    assert len(calls)==3 # retry plus existing post-G-code verification
+
+
+def test_missing_history_after_recheck_still_blocks():
+    from types import SimpleNamespace
+    client=Client();client.history=lambda:[]
+    store=SimpleNamespace();reader=ProfileHistory(client,store)
+    with pytest.raises(ValueError,match='Unique active'):reader()
+    assert store._motion_slicer_profile is None
+
+
 def test_verified_profile_is_bound_to_history_identity_and_reused():
     from types import SimpleNamespace
     store=SimpleNamespace();c=Client();reader=ProfileHistory(c,store)

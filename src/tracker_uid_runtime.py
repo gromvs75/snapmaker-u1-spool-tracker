@@ -213,6 +213,10 @@ class PrinterWorkers:
 
     def _gap(self, error):
         self.errors.put(str(error))
+        if str(error)!=getattr(self,'_last_logged_gap',None):
+            import logging
+            logging.getLogger('tracker20').warning('Observation gap printer=%s reason=%s',self.printer_id,str(error))
+            self._last_logged_gap=str(error)
         self.proxy.disconnected(self.printer_id, str(error))
 
     def _motion(self):

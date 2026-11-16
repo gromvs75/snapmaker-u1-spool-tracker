@@ -109,6 +109,17 @@ class ProfileHistory:
             jobs=self.client.history()
             status=self.client.status();stats=status['print_stats']
             active=[j for j in jobs if j.get('status')=='in_progress' and j.get('filename')==stats.get('filename')]
+            if stats.get('state') in ('printing','paused') and not active:
+                # History and status are separate HTTP snapshots. A print can
+                # start between them. Re-read once and still demand a unique,
+                # unchanged identity; this does not forgive a transport gap.
+                jobs=self.client.history()
+                after=self.client.status()
+                if (after['print_stats'].get('state')!=stats.get('state')
+                        or after['print_stats'].get('filename')!=stats.get('filename')
+                        or after.get('print_task_config')!=status.get('print_task_config')):
+                    raise ValueError('Print changed during history/status boundary verification')
+                active=[j for j in jobs if j.get('status')=='in_progress' and j.get('filename')==stats.get('filename')]
             if stats.get('state') in ('printing','paused'):
                 if len(active)!=1:raise ValueError('Unique active history identity unavailable')
                 job=active[0];key=self.identity(job);mapping,replenished=self.mapping(status)

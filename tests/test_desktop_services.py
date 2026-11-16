@@ -152,7 +152,7 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             # Compare canonical names through the original 1.3.3 comparison dialog.
             value['name']='Updated PLA'
             page.locator('#sm-refresh-selected').click();page.wait_for_function("Object.values(desktopSpoolmanData.state.catalog)[0]?.name==='Updated PLA'")
-            page.locator('#sm-inspector .sc-open').click();page.locator('[data-sc-filter=different]').click()
+            page.locator('#spoolman-panel .sc-open').click();page.locator('[data-sc-filter=different]').click()
             page.locator('#sc-sync').click();page.wait_for_function("document.getElementById('sc-message').textContent.includes('Название обновлено')");page.locator('#sc-close').click()
             store,*_=setup_plan(tmp_path/'motion');e=evidence(store);e['start']=app.call('inventory_snapshot',p2);e['capture_id']='desktop-services';e['terminal_state']='completed';e['profile']['started_at']=1010.
             app.call('start',p2,filename='job.gcode',observed_at=1010.,capture_id=e['capture_id'],epoch=e['epoch'],start=e['start'],channels=['0']);app.call('terminal',p2,e)

@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 
-VERSION = '2.0.0rc8'
+VERSION = '2.0.0rc9'
 
 
 def data_directory():

@@ -7,7 +7,7 @@ import time
 from tracker_uid_catalog import UidCatalog
 
 
-def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
+def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None):
     token=secrets.token_urlsafe(32)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
@@ -26,7 +26,8 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                 self.send_response(204);self.end_headers();return
             if self.path=='/':
                 html=Path(__file__).with_name('tracker_uid_gui.html').read_text(encoding='utf-8')
-                return self.reply(200,html.replace('<script>','<script>const TOKEN='+json.dumps(token)+';'),'text/html')
+                info=app_info or {'mode':'laboratory','version':'2.0 development','isolation':'Адреса ограничены списком разрешений; это не системная песочница.'}
+                return self.reply(200,html.replace('<script>','<script>const APP_INFO='+json.dumps(info,ensure_ascii=False)+';const TOKEN='+json.dumps(token)+';'),'text/html')
             if self.path!='/api/state':return self.reply(404,{'error':'Not found'})
             if not self.authorized():return self.reply(403,{'error':'Forbidden'})
             locations=owner.call('refresh');state=owner.call('inspect')
@@ -102,6 +103,10 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None):
                     from tracker_uid_spoolman import Client
                     settings=owner.call('settings')
                     url=settings['values'].get('spoolman_url','')
+                    # Apply the same policy to catalogue reads as to delivery.
+                    # Check BEFORE constructing a client or updating cached data.
+                    if sender is None or not sender.permits(url):
+                        raise ValueError('Сервер Spoolman не разрешён для этого сеанса.')
                     try: items=Client(url).catalog()
                     except Exception:
                         if url:owner.call('cache_catalog',url,None)

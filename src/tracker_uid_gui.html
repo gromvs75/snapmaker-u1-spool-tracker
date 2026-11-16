@@ -57,6 +57,7 @@
 <div class="actions"><button type="submit" class="primary" id="resolveSubmit" disabled>Снять блокировку</button><button type="button" id="resolveCancel">Отмена</button></div>
 </form></dialog>
 <script>
+document.querySelector('header h1').textContent='Snapmaker · Tracker '+APP_INFO.version;document.querySelector('header .badge').textContent=APP_INFO.mode==='user'?'Кандидат · подключения вручную':'Лаборатория · адреса ограничены';document.querySelector('header .badge').title=APP_INFO.isolation;document.title='Tracker '+APP_INFO.version;
 let state,renderedState,selection,dragged=null,busy=false;const $=id=>document.getElementById(id);const names={a:'U1_1',b:'U1_2'};const place=a=>a?`${names[a.printer_id]||a.printer_id} · T${a.channel}`:'Не назначена';const grams=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(n/1000)+' г';
 async function api(path,body){const r=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','X-Tracker-Token':TOKEN},body:body?JSON.stringify(body):undefined});const data=await r.json();if(!r.ok)throw Error(data.error||'Не удалось сохранить. Обновите экран.');return data}
 function assignmentFor(spool){return state.manual_assignments.find(a=>a.spool_id===spool.spool_id)||(spool.uid?state.occupied.find(a=>a.spool?.spool_id===spool.spool_id):null)}

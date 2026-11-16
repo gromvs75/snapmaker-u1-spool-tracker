@@ -10,11 +10,19 @@ from tracker_uid_spoolman import Client, catalog_item, endpoint
 class Sender:
     def __init__(self, owner, allowed_urls, *, client_factory=Client, interval=3):
         self.owner=owner
-        self.allowed_urls=frozenset(endpoint(url) for url in allowed_urls)
-        if not self.allowed_urls or interval<=0:raise ValueError('Explicit server allowlist and positive interval required')
+        self._allowed_urls=allowed_urls if callable(allowed_urls) else tuple(allowed_urls)
+        if (not callable(allowed_urls) and not self.allowed_urls) or interval<=0:raise ValueError('Explicit server allowlist and positive interval required')
         self.client_factory=client_factory;self.interval=interval
         self._stop=threading.Event();self._mutex=threading.Lock();self._thread=None
         self.last_error=None
+
+    @property
+    def allowed_urls(self):
+        values=self._allowed_urls() if callable(self._allowed_urls) else self._allowed_urls
+        return frozenset(endpoint(url) for url in values if url)
+
+    def permits(self, url):
+        return endpoint(url) in self.allowed_urls
 
     def send_one(self, operation_id=None, expected_revision=None):
         with self._mutex:

@@ -4,7 +4,7 @@ import threading
 
 
 class UidWindow:
-    def __init__(self, url, storage_path, *, webview_module=None):
+    def __init__(self, url, storage_path, *, webview_module=None, title='Snapmaker U1 Spool Tracker 2.0 · стенд', tray_title='Tracker 2.0 · стенд'):
         if webview_module is None:
             import webview as webview_module
         self._webview = webview_module
@@ -12,6 +12,7 @@ class UidWindow:
         if hasattr(webview_module, 'settings'):
             webview_module.settings['ALLOW_DOWNLOADS'] = True
         self._storage_path = str(storage_path)
+        self._tray_title = tray_title
         self._ready = False
         self._quitting = False
         self._pending_show = False
@@ -26,7 +27,7 @@ class UidWindow:
                 height = min(height, work.bottom-work.top-32)
                 position = dict(x=work.left+16, y=work.top+16)
         self._window = webview_module.create_window(
-            'Snapmaker U1 Spool Tracker 2.0 · стенд', url,
+            title, url,
             width=width, height=height, min_size=(min(700,width), min(560,height)), **position)
         self._window.events.shown += self._shown
         self._window.events.closing += self._closing
@@ -95,7 +96,7 @@ class UidWindow:
         draw = ImageDraw.Draw(icon)
         draw.ellipse((8, 8, 56, 56), outline='white', width=5)
         draw.ellipse((25, 25, 39, 39), fill='white')
-        tray = pystray.Icon('tracker-uid-bench', icon, 'Tracker 2.0 · стенд',
+        tray = pystray.Icon('tracker-uid', icon, self._tray_title,
             menu=pystray.Menu(pystray.MenuItem('Открыть Tracker', self.show, default=True),
                               pystray.MenuItem('Выход', self.quit)))
         tray.run_detached()

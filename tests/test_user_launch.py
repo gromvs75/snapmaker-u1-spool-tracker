@@ -5,7 +5,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 import pytest
-from tracker_app import data_directory, build_info
+from tracker_app import data_directory, build_info, main
 from tracker_uid_gui import serve
 from tracker_uid_session import Session
 from tracker_uid_sender import Sender
@@ -17,6 +17,8 @@ def test_user_data_separate_and_override(tmp_path, monkeypatch):
     monkeypatch.setenv('TRACKER20_DATA_DIR', str(tmp_path))
     assert data_directory() == tmp_path
     assert build_info()['version'] == '2.0.0rc1'
+    assert main(['--data','ignored-lab-directory']) == 2
+    assert not (tmp_path/'tracker.sqlite').exists()
 
 
 @pytest.mark.parametrize('allowed', [None, ['http://127.0.0.1:19871']])

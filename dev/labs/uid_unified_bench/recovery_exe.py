@@ -77,16 +77,31 @@ def main():
         review=api('reconcile_preview',dict(job_key=job['job_key']))
         allocation={s['spool_id']:500 if s['uid']=='04112244' else 2483 for s in review['candidates']}
         request=dict(job_key=job['job_key'],expected_revision=review['revision'],allocations_mg=allocation,note='Verified process bench replacement while asleep',request_id='exe-review-decision',confirmed=True)
+        decision_route='reconcile_apply'
+        if a.user:
+            api('connections_stop',{'confirmed':True})
+            detail=api('history_detail',dict(job_key=job['job_key']))
+            request.update(expected_revision=detail['revision'],action='account',completed=True)
+            decision_route='history_decide'
         if a.browser:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as pw:
                 browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1200,'height':900});errors=[]
                 page.on('pageerror',lambda e:errors.append(str(e)))
-                page.goto(f'http://127.0.0.1:{api_port}');page.locator('#navHistory').click();page.get_by_role('button',name='Сверить расход',exact=True).click()
-                page.locator('#recoveryApply').wait_for();assert page.locator('#recoveryApply').is_disabled()
-                for uid,value in [('04112244','0.500'),('04EEEEFF','2.483')]:page.locator('.recovery-spool').filter(has_text='UID '+uid).locator('input').fill(value)
-                page.locator('#recoveryNote').fill(request['note']);assert page.locator('#recoveryApply').is_disabled()
-                page.locator('#recoveryAck').check();assert page.locator('#recoveryApply').is_enabled()
+                page.goto(f'http://127.0.0.1:{api_port}');page.locator('#navHistory').click()
+                if a.user:
+                    page.locator('.history-row').filter(has_text='Ожидаем уточнения').count() # No state inference from labels.
+                    row=page.locator('.history-row').filter(has=page.get_by_role('button',name='Печать завершилась успешно?',exact=True))
+                    row.get_by_role('button',name='Раскрыть задание',exact=True).click()
+                    page.get_by_role('button',name='Да — перейти к списанию',exact=True).click()
+                    for i,spool in enumerate(detail['candidates']):page.locator('#manualExtra_'+str(i)).fill('0.500' if spool['uid']=='04112244' else '2.483')
+                    page.locator('#manualExtraNote').fill(request['note']);page.locator('#manualExtraAck').check()
+                else:page.get_by_role('button',name='Сверить расход',exact=True).click()
+                if not a.user:
+                    page.locator('#recoveryApply').wait_for();assert page.locator('#recoveryApply').is_disabled()
+                    for uid,value in [('04112244','0.500'),('04EEEEFF','2.483')]:page.locator('.recovery-spool').filter(has_text='UID '+uid).locator('input').fill(value)
+                    page.locator('#recoveryNote').fill(request['note']);assert page.locator('#recoveryApply').is_disabled()
+                    page.locator('#recoveryAck').check();assert page.locator('#recoveryApply').is_enabled()
                 page.locator('#historyDetail').screenshot(path=str(a.output/'recovery-form.png'))
                 # Lose the successful response once. A repeated identical click must be harmless.
                 captured=[]
@@ -95,25 +110,25 @@ def main():
                     response=route.fetch()
                     assert response.status==200
                     route.abort()
-                page.route('**/api/reconcile_apply',lose,times=1)
-                page.locator('#recoveryApply').click()
+                page.route('**/api/'+decision_route,lose,times=1)
+                page.locator('#manualExtraApply' if a.user else '#recoveryApply').click()
                 page.wait_for_function("document.querySelector('#workspaceError').textContent.length>0")
-                page.locator('#recoveryApply').click()
-                page.get_by_text('Решение сохранено. Повторная история не спишет этот расход снова.',exact=True).wait_for()
+                page.locator('#manualExtraApply' if a.user else '#recoveryApply').click()
+                page.get_by_text('Ручной учёт сохранён. Повторная история не спишет расход снова.' if a.user else 'Решение сохранено. Повторная история не спишет этот расход снова.',exact=True).wait_for()
                 request=captured[0]
                 page.locator('#historyList').screenshot(path=str(a.output/'recovery-history.png'))
                 assert not errors,errors
                 browser.close()
             check('GUI confirms once even when successful response is lost',len(api('state')['debits'])==4)
-        else:api('reconcile_apply',request)
-        assert api('reconcile_apply',request)['status']=='duplicate'
+        else:api(decision_route,request)
+        assert api(decision_route,request)['status']=='duplicate'
         check('manual review distributes 500 and 2483 mg with idempotent retry',balances()['04112244']==19500 and balances()['04EEEEFF']==97517 and len(api('state')['debits'])==4)
         api('connections_stop',{'confirmed':True});package=api('backup_package',{});v=api('validate_backup',dict(package=package))
         api('restore_backup',dict(package=package,expected_revision=v['current_revision'],confirmed=True))
         api('connections_start',{'confirmed':True});wait(connected);time.sleep(5)
         check('restored receipt and repeated process history do not debit again',len(api('state')['debits'])==4 and balances()['04EEEEFF']==97517)
         api('connections_stop',{'confirmed':True});app.terminate();app.wait(15);app=launch();api('connections_start',{'confirmed':True});wait(connected);time.sleep(5)
-        check('second EXE restart keeps ledger and manual decision',len(api('state')['debits'])==4 and api('reconcile_apply',request)['status']=='duplicate')
+        check('second EXE restart keeps ledger and manual decision',len(api('state')['debits'])==4 and api(decision_route,request)['status']=='duplicate')
         (a.output/'recovery-exe-result.json').write_text(json.dumps(dict(success=True,checks=checks,state=api('state'),browser_checked=a.browser,user_candidate=a.user,data=str(root)),indent=2),encoding='utf-8')
     finally:
         if app and app.poll() is None:app.terminate();app.wait(15)

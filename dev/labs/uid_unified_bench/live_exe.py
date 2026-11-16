@@ -1,16 +1,16 @@
 """Ordinary current packaged app against authenticated no-hardware process benches."""
-import argparse,json,subprocess,tempfile,time,urllib.request,re,socket
+import argparse,json,os,subprocess,tempfile,time,urllib.request,re,socket
 from pathlib import Path
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--manifest',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--exe',type=Path,required=True);p.add_argument('--manifest',type=Path,required=True);p.add_argument('--output',type=Path,required=True);p.add_argument('--user',action='store_true');a=p.parse_args()
     cfg=json.loads(a.manifest.read_text(encoding='utf-8'))
     assert cfg['kind']=='tracker-process-bench' and cfg['printers']=={'a':18781,'b':18782} and cfg['control_port']==18780
-    a.output.mkdir(parents=True,exist_ok=True);root=Path(tempfile.mkdtemp(prefix='uid-unified-exe-live-'));checks=[];app=None;token=None
+    a.output.mkdir(parents=True,exist_ok=True);root=Path(tempfile.mkdtemp(prefix='uid-unified-exe-live-'));checks=[];app=None;token=None;api_port=18783
     def http(port,path,data=None,headers=None):
         r=urllib.request.Request(f'http://127.0.0.1:{port}'+path,data=json.dumps(data).encode() if data is not None else None,headers={'Content-Type':'application/json',**(headers or {})})
         with urllib.request.urlopen(r,timeout=50) as v:return json.load(v)
-    def api(path,data=None):return http(18783,'/api/'+path,data,{'X-Tracker-Token':token})
+    def api(path,data=None):return http(api_port,'/api/'+path,data,{'X-Tracker-Token':token})
     def wait(fn,timeout=70):
         end=time.monotonic()+timeout;error=None
         while time.monotonic()<end:
@@ -22,12 +22,13 @@ def main():
         raise AssertionError('Timeout: '+str(error))
     def check(name,ok):assert ok,name;checks.append(name);print('PASS '+name,flush=True)
     def launch():
-        nonlocal token
+        nonlocal token,api_port
         cmd=[str(a.exe.resolve()),'--data',str(root),'--port','18783','--allow-url','http://127.0.0.1:18781','--allow-url','http://127.0.0.1:18782']
-        proc=subprocess.Popen(cmd,cwd=root)
+        proc=subprocess.Popen([str(a.exe.resolve())] if a.user else cmd,cwd=root,env=dict(os.environ,TRACKER20_DATA_DIR=str(root)) if a.user else None)
         def ready():
-            nonlocal token
-            with urllib.request.urlopen('http://127.0.0.1:18783',timeout=2) as r:html=r.read().decode()
+            nonlocal token,api_port
+            if a.user:api_port=int(re.findall(r'GUI http://127.0.0.1:(\d+)',(root/'logs/tracker.log').read_text())[-1])
+            with urllib.request.urlopen(f'http://127.0.0.1:{api_port}',timeout=2) as r:html=r.read().decode()
             token=json.loads(re.search(r'const TOKEN=("[^"]+");',html)[1]);return True
         try:wait(ready,90)
         except BaseException:proc.terminate();proc.wait(15);raise
@@ -39,6 +40,9 @@ def main():
     try:
         app=launch();s=api('state');api('settings',dict(values={'printers':[dict(id=pid,name='Process '+pid,url=f'http://127.0.0.1:{port}') for pid,port in cfg['printers'].items()]},expected_revision=s['settings']['revision']))
         api('connections_start',{'confirmed':True});wait(connected)
+        for pid,port in cfg['printers'].items():
+            for ch in range(4):http(port,'/printer/bench_radio/clear',dict(channel=ch))
+        wait(lambda:not api('state')['occupied'])
         for pid,port in cfg['printers'].items():
             api('create',dict(name='Manual '+pid,remaining_g=500,details={'material':'PLA'},assignment=dict(printer_id=pid,channel='0',expected_version='',confirmed=True)))
         wait(subscribed);check('current EXE connects UID motion and history for two printers',api('state')['connections']['collectors_enabled'])

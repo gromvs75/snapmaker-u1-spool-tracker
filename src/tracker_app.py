@@ -30,7 +30,10 @@ def build_info():
     return dict(info, version=VERSION, mode='user', isolation='Пользовательский кандидат. Подключения запускаются только по вашей команде.')
 
 
-def main():
+def main(argv=None):
+    # Never silently ignore --data/--allow-url intended for the lab launcher.
+    if (sys.argv[1:] if argv is None else argv):
+        return 2
     from tracker_uid_session import Session
     from tracker_uid_catalog import CatalogBusyError
     from tracker_uid_collectors import create_workers, ReadOnlyMoonraker
@@ -71,7 +74,14 @@ def main():
             logger.info('Exit requested signal=%s', signum)
             shell.quit()
         for signum in (signal.SIGTERM,signal.SIGINT):
-            previous_signals[signum] = signal.signal(signum,stop)
+            previous_signals[signum] = signal.getsignal(signum)
+            if sys.platform=='darwin':
+                # Cocoa may stay inside its native run loop without executing
+                # Python bytecode; ordinary Python signal callbacks then wait.
+                from PyObjCTools import MachSignals
+                MachSignals.signal(signum,lambda number: stop(number,None))
+            else:
+                signal.signal(signum,stop)
         shell.run()
     except BaseException:
         logger.exception('Application failed')

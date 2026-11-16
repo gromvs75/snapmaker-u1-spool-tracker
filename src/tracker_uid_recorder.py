@@ -260,9 +260,14 @@ class MotionStreamRecorder:
                                 mapping_changed = True
                             capture_id = uuid.uuid4().hex
                             start_profile_baseline = previous_profile
-                            start_ready = not pending and isinstance(stats.get('filename'), str) and bool(stats['filename'])
+                            # Klipper sends object deltas: reprinting the same
+                            # file may change only state. Use the filename from
+                            # this connection's subscribed status, never a saved
+                            # plan or another connection's cache.
+                            start_filename = stats.get('filename', filename)
+                            start_ready = not pending and isinstance(start_filename, str) and bool(start_filename)
                             if self.lifecycle is not None and start_ready:
-                                self.lifecycle.start(self.printer_id, filename=stats['filename'],
+                                self.lifecycle.start(self.printer_id, filename=start_filename,
                                     observed_at=observed_start, capture_id=capture_id, epoch=capture_epoch,
                                     start=spool_snapshot, channels=self.channels if self.channels is not None else [str(i) for i in range(4) if spool_snapshot['slots'].get(str(i+1))])
                             completion_time = None
@@ -273,7 +278,8 @@ class MotionStreamRecorder:
                             error_job_start = None
                         if 'filament_used' in stats:
                             printer_total_mm = stats['filament_used']
-                        filename = stats.get('filename') or filename
+                        if 'filename' in stats:
+                            filename = stats['filename'] if isinstance(stats['filename'], str) else ''
                         if state == 'complete' and print_state in ('printing', 'paused') and summary.valid:
                             write_summary('Diagnostic estimate only; completion batches may arrive later; no debit')
                             completion_time = now

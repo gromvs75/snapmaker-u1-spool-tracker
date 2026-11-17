@@ -66,7 +66,8 @@ class Reconciliation:
             if not bounds[0] <= total <= bounds[1]:raise ValueError('Сумма распределения не совпадает с расчётом.')
             job = self.accounting.job(job_key)
             snapshot = fleet.get(job['printer_id'],{})
-            if snapshot.get('state') != 'ready':raise ValueError('Восстановите соединение с принтером.')
+            from tracker_printer_capabilities import printer_available
+            if not printer_available(snapshot):raise ValueError('Восстановите соединение с принтером.')
             if observation.get('state') not in ('standby','complete','cancelled','error'):
                 raise ValueError('Принтер печатает или на паузе. Дождитесь завершения.')
             checked = observation.get('checked_at')

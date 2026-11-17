@@ -83,7 +83,10 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
             for assignment in state['manual_assignments']:
                 tagged=next((r for r in state['occupied'] if r['printer_id']==assignment['printer_id'] and r['channel']==assignment['channel']),None)
                 assignment['state']='conflict' if tagged else ('manual_confirmed' if assignment['confirmed'] else 'manual_unconfirmed')
-            state['printers']=[{'id':pid,'name':s.get('name',{'a':'U1_1','b':'U1_2'}.get(pid,pid)),'ready':s['state']=='ready'} for pid,s in fleet.snapshot().items()]
+            from tracker_printer_capabilities import manual_edit_available
+            state['printers']=[{'id':pid,'name':s.get('name',{'a':'U1_1','b':'U1_2'}.get(pid,pid)),
+                               'ready':manual_edit_available(s),'uid_ready':s['state']=='ready','uid_state':s['state']}
+                              for pid,s in fleet.snapshot().items()]
             for p in state['printers']:p['name']=state['settings']['values'].get('printer_names',{}).get(p['id'],p['name'])
             self.reply(200,state)
         def do_POST(self):
@@ -164,7 +167,8 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     detail=owner.call('history_detail',data['job_key'])
                     pid=detail['job']['printer_id'];snapshot=fleet.snapshot().get(pid,{})
                     observation=None
-                    if snapshot.get('state')=='ready' and data.get('action')!='defer':
+                    from tracker_printer_capabilities import printer_available
+                    if printer_available(snapshot) and data.get('action')!='defer':
                         if status_reader is None:raise ValueError('Проверка принтера недоступна.')
                         checked=time.monotonic()
                         observation=dict(state=status_reader(pid),checked_at=checked,connection_token=UidCatalog.connection_token(snapshot))

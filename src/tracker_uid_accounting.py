@@ -9,6 +9,7 @@ import hashlib
 import json
 import time
 from tracker_uid_client import canonical_uid
+from tracker_printer_capabilities import manual_available, manual_edit_available, printer_available
 
 
 class AccountingConflict(ValueError): pass
@@ -128,7 +129,7 @@ class UidAccounting:
                     manual=self.db.execute('SELECT assignment_version FROM uid_job_manual WHERE job_key=? AND channel=?',(j['job_key'],t['channel'])).fetchone()
                     if manual:
                         assignment=self.db.execute('SELECT * FROM manual_assignments WHERE printer_id=? AND channel=?',(j['printer_id'],t['channel'])).fetchone()
-                        invalid=(connection_changed or snapshot.get('state')!='ready' or assignment is None or not assignment['confirmed'] or assignment['version']!=manual[0] or assignment['spool_id']!=t['spool_id'])
+                        invalid=(connection_changed or not manual_available(snapshot) or assignment is None or not assignment['confirmed'] or assignment['version']!=manual[0] or assignment['spool_id']!=t['spool_id'])
                     if invalid:
                         self.db.execute('UPDATE uid_jobs SET mapping_valid=0 WHERE job_key=?',(j['job_key'],))
         return locations
@@ -149,11 +150,13 @@ class UidAccounting:
             raise AccountingConflict('Назначение изменилось. Обновите экран.')
         spool=self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?',(spool_id,)).fetchone()
         if self.catalog.archived(spool_id):raise AccountingConflict('Сначала верните катушку из архива.')
-        if not spool or spool['uid'] is not None: raise AccountingConflict('Manual assignment requires a local untagged spool')
+        if not spool: raise AccountingConflict('Spool not found')
         snapshot=fleet.get(printer_id,{})
         obs=snapshot.get('channels',{}).get(channel,{})
-        if snapshot.get('state')!='ready' or obs.get('state') not in ('absent','unreadable','unknown'):
+        if not manual_edit_available(snapshot) or obs.get('state') not in ('absent','unreadable','unknown'):
             raise AccountingConflict('Connection or tag evidence conflicts with manual assignment')
+        if any(r.get('identity_mode')!='manual' and (r.get('spool') or {}).get('spool_id')==spool_id for r in rows):
+            raise AccountingConflict('Unresolved UID location for this spool')
         if any(r['printer_id']==printer_id and r['channel']==channel and r.get('identity_mode')!='manual' for r in rows):
             raise AccountingConflict('Unresolved UID location on this channel')
         if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND (t.spool_id=? OR (j.printer_id=? AND t.channel=?))",(spool_id,printer_id,channel)).fetchone():
@@ -190,12 +193,14 @@ class UidAccounting:
                 raise AccountingConflict('Печать активна — перенос недоступен.')
             if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND (t.spool_id=? OR (j.printer_id=? AND t.channel=?) OR (j.printer_id=? AND t.channel=?))",(spool_id,source_printer,source_channel,target_printer,target_channel)).fetchone():
                 raise AccountingConflict('Перенос заблокирован: катушка или головка участвует в задании.')
-            if fleet.get(source_printer,{}).get('state')!='ready':raise AccountingConflict('Исходный принтер недоступен.')
+            if not manual_edit_available(fleet.get(source_printer,{})):raise AccountingConflict('Исходный принтер недоступен или печатает.')
             if any(r['printer_id']==source_printer and r['channel']==source_channel and r.get('identity_mode')!='manual' for r in rows):
                 raise AccountingConflict('На исходной головке конфликт RFID. Перенос не выполнен.')
             target=fleet.get(target_printer,{})
-            if target.get('state')!='ready' or target.get('channels',{}).get(target_channel,{}).get('state') not in ('absent','unknown','unreadable'):
+            if not manual_edit_available(target) or target.get('channels',{}).get(target_channel,{}).get('state') not in ('absent','unknown','unreadable'):
                 raise AccountingConflict('Целевой принтер недоступен или есть конфликт RFID.')
+            if any(r.get('identity_mode')!='manual' and (r.get('spool') or {}).get('spool_id')==spool_id for r in rows):
+                raise AccountingConflict('Unresolved UID location for this spool')
             if any(r['printer_id']==target_printer and r['channel']==target_channel for r in rows):
                 raise AccountingConflict('Целевая головка уже занята. Назначение не изменено.')
             import uuid
@@ -301,7 +306,7 @@ class UidAccounting:
             if not ((job['state']=='active' and not job['mapping_valid']) or (job['state']=='resolved' and window and window['expired'])):
                 raise AccountingConflict('Разрешить можно только прерванное задание.')
             snapshot=fleet.get(job['printer_id'],{})
-            if snapshot.get('state')!='ready':raise AccountingConflict('Принтер недоступен. Восстановите соединение.')
+            if not printer_available(snapshot):raise AccountingConflict('Принтер недоступен. Восстановите соединение.')
             if observation.get('state') not in ('standby','complete','cancelled','error'):
                 raise AccountingConflict('Принтер печатает или приостановлен. Сначала остановите печать.')
             checked=observation.get('checked_at')

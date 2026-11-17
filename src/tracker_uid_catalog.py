@@ -178,16 +178,20 @@ class UidCatalog:
         return json.dumps([snapshot.get(k) for k in ('client_session','generation','epoch')])
 
     def _manual_locations(self, fleet, tagged):
+        from tracker_printer_capabilities import manual_available
         rows=[]
         for assignment in self.db.execute('SELECT * FROM manual_assignments').fetchall():
             row=dict(assignment); snapshot=fleet.get(row['printer_id'],{})
             obs=snapshot.get('channels',{}).get(row['channel'],{})
-            conflict=any(r['printer_id']==row['printer_id'] and r['channel']==row['channel'] for r in tagged)
+            def competes(r):
+                return ((r['printer_id']==row['printer_id'] and r['channel']==row['channel'])
+                        or (r.get('spool') or {}).get('spool_id')==row['spool_id'])
+            conflict=any(competes(r) for r in tagged)
             if conflict:
                 for tagged_row in tagged:
-                    if tagged_row['printer_id']==row['printer_id'] and tagged_row['channel']==row['channel']:
+                    if competes(tagged_row):
                         tagged_row.update(usable=False,state='conflict')
-            valid=(snapshot.get('state')=='ready' and row['token']==self.connection_token(snapshot)
+            valid=(manual_available(snapshot) and row['token']==self.connection_token(snapshot)
                    and not conflict and obs.get('state') in ('absent','unreadable','unknown'))
             if not valid:
                 self.db.execute('UPDATE manual_assignments SET confirmed=0 WHERE printer_id=? AND channel=?',(row['printer_id'],row['channel']))

@@ -248,7 +248,8 @@ class Library:
             row=self.db.execute('SELECT * FROM manual_assignments WHERE printer_id=? AND channel=?',(printer_id,channel)).fetchone()
             if not row or row['version']!=expected_version:raise AccountingConflict('Назначение изменилось.')
             self.accounting._unlock_guard(printer_id,row['spool_id'])
-            if fleet.get(printer_id,{}).get('state')!='ready' or self.db.execute("SELECT 1 FROM uid_jobs WHERE state='active' AND printer_id=?",(printer_id,)).fetchone():
+            from tracker_printer_capabilities import manual_edit_available
+            if not manual_edit_available(fleet.get(printer_id,{})) or self.db.execute("SELECT 1 FROM uid_jobs WHERE state='active' AND printer_id=?",(printer_id,)).fetchone():
                 raise AccountingConflict('Снятие недоступно: нет связи или печать активна.')
             self.db.execute('DELETE FROM manual_assignments WHERE printer_id=? AND channel=?',(printer_id,channel))
         return {'status':'detached'}

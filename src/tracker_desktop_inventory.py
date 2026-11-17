@@ -5,6 +5,7 @@ import time
 
 from tracker_uid_accounting import AccountingConflict, mg
 from tracker_uid_library import revision
+from tracker_printer_capabilities import manual_edit_available
 
 
 def context(library, fleet):
@@ -97,7 +98,7 @@ class DesktopInventory:
             current=manual.get(ch)
             if target!=(current['spool_id'] if current else '') or (current and not current['confirmed']):changed.append((ch,current,target))
         if changed:
-            if fleet.get(pid,{}).get('state')!='ready':raise AccountingConflict('Нет связи с принтером. Назначение не подтверждено.')
+            if not manual_edit_available(fleet.get(pid,{})):raise AccountingConflict('Нет связи с принтером или печать не завершена. Назначение не подтверждено.')
             if self.db.execute("SELECT 1 FROM uid_jobs WHERE state='active' AND printer_id=?",(pid,)).fetchone():
                 raise AccountingConflict('Сначала завершите или разрешите активное задание.')
         # Release all changed manual slots first, so a same-printer swap is atomic.

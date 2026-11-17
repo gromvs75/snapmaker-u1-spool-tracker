@@ -87,6 +87,8 @@ class UidClient:
         self._connections = 0
         self._pushes = 0
         self._successful_responses = 0
+        self._printer_received = 0.
+        self._print_state = None
 
     def start(self):
         import websocket  # Fail visibly at startup if the optional dependency is missing.
@@ -115,6 +117,20 @@ class UidClient:
             self._state = state
             self._raw = None
             self._received = 0.
+            self._printer_received = 0.
+            self._print_state = None
+
+    def _accept_printer(self, status):
+        state = status.get('print_stats', {}).get('state')
+        if status.get('webhooks', {}).get('state') != 'ready' or state not in (
+                'standby', 'printing', 'paused', 'complete', 'cancelled', 'error'):
+            raise ConnectionError('Printer status unavailable')
+        with self._lock:
+            if self._printer_received and time.monotonic() - self._printer_received > self.response_timeout + self.poll_interval:
+                self._generation += 1  # A sleep/heartbeat gap fences prior confirmations.
+            self._printer_received = time.monotonic()
+            self._print_state = state
+            self._successful_responses += 1
 
     def _accept(self, raw):
         value = validate_status(raw)
@@ -131,7 +147,11 @@ class UidClient:
             state = self._state
             elapsed = time.monotonic() - self._received
             raw = copy.deepcopy(self._raw)
+            printer_connected = bool(self._printer_received and
+                time.monotonic() - self._printer_received <= self.response_timeout + self.poll_interval)
             if raw and elapsed > self.response_timeout + self.poll_interval:
+                state = 'offline'
+            if self._printer_received and not printer_connected:
                 state = 'offline'
             channels = {str(i): {'state': 'unknown', 'uid': None} for i in range(4)}
             if state == 'ready' and raw:
@@ -143,6 +163,7 @@ class UidClient:
                             c.update(state='stale', uid=None)
             return dict(printer_id=self.endpoint.printer_id, name=self.endpoint.name,
                         state=state, channels=channels, epoch=raw['epoch'] if raw else None,
+                        printer_connected=printer_connected, print_state=self._print_state if printer_connected else None,
                         client_session=self.session_id, generation=self._generation, connections=self._connections,
                         push_notifications=self._pushes)
 
@@ -166,12 +187,35 @@ class UidClient:
                     if 'error' in msg: raise ConnectionError('UID API not ready')
                     return msg['result']
             raise TimeoutError('UID API timeout')
-        # Retrying session handles missing module / endpoint registration on startup.
-        subscribed = rpc('printer.objects.subscribe', {'objects': {'tracker_uid': None}})
-        self._accept(subscribed['status']['tracker_uid'])
+        # Ordinary printer telemetry is available even on stock firmware. Missing
+        # UID is a capability result, never a fabricated successful UID reading.
+        objects = rpc('printer.objects.list', {})['objects']
+        if not isinstance(objects, list) or not {'print_stats', 'webhooks'} <= set(objects):
+            raise ConnectionError('Required printer objects unavailable')
+        has_uid = 'tracker_uid' in objects
+        query = {'print_stats': None, 'webhooks': None}
+        if has_uid: query['tracker_uid'] = None
+
+        def accept(result):
+            status = result['status']
+            with self._lock:
+                self._accept_printer(status)
+                if has_uid:
+                    try: self._accept(status['tracker_uid'])
+                    except (KeyError, TypeError, ValueError):
+                        # A malformed/unsupported UID response must not fall back to
+                        # manual authority or keep a stale recognized UID visible.
+                        with self._lock:
+                            if self._state != 'invalid_data': self._generation += 1
+                            self._state = 'invalid_data'
+                            self._raw = None
+                            self._received = 0.
+                else:
+                    with self._lock: self._state = 'module_missing'
+
+        accept(rpc('printer.objects.subscribe', {'objects': query}))
         while not self._stop.is_set():
-            result = rpc('printer.objects.query', {'objects': {'tracker_uid': None}})
-            self._accept(result['status']['tracker_uid'])
+            accept(rpc('printer.objects.query', {'objects': query}))
             # Notifications wake the next full refresh; never merge partial deltas.
             deadline = time.monotonic() + self.poll_interval
             while not self._stop.is_set() and time.monotonic() < deadline:

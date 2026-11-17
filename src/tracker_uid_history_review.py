@@ -97,7 +97,8 @@ class HistoryReview:
                 if detail['job']['state']=='active' and detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')
                 # Live collector evidence wins over a stale UI confirmation.
                 snapshot=fleet.get(detail['job']['printer_id'],{})
-                if snapshot.get('state')=='ready':
+                from tracker_printer_capabilities import printer_available
+                if printer_available(snapshot):
                     observation=observation or {}
                     checked=observation.get('checked_at')
                     if (observation.get('state') not in ('standby','complete','cancelled','error')

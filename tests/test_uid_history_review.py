@@ -100,6 +100,21 @@ def test_connected_idle_requires_fresh_server_observation(bench):
     assert review.decide(**request,observation=observation)['status']=='saved'
 
 
+def test_stock_printer_live_state_is_not_bypassed_when_uid_module_missing(bench):
+    import time
+    from tracker_uid_catalog import UidCatalog
+    life,key,c,review=setup_review(bench)
+    request=args(review,key);request['fleet']=life.adapter.service.fleet.snapshot()
+    snapshot=request['fleet']['a']
+    snapshot.update(state='module_missing',printer_connected=True,print_state='paused')
+    observation=dict(state='paused',checked_at=time.monotonic(),connection_token=UidCatalog.connection_token(snapshot))
+    with pytest.raises(ValueError):review.decide(**request,observation=observation)
+    with pytest.raises(ValueError):review.decide(**request)
+    snapshot['print_state']='complete';observation['state']='complete'
+    assert review.decide(**request,observation=observation)['status']=='saved'
+    assert review.decide(**request,observation=observation)['status']=='duplicate'
+
+
 def test_manual_receipt_restore_keeps_idempotency_and_holds_remote(bench):
     from tracker_uid_library import Library
     from tracker_uid_delivery import Delivery

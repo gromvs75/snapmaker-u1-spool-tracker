@@ -17,7 +17,7 @@ def tray_model(snapshot):
     status=entry['status'] if entry and not snapshot.get('error') else 'unknown'
     label={'ok':'✓ Хватает с резервом','shortage':'✕ Не хватает с резервом','unknown':'Нет подтверждённого прогноза'}[status]
     if entry:
-        label+=' · Пластина '+str(entry['plate'] or '?')+' · '+datetime.fromtimestamp(entry['completed_at_ns']/1e9).strftime('%d.%m %H:%M')
+        label+=' · '+('Стол '+str(entry['plate']) if entry.get('plate') else 'Стол не определён')+' · '+datetime.fromtimestamp(entry['completed_at_ns']/1e9).strftime('%d.%m %H:%M')
     heads=[]
     for i in range(4):
         head=printer.get('heads',[{}]*4)[i];spool=head.get('spool')

@@ -22,6 +22,7 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
     s.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     folder=tmp_path/'slices'/'Test project'/'Metadata';folder.mkdir(parents=True)
     (folder/'.42.3.gcode').write_bytes(payload('4.01, 0, 0, 0'))
+    (folder/'model_settings.config').write_text('<config><plate><metadata key="plater_id" value="2"/><metadata key="gcode_file" value="Metadata/.42.3.gcode"/></plate></config>')
     forecast=SliceForecast(s,tmp_path/'slices');forecast.poll();forecast.observer.settle=0;forecast.poll()
     server=serve(s,s.fleet,forecast=forecast);thread=threading.Thread(target=server.serve_forever);thread.start()
     screens=Path('output/native-forecast-library');screens.mkdir(parents=True,exist_ok=True)
@@ -31,7 +32,7 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
             errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.wait_for_function("document.getElementById('forecast-status').textContent.includes('По расчёту материала хватит')")
-            assert 'Пластина 4' in page.locator('#forecast-single').inner_text()
+            assert 'Стол 2' in page.locator('#forecast-single').inner_text()
             assert '567,6' in page.locator('.forecast-head-note').inner_text()
             page.locator('#desktop-forecast-details summary').click()
             assert 'сохранённым катушкам' in page.locator('#desktop-forecast-provisional').inner_text()
@@ -42,6 +43,8 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
             for lang in ('ru','en','de','uk','es'):
                 page.locator('#lang-picker').select_option(lang)
                 page.wait_for_function('(lang)=>currentLang===lang',arg=lang)
+                expected={'ru':'Стол 2','en':'Plate 2','de':'Platte 2','uk':'Стіл 2','es':'Placa 2'}[lang]
+                page.wait_for_function('(s)=>document.getElementById("forecast-single").textContent===s',arg=expected)
                 for width in (1202,1000,700):
                     page.set_viewport_size(dict(width=width,height=950))
                     metrics=page.locator('#view-spools .table-scroll').evaluate('(e)=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight})')

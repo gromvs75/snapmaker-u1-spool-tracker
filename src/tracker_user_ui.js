@@ -85,15 +85,15 @@ function renderSliceForecast(box,heads,active){
  const entries=printer?.entries||f?.entries||[];
  if(!entries.some(e=>e.source===viewedPlate))viewedPlate=f?.latest||entries[0]?.source||'';
  const content=document.createElement('div');box.append(content);
- const select=document.createElement('select');select.id='viewedPlate';select.setAttribute('aria-label','Пластина для просмотра');
- for(const e of entries){const match=e.source.match(/\.(\d+)\.gcode$/);select.add(new Option('Пластина '+(e.plate||(match?Number(match[1])+1:'?'))+(e.state==='ready'?'':' · ещё не готова'),e.source))}
+ const select=document.createElement('select');select.id='viewedPlate';select.setAttribute('aria-label','Стол для просмотра');
+ for(const e of entries){select.add(new Option((e.plate?'Стол '+e.plate:'Стол не определён · '+e.source.split('/').pop())+(e.state==='ready'?'':' · ещё не готова'),e.source))}
  select.value=viewedPlate;select.hidden=entries.length<2;box.append(select);
  function draw(){content.replaceChildren();const e=entries.find(e=>e.source===viewedPlate);
   const title=document.createElement('strong');title.className='forecast-result '+(e?.status||'unknown');
   title.textContent=e?.state==='ready'?({ok:'✓ Материала хватает',shortage:'✕ Материала не хватает',unknown:'Проверьте назначения катушек'}[e.status]||'Прогноз готов · выберите принтер'):e?'Нарезка ещё не готова':'Ожидаем завершённую нарезку';content.append(title);
   if(e?.state==='ready'){
-   const match=e.source.match(/\.(\d+)\.gcode$/),plate=e.plate||(match?Number(match[1])+1:'?');
-   content.append(paragraph('Пластина '+plate+' · '+new Date(e.completed_at_ns/1e6).toLocaleString('ru-RU')),
+   const plate=e.plate?'Стол '+e.plate:'Стол не определён';
+   content.append(paragraph(plate+' · '+new Date(e.completed_at_ns/1e6).toLocaleString('ru-RU')),
      paragraph('Резерв '+grams((f.safety_margin_g??5)*1000)+' на используемую катушку · Без списания'));
    const mapping=paragraph('Материалы: 1→T0 · 2→T1 · 3→T2 · 4→T3 (предположение)');mapping.className='mapping-note';content.append(mapping);
    if(active)content.append(paragraph('Новая нарезка показана отдельно. Головки ниже относятся к текущей печати.'));

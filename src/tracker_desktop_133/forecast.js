@@ -15,10 +15,10 @@
    'Розрахунок за збереженими котушками й залишками. Перед друком перевірте призначення в «Котушки → Головки T0–T3».',
    'Cálculo con bobinas y saldos guardados. Antes de imprimir, revise las asignaciones en Bobinas → Cabezales T0–T3.'):'';
   if(entry&&data?.monitor.active_job_key)source.append(document.createTextNode(' · '+text(
-   'Просмотр пластины — отдельно от плана текущей печати',
+   'Просмотр стола — отдельно от плана текущей печати',
    'Viewed plate — separate from the current print plan',
    'Angezeigte Platte — getrennt vom aktuellen Druckplan',
-   'Перегляд пластини — окремо від плану поточного друку',
+   'Перегляд столу — окремо від плану поточного друку',
    'Placa visualizada — independiente del plan de impresión actual')));
  };
 })();

@@ -21,6 +21,8 @@ def integration_html(token,version):
     """Add the 2.0 bridge while retaining the entire published presentation."""
     import json
     html=published_html()
+    html=html.replace('Пластина','Стол')
+    html=html.replace("const plateLabel = e => tr().plate + ' ' + e.label.split(' ').pop();", "const plateLabel = e => e.plate ? ({ru:'Стол',en:'Plate',de:'Platte',uk:'Стіл',es:'Placa'}[currentLang]||'Plate')+' '+e.plate : ({ru:'Стол не определён',en:'Plate unknown',de:'Platte unbekannt',uk:'Стіл не визначено',es:'Placa desconocida'}[currentLang]||'Plate unknown')+' · '+e.source.split(/[\\\\/]/).pop();")
     html=html.replace("if(!loaded){$('url').value=s.url;","if(!loaded){desktopSpoolmanFormRevision=data.configuration_revision; $('url').value=s.url;")
     html=html.replace("if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet');","if(!Object.keys(s.outbox).length)$('queue').textContent=t('Операций пока нет','No operations yet'); window.desktopDeliveryRows?.(data);")
     html=html.replace('Отвязать катушку? Данные Spoolman не удаляются.','Перевести катушку на локальный учёт? UID, назначения и история сохранятся. Незавершённые отправки нужно разрешить заранее.').replace('Detach this spool? Spoolman data is kept.','Switch this spool to local accounting? UID, assignments and history are kept. Resolve unfinished deliveries first.')

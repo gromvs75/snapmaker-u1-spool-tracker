@@ -83,7 +83,8 @@ def main():
         # A newly completed synthetic slice: never read the user's slicer cache.
         metadata=data/'slices'/'Graphite fixture'/'Metadata';metadata.mkdir(parents=True)
         (metadata/'.42.0.gcode').write_bytes(payload('0, 0, 0, 54.7'))
-        wait(lambda:api('desktop/forecast')['entries'])
+        (metadata/'model_settings.config').write_text('<config><plate><metadata key="plater_id" value="3"/><metadata key="gcode_file" value="Metadata/.42.0.gcode"/></plate></config>')
+        wait(lambda:api('desktop/forecast')['entries'] and api('desktop/forecast')['entries'][0].get('plate')==3)
         descriptor=json.loads((data/'instance.json').read_text())
         url=f'http://127.0.0.1:{descriptor["port"]}/desktop'
         with sync_playwright() as p:
@@ -95,6 +96,7 @@ def main():
             assert page.evaluate('getComputedStyle(document.querySelector(".sidebar-slot")).borderRadius')=='10px'
             for language in ['en','de','uk','es','ru']:
                 page.locator('#lang-picker').select_option(language);page.wait_for_function('(l)=>currentLang===l',arg=language)
+            page.wait_for_function("document.getElementById('forecast-single').textContent==='Стол 3'")
             page.screenshot(path=str(out/'overview.png'),full_page=True);checks.append('packaged Graphite, five languages, heads above live synthetic forecast')
             page.locator('#nav-spools').click();page.screenshot(path=str(out/'library.png'),full_page=True)
             assert page.locator('.spool-inventory th').count()==5

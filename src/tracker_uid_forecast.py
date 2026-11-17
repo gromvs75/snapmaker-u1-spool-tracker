@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 import threading
 import time
-import re
+from slice_identity import bed_identity
 from slice_observer import SliceObserver
 
 
@@ -14,8 +14,7 @@ def forecast_entry(entry, heads, reserve):
     Material i -> Ti remains a labelled assumption, never an accounting mapping.
     Sum all heads of the same spool before applying the reserve once.
     """
-    match=re.search(r'\.(\d+)\.gcode$',entry['source'])
-    result=dict(entry,plate=int(match[1])+1 if match else None,mapping_assumed=True)
+    result=dict(entry,plate=entry.get('plate'),mapping_assumed=True)
     if entry['state']!='ready':return dict(result,rows=[],status='unknown')
     totals={}
     for head,used in zip(heads,entry['weights']):
@@ -72,6 +71,9 @@ class SliceForecast:
             if self.observer is None:self.observer=SliceObserver(root)
             self.observer.poll()
             entries=copy.deepcopy(list(self.observer.entries.values()))
+            for entry in entries:
+                if entry['state']=='ready':
+                    entry['plate']=bed_identity(root/entry['source'],entry['completed_at_ns'])
             ready=[e for e in entries if e['state']=='ready']
             latest=max(ready,key=lambda e:e['completed_at_ns'])['source'] if ready else None
             result=dict(entries=entries,latest=latest,watch_root=str(root),checked_at=time.time(),error='')

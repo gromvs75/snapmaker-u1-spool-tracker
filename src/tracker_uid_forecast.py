@@ -72,8 +72,9 @@ class SliceForecast:
             self.observer.poll()
             entries=copy.deepcopy(list(self.observer.entries.values()))
             for entry in entries:
-                if entry['state']=='ready':
+                if entry['state']=='ready' and entry.get('plate_identity', 'absent')=='absent':
                     entry['plate']=bed_identity(root/entry['source'],entry['completed_at_ns'])
+                    entry['plate_identity']='project_metadata' if entry['plate'] else 'absent'
             ready=[e for e in entries if e['state']=='ready']
             latest=max(ready,key=lambda e:e['completed_at_ns'])['source'] if ready else None
             result=dict(entries=entries,latest=latest,watch_root=str(root),checked_at=time.time(),error='')

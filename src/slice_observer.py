@@ -12,6 +12,7 @@ import stat
 import time
 
 from gcode import GCodeError, METADATA, parse_u1_gcode_handle
+from slice_bed_marker import embedded_bed_identity
 
 NAME = re.compile(r'^\.[0-9]+\.[0-9]+\.gcode$')
 MAX_BYTES = 128 * 1024 * 1024
@@ -112,9 +113,11 @@ class SliceObserver:
                 if now - candidate[1] < self.settle:
                     continue
                 weights = completed_weights(content)
+                plate, plate_identity = embedded_bed_identity(content)
                 previous = self.entries.get(key, {})
                 preview = {'source': key, 'state': 'ready', 'sha256': digest,
                            'weights': weights, 'completed_at_ns': signature[3],
+                           'plate': plate, 'plate_identity': plate_identity,
                            'observed_at': previous.get('observed_at', time.time()) if previous.get('sha256') == digest else time.time(),
                            'mapping': 'unknown'}
                 self.entries[key] = preview

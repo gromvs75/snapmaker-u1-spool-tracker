@@ -28,6 +28,7 @@ from playwright.sync_api import sync_playwright
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle',type=Path);parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--slice-file',type=Path,help='Offline Snorca output with embedded bed 3 marker')
     args=parser.parse_args();out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
     bundle=args.bundle.resolve();info=plistlib.loads((bundle/'Contents/Info.plist').read_bytes())
     root=Path(tempfile.mkdtemp(prefix='tracker-graphite-package-'));data=root/'profile'
@@ -82,9 +83,11 @@ def main():
         api('restore_backup',dict(package=package,expected_revision=checked['current_revision'],confirmed=True))
         # A newly completed synthetic slice: never read the user's slicer cache.
         metadata=data/'slices'/'Graphite fixture'/'Metadata';metadata.mkdir(parents=True)
-        (metadata/'.42.0.gcode').write_bytes(payload('0, 0, 0, 54.7'))
-        (metadata/'model_settings.config').write_text('<config><plate><metadata key="plater_id" value="3"/><metadata key="gcode_file" value="Metadata/.42.0.gcode"/></plate></config>')
+        sliced=args.slice_file.read_bytes() if args.slice_file else payload('0, 0, 0, 54.7').replace(b'G1 X1',b'; TRACKER_BED_V1 = 03\nG1 X1')
+        (metadata/'.42.0.gcode').write_bytes(sliced)
         wait(lambda:api('desktop/forecast')['entries'] and api('desktop/forecast')['entries'][0].get('plate')==3)
+        assert api('desktop/forecast')['entries'][0]['plate_identity']=='gcode_marker_v1'
+        checks.append('embedded bed 3 from exact G-code bytes; cache suffix 0 is not used as a bed number')
         descriptor=json.loads((data/'instance.json').read_text())
         url=f'http://127.0.0.1:{descriptor["port"]}/desktop'
         with sync_playwright() as p:

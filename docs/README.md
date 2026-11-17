@@ -17,6 +17,7 @@
 
 ## Tracker 2.0 development
 
+- [Номера столов Snorca: настройка передачи при нарезке](guides/snorca-bed-identity-ru.md)
 - [Запуск отдельной стендовой сборки 2.0](guides/tracker-2.0-bench-ru.md)
 - [История, ручная сверка и итоговая сборка](development/ready-build-2026-11-14.md)
 

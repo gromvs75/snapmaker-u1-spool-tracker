@@ -7,6 +7,7 @@ import subprocess
 import pytest
 
 from dev.labs.uid_boot_bench.model import BootModel, PersistenceTrial, tool
+from dev.labs.uid_boot_bench.optional import OptionalBootTrial, CFG
 
 pytestmark = pytest.mark.skipif(sys.platform == 'win32', reason='POSIX boot-policy laboratory')
 
@@ -335,3 +336,76 @@ def test_damaged_recovery_kit_cannot_execute_mutations(model, tmp_path):
     assert result.returncode == 1 and 'integrity failure' in result.stdout
     assert 'executed' not in result.stderr
     assert model.debug.exists() and tool.BLOCK in model.base.path(tool.MAIN).read_bytes()
+
+
+@pytest.mark.parametrize('stage', range(4))
+def test_optional_activation_cold_boot_and_rollback_at_install_boundaries(model, stage):
+    before = model.base.path(tool.MAIN).read_bytes()
+    trial = OptionalBootTrial(model)
+    with pytest.raises(RuntimeError):
+        trial.install(fail_after=stage)
+    assert not model.debug.exists()
+    model.cold_boot()
+    assert not model.base.path(CFG).exists()
+    assert not model.base.path(tool.TARGETS[0]).exists()
+    OptionalBootTrial(BootModel(model.root)).rollback()
+    assert model.base.path(tool.MAIN).read_bytes() == before
+
+
+@pytest.mark.parametrize('stage', range(1, 4))
+def test_optional_rollback_resumes_without_restoring_obsolete_config(model, stage):
+    trial = OptionalBootTrial(model)
+    before = model.base.path(tool.MAIN).read_bytes()
+    trial.install()
+    main = model.base.path(tool.MAIN)
+    main.write_bytes(main.read_bytes() + b'# later edit\n')
+    with pytest.raises(RuntimeError):
+        trial.rollback(fail_after=stage)
+    model.cold_boot()
+    OptionalBootTrial(BootModel(model.root)).rollback()
+    assert main.read_bytes() == before + b'# later edit\n'
+
+
+def test_optional_trial_does_not_enable_whole_system_persistence(model):
+    trial = OptionalBootTrial(model)
+    trial.install()
+    assert model.base.path(CFG).read_bytes() == tool.CONFIG
+    assert not model.debug.exists()
+    model.cold_boot()
+    assert trial.block in model.base.path(tool.MAIN).read_bytes()
+    assert not model.base.path(CFG).exists()
+    assert not model.base.path(tool.TARGETS[0]).exists()
+    trial.rollback()
+
+
+def test_optional_trial_refuses_modified_owned_file_before_changing_main(model):
+    trial = OptionalBootTrial(model)
+    trial.install()
+    model.base.path(CFG).write_text('# somebody changed this\n')
+    with pytest.raises(ValueError, match='file changed'):
+        trial.rollback()
+    assert trial.block in model.base.path(tool.MAIN).read_bytes()
+
+
+def test_optional_trial_rejects_live_process_and_unknown_firmware(model):
+    trial = OptionalBootTrial(model)
+    marker = model.base.path('.klipper-running')
+    marker.write_text('running')
+    with pytest.raises(ValueError, match='Stop simulated'):
+        trial.install()
+    marker.unlink()
+    trial.install()
+    (model.lower / 'system/new-version').write_text('new')
+    with pytest.raises(ValueError, match='Firmware changed'):
+        trial.rollback()
+    assert trial.block in model.base.path(tool.MAIN).read_bytes()
+
+
+def test_optional_trial_does_not_remove_cfg_referenced_by_changed_activation(model):
+    trial = OptionalBootTrial(model)
+    trial.install()
+    main = model.base.path(tool.MAIN)
+    main.write_bytes(main.read_bytes().replace(trial.block, b'\n[include other.cfg]\n'))
+    with pytest.raises(ValueError, match='Activation changed'):
+        trial.rollback()
+    assert model.base.path(CFG).exists() and model.base.path(tool.TARGETS[0]).exists()

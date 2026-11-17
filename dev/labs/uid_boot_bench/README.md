@@ -90,3 +90,33 @@ Unit tests inject interruption at every modeled installation and rollback bounda
 Process checks include the naive failure, recovery, fresh UID epoch, stock callback,
 interrupted include commit/rollback, unknown driver, and pre-update removal. They
 are not measurements of physical tag-reading or tests of the packaged desktop app.
+
+## Optional activation experiment (session only)
+
+`optional.py` / `optional_run.py` explore a different layout. Both `tracker_uid.py`
+and its activating `tracker_uid_boot.cfg` live in the modeled volatile Klipper tree.
+The persistent main config includes the latter through an exact-name glob
+`[t]racker_uid_boot.cfg`. It matches exactly that filename, while Klipper's tested
+parser tolerates an empty match. No broad `*.cfg` wildcard is used.
+
+After whole-layer cleanup both files disappear together: Klipper starts without
+the module and Tracker invalidates its UID observations. No `.debug` is created,
+no firmware hooks are added, and nothing automatically reinstalls the extra.
+This protects stock startup for this specific failure; **it does not provide
+persistent RFID functionality**. Deleting only the module still leaves an invalid
+section; that negative case is reproduced on both process benches.
+
+The experiment requires marked, stopped simulator roots. A persistent record
+precedes module → cfg → main activation; rollback validates hashes, removes only
+the recorded activation, then cfg/module. It retains later main-config edits and
+refuses changed activation/files or changed modeled firmware. It is deliberately
+separate from the production installer and exported recovery kit.
+
+```sh
+python dev/labs/uid_boot_bench/optional_run.py --output output/rfid-optional-process
+```
+
+Uses ports 18821/18822 and temporary `/private/tmp/rfid-optional-*` roots. RF/SPI/MCU
+are simulated. The pinned driver matches the U1 audit; the actual U1 config parser
+has not been separately hashed/read for this experiment. Do not treat the local
+parser's behavior as a completed compatibility check of every firmware component.

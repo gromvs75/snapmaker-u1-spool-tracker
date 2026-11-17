@@ -120,3 +120,47 @@ Uses ports 18821/18822 and temporary `/private/tmp/rfid-optional-*` roots. RF/SP
 are simulated. The pinned driver matches the U1 audit; the actual U1 config parser
 has not been separately hashed/read for this experiment. Do not treat the local
 parser's behavior as a completed compatibility check of every firmware component.
+
+## Conditional selective pre-start loader
+
+`selective.py` / `selective_run.py` keep an RFID-only package and enable marker in
+the modeled persistent OEM area. A **test-runner pre-start hook** restores the
+checked module and finally its optional activating cfg after layer cleanup, before
+Klipper starts. This is a conditional design experiment, not a discovered U1 hook.
+**The audited printer has no established persistent caller for this loader.**
+Without the runner hook the same persistent package does not load RFID; that
+counterexample is included in both process benches. Do not remove this limitation
+from installation instructions or market this experiment as stock-U1 persistence.
+
+No init scripts, lower firmware files, boot partitions, `.debug`, Python global
+startup files, or service commands are modified. No SSH or remote mode exists.
+The existing simulator marker and stopped-process guard remain mandatory. A lock
+serializes loader controllers; it does not prove exclusion against actual U1
+services/watchdogs. Whole-overlay persistence is rejected in this experiment.
+
+Order: durable package → optional-layout transaction → enable → pre-start check →
+module → cfg. Every activation withdraws its own cfg first. Corruption, changed
+firmware/driver/source/config, missing enable, or rollback in progress keeps RFID
+disabled. Foreign cfg/invalid ownership raises an error and does **not** authorize
+automatic Klipper start. A disabled result only describes our cfg; it cannot
+certify arbitrary foreign configs. The recorded hashes detect corruption; they
+are not signatures against an attacker able to replace code and records together.
+
+Rollback disables future activation first, then uses the existing optional-layout
+rollback and removes the persistent package. Later config edits are preserved;
+changed firmware/files require review. The old independent recovery kit does not
+understand this experimental layout. No production installer is changed.
+
+```sh
+python -m pytest tests/test_rfid_selective_boot.py -q
+python dev/labs/uid_boot_bench/selective_run.py --output output/rfid-selective-process
+```
+
+The runner uses only ports 18831/18832 on localhost and fresh
+`/private/tmp/rfid-selective-*` roots. It covers cold boots, Klipper restart,
+Moonraker reconnect, fresh epochs, four-/seven-byte UID fixtures, stock callbacks,
+missing module, corrupted package, firmware/config changes, interrupted activation
+and rollback, and the absent-hook counterexample. MCU/RF are simulated. Physical
+power loss, actual OverlayFS, init/watchdog ordering, OTA and hardware tags remain
+outside these results. A safe real deployment still needs an independently
+verified, selective persistent boot anchor before any installation proposal.

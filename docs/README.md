@@ -19,6 +19,7 @@
 
 - [Установка и откат RFID-модуля: стендовый пакет (RU)](guides/rfid-module-install-ru.md) · [English](guides/rfid-module-install-en.md) · [Проверки](development/rfid-installation-2026-11-17.md)
 - [Сверка RFID-драйвера U1 через SSH: только чтение (RU)](guides/u1-rfid-readonly-ssh-ru.md)
+- [RFID: холодный старт, прерывания установки и откат на двух стендах](development/rfid-boot-lifecycle-2026-11-17.md)
 - [Ручной режим без модуля и канал RFID (RU)](guides/manual-and-rfid-2.0-ru.md) · [English](guides/manual-and-rfid-2.0-en.md)
 - [Номера столов Snorca: обязательная настройка для надёжного определения (RU)](guides/snorca-bed-identity-ru.md) · [English](guides/snorca-bed-identity-en.md)
 - [Пользовательский кандидат 2.0: запуск и настройка](guides/user-candidate-2.0-ru.md)

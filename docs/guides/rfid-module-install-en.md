@@ -5,6 +5,13 @@ The kit makes no SSH/printer requests, controls no services and never writes the
 stock reader driver. Writes require a marked simulator root. Do not manufacture
 that marker on a real printer to bypass the restriction.
 
+**2026-11-17 update:** the inspected stock U1 2.1.0.157 discards the system
+overlay at boot while retaining user configuration. A simple file installation
+can leave `[tracker_uid]` configured with its Python module missing, preventing
+Klipper startup. Two process benches reproduced this. Do not enable `/oem/.debug`
+using this guide: it persists the entire system overlay. Physical deployment is
+not ready. See the [boot-policy experiment](../development/rfid-boot-lifecycle-2026-11-17.md).
+
 Manual assignments need no module. RFID requires a compatible Python extra,
 `tracker_uid.cfg` and a Klipper include. A config line alone is insufficient.
 No firmware image is flashed: the observer wraps approved reader methods in memory

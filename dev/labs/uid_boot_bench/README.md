@@ -164,3 +164,21 @@ and rollback, and the absent-hook counterexample. MCU/RF are simulated. Physical
 power loss, actual OverlayFS, init/watchdog ordering, OTA and hardware tags remain
 outside these results. A safe real deployment still needs an independently
 verified, selective persistent boot anchor before any installation proposal.
+# Выбранный вариант `.debug`: guarded debug loader
+
+`debug_loader.py` и `debug_run.py` — следующий лабораторный этап после selective
+и исследования Bespok3d. Постоянный wrapper вызывает проверку перед модельным
+S60; исходная служба в тесте — безвредная заглушка. Никаких vendor/MCU-команд.
+Пакет активации/отката экспортируется автоматически в постоянный каталог стенда.
+Не копировать wrapper на U1 и не создавать там маркер симулятора.
+
+```sh
+python dev/labs/uid_boot_bench/debug_run.py --output output/rfid-debug-loader-process
+python -m pytest -q tests/test_rfid_debug_loader.py
+```
+
+Процессный тест требует подготовленного корпуса Klipper/Moonraker из прежних
+этапов, Python-окружения `/private/tmp/tracker-uid-live/env` и loopback-портов
+18851/18852. Временный корень и результаты записываются в `results.json`.
+Нельзя запускать произвольную реальную службу под видом тестового S60.
+Границы проверки: [отчёт](../../../docs/development/rfid-debug-loader-2026-11-17.md).

@@ -24,6 +24,7 @@
 - [RFID: условия остановки служб и read-only диагностика](development/rfid-service-preflight-2026-11-17.md)
 - [RFID: выборочный загрузчик, стенд и нерешённая точка автозапуска U1](development/rfid-selective-loader-2026-11-17.md)
 - [RFID: как запускается Bespok3d и почему без .debug теряется точка запуска](development/rfid-bespok-boot-anchor-2026-11-17.md)
+- [RFID: выбранный вариант с .debug, проверка перед запуском и независимый откат](development/rfid-debug-loader-2026-11-17.md)
 - [RFID: полученная диагностика U1 и защита запуска при потере модуля](development/rfid-audit-findings-optional-boot-2026-11-17.md)
 - [U1: одна команда для диагностики overlay и процессов без установки](guides/u1-rfid-overlay-audit-ru.md)
 - [Ручной режим без модуля и канал RFID (RU)](guides/manual-and-rfid-2.0-ru.md) · [English](guides/manual-and-rfid-2.0-en.md)

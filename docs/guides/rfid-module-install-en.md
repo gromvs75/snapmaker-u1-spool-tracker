@@ -18,6 +18,12 @@ persistent invocation point for our loader was found in the inspected stock
 startup path; retaining a package in user storage does not create one.
 See [sources, bench evidence and alternatives](../development/rfid-bespok-boot-anchor-2026-11-17.md).
 
+The user selected further development of the minimal `.debug` approach.
+A [bench loader and rollback prototype](../development/rfid-debug-loader-2026-11-17.md)
+now exists. This does not authorize physical installation: `.debug` retains the
+entire overlay; real overlay backup and hardware service control remain unverified.
+The laboratory wrapper is not a deployable U1 package.
+
 Manual assignments need no module. RFID requires a compatible Python extra,
 `tracker_uid.cfg` and a Klipper include. A config line alone is insufficient.
 No firmware image is flashed: the observer wraps approved reader methods in memory

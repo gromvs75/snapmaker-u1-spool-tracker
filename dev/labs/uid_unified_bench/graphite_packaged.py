@@ -79,6 +79,12 @@ def main():
     try:
         child=subprocess.Popen([str(bundle/'Contents/MacOS'/info['CFBundleExecutable'])],env=dict(os.environ,TRACKER20_DATA_DIR=str(data)),stdout=log,stderr=subprocess.STDOUT)
         wait(lambda:(data/'instance.json').exists())
+        first_descriptor=(data/'instance.json').read_bytes()
+        second=subprocess.run([str(bundle/'Contents/MacOS'/info['CFBundleExecutable'])],env=dict(os.environ,TRACKER20_DATA_DIR=str(data)),stdout=log,stderr=subprocess.STDOUT,timeout=20)
+        assert second.returncode==2 and child.poll() is None
+        assert (data/'instance.json').read_bytes()==first_descriptor
+        assert not api('state')['connections']['connected']
+        checks.append('second packaged instance rejects a second writer and preserves the original instance')
         checked=api('validate_backup',dict(package=package))
         api('restore_backup',dict(package=package,expected_revision=checked['current_revision'],confirmed=True))
         # A newly completed synthetic slice: never read the user's slicer cache.
@@ -185,11 +191,13 @@ def main():
         import AppKit,Quartz
         app=AppKit.NSRunningApplication.runningApplicationWithProcessIdentifier_(child.pid)
         assert app and app.activationPolicy()==1 and str(app.bundleURL().path())==str(bundle)
+        api('window',dict(action='hide'));time.sleep(.5)
+        assert child.poll() is None and (data/'instance.json').exists()
         api('window',dict(action='show'));time.sleep(2)
         windows=[w for w in Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionAll,0) if w.get('kCGWindowOwnerPID')==child.pid and w.get('kCGWindowLayer')==0]
         window=max(windows,key=lambda w:w['kCGWindowBounds']['Width']*w['kCGWindowBounds']['Height'])
         subprocess.run(['screencapture','-x','-o','-l',str(window['kCGWindowNumber']),str(out/'native-overview.png')],check=True)
-        checks.append('native child window captured, Accessory policy, no real connections or new debits')
+        checks.append('native child window hide/show and capture, Accessory policy, no real connections or new debits')
         child.send_signal(signal.SIGTERM);child.wait(20)
         assert child.returncode==0 and not (data/'instance.json').exists();checks.append('clean packaged exit')
         (out/'results.json').write_text(json.dumps(dict(version=info['CFBundleShortVersionString'],commit=info['TrackerSourceCommit'],dirty=info['TrackerBuildDirty'],profile=str(data),bundle=str(bundle),checks=checks),indent=2))

@@ -107,15 +107,32 @@
  const localizeAdd=()=>{submit.textContent=head.hidden?t('Добавить катушку','Add spool','Spule hinzufügen','Додати котушку','Añadir bobina'):t('Добавить и назначить','Add and assign','Hinzufügen und zuweisen','Додати й призначити','Añadir y asignar');head.querySelector('span').textContent=t('Назначить на головку','Assign to toolhead','Druckkopf zuweisen','Призначити голівці','Asignar al cabezal');renderNewColorPicker()};
  new MutationObserver(localizeAdd).observe(add,{attributes:true,attributeFilter:['open']});
  bindings.push(()=>{localizeAdd();el('inventory-create-assign').textContent=t('Добавить и назначить','Add and assign','Hinzufügen und zuweisen','Додати й призначити','Añadir y asignar');
-  const words=[['Библиотека','Library','Bibliothek','Бібліотека','Biblioteca'],['Головки T0–T3','Toolheads T0–T3','Druckköpfe T0–T3','Голівки T0–T3','Cabezales T0–T3']];document.querySelectorAll('.inventory-tabs button').forEach((b,i)=>{for(const n of [...b.childNodes])if(n.nodeType===3)n.remove();b.append(document.createTextNode(t(...words[i])))})
+  const words=[['Библиотека','Library','Bibliothek','Бібліотека','Biblioteca'],['Головки T0–T3','Toolheads T0–T3','Druckköpfe T0–T3','Голівки T0–T3','Cabezales T0–T3']];document.querySelectorAll('.inventory-tabs button').forEach((b,i)=>{for(const n of [...b.childNodes])if(n.nodeType===3)n.remove();b.append(document.createTextNode(t(...words[i])));b.setAttribute('aria-label',t(...words[i]))})
  });
  // Localize the inherited settings chrome in all five supported languages.
  bindings.push(()=>{
   const sections=[['Принтер','Printer','Drucker','Принтер','Impresora'],['Spoolman','Spoolman','Spoolman','Spoolman','Spoolman'],['Учёт','Accounting','Verbrauch','Облік','Consumo'],['Резервная копия','Backup','Sicherung','Резервна копія','Copia de seguridad']];
-  document.querySelectorAll('.settings-nav button').forEach((b,i)=>{for(const n of [...b.childNodes])if(n.nodeType===3)n.remove();b.append(document.createTextNode(t(...sections[i]))) });
+  document.querySelectorAll('.settings-nav button').forEach((b,i)=>{for(const n of [...b.childNodes])if(n.nodeType===3)n.remove();b.append(document.createTextNode(t(...sections[i])));b.setAttribute('aria-label',t(...sections[i])) });
   const tabs=[['Подключение','Connection','Verbindung','Підключення','Conexión'],['Катушки','Spools','Spulen','Котушки','Bobinas'],['Передача расхода','Usage delivery','Verbrauchsübertragung','Передача витрат','Envío de consumo']];document.querySelectorAll('.settings-tabs button').forEach((b,i)=>b.textContent=t(...tabs[i]));
   for(const [id,words] of [['settings-account-title',['Учёт','Accounting','Verbrauch','Облік','Consumo']],['accounting-save',['Сохранить настройки учёта','Save accounting settings','Verbrauchseinstellungen speichern','Зберегти налаштування обліку','Guardar ajustes de consumo']],['sm-inspector-title',['Назначение катушки','Spool assignment','Spulenzuweisung','Призначення котушки','Asignación de bobina']],['sm-head-label',['Головка принтера','Toolhead','Druckkopf','Голівка принтера','Cabezal']],['sm-detach-selected',['Отвязать от Tracker','Detach from Tracker','Von Tracker trennen','Відв’язати від Tracker','Desvincular de Tracker']],['sm-refresh-selected',['Обновить каталог','Refresh catalog','Katalog aktualisieren','Оновити каталог','Actualizar catálogo']]])el(id).textContent=t(...words);
  });
+ // Toolhead assignments: four readable rows, retaining selects/color shortcuts.
+ const loaded=window.desktopInventoryLoaded;
+ window.desktopInventoryLoaded=data=>{
+  loaded(data);
+  for(const [i,row] of [...el('slots-container').children].entries()){
+   const badge=row.querySelector('.slot-badge'),select=row.querySelector('select'),control=row.querySelector('.slot-select-wrap'),choices=row.querySelector('details');
+   badge.textContent='T'+i;select.setAttribute('aria-label','T'+i);
+   const art=node('div',undefined,'gd-head-art'),copy=node('div',undefined,'gd-head-copy'),controls=node('div',undefined,'gd-head-controls');
+   control.querySelector('.slot-selected-color').hidden=true;controls.append(control,choices);row.replaceChildren(badge,art,copy,controls);
+   choices.querySelector('summary').textContent=t('Выбрать по цвету','Choose by color','Nach Farbe wählen','Вибрати за кольором','Elegir por color');
+   const paint=()=>{const spool=data.spools[select.value],assignment=spool?.assignments?.find(a=>a.printer_id===data.selected_printer&&a.channel===i);art.replaceChildren(window.trackerSpoolArt(spool?.color));copy.replaceChildren(node('strong',spool?.name||t('Катушка не назначена','No spool assigned','Keine Spule zugewiesen','Котушку не призначено','Sin bobina asignada')));
+    if(spool)copy.append(node('small',(spool.material||'—')+' · '+displayGrams(spool.remaining_g)+' '+gramUnit()+(spool.uid?' · UID '+spool.uid:'')));
+    copy.append(node('small',select.value!==(data.slots[i+1]||'')?t('Выбор ещё не сохранён','Selection not saved yet','Auswahl noch nicht gespeichert','Вибір ще не збережено','Selección sin guardar'):!spool?'':assignment?.state==='recognized'?t('Метка распознана','Tag recognized','Tag erkannt','Мітку розпізнано','Etiqueta reconocida'):assignment?.state==='manual_confirmed'?t('Подтверждено вручную','Confirmed manually','Manuell bestätigt','Підтверджено вручну','Confirmado manualmente'):t('Требует проверки','Needs review','Prüfung erforderlich','Потребує перевірки','Requiere revisión')));
+   };select.addEventListener('change',paint);choices.querySelectorAll('button').forEach(b=>b.addEventListener('click',paint));paint();
+  }
+ };
+ bindings.push(()=>{el('t-slots-hdr').textContent=t('Головки T0–T3','Toolheads T0–T3','Druckköpfe T0–T3','Голівки T0–T3','Cabezales T0–T3');el('t-save-slots').textContent=t('Подтвердить расположение','Confirm positions','Positionen bestätigen','Підтвердити розташування','Confirmar posiciones')});
  // Updating captions must not replace form nodes or their state.
  const language=()=>bindings.forEach(f=>f());new MutationObserver(language).observe(el('nav-settings'),{childList:true});language();
 })();

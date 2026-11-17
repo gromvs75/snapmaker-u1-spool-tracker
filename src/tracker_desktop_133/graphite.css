@@ -437,3 +437,7 @@ body.graphite{padding:0;margin:0}
 .graphite #desktop-tags-dialog .gd-body{flex:1;align-content:start}
 
 .graphite .gd-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:20px 0}.graphite .gd-stat-grid h3{margin-bottom:12px}.graphite .gd-stat-grid table{width:100%}.graphite .gd-stat-grid td:first-child{overflow-wrap:anywhere}.graphite .gd-stat-grid td:last-child{white-space:nowrap}@media(max-width:620px){.graphite .gd-stat-grid{grid-template-columns:1fr}}
+
+.graphite #slots-container{display:block}.graphite #slots-container .slot-row{display:grid;grid-template-columns:28px 38px minmax(0,1fr) minmax(180px,32%);gap:16px;align-items:center;padding:20px 0;border-bottom:1px solid var(--border)}
+.graphite .gd-head-art svg{width:36px;height:36px}.graphite .gd-head-copy small{display:block;font-size:12px;line-height:1.7;color:var(--muted)}.graphite .gd-head-copy strong{font-size:13px}.graphite .gd-head-controls select{width:100%;font-size:12px}.graphite .gd-head-controls .slot-select-wrap{display:block}.graphite .gd-head-controls .slot-color-option{font-size:12px}.graphite #slots-container .slot-badge{margin:0;font-size:13px;color:var(--text)}
+@media(max-width:620px){.graphite #slots-container .slot-row{grid-template-columns:28px 36px minmax(0,1fr)}.graphite .gd-head-controls{grid-column:2/-1}}

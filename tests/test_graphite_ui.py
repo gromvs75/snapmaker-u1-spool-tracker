@@ -75,6 +75,11 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
                 assert boxes[0]['x']+boxes[0]['width']<boxes[1]['x']
                 assert boxes[1]['x']+boxes[1]['width']<boxes[2]['x']
             page.locator('#nav-spools').click()
+            page.locator('[data-inventory-tab=slots]').click()
+            assert page.locator('#slots-container .gd-head-art svg').count()==4
+            assert page.locator('#slots-container .gd-head-copy').count()==4
+            page.screenshot(path=str(out/'heads.png'),full_page=True)
+            page.locator('[data-inventory-tab=library]').click()
             assert page.locator('.spool-inventory thead th').count()==5
             assert page.locator('.graphite-balance').first.inner_text()=='571,6 гр.'
             assert page.locator('#spools-table input').first.input_value()=='571.597'

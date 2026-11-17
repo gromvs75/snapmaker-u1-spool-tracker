@@ -15,6 +15,8 @@ ENABLE_VALUE = b'tracker-uid-selective-trial-v1\n'
 
 
 class SelectiveBootTrial:
+    requires_global_persistence = False
+
     def __init__(self, model):
         self.model = model
         self.base = model.base
@@ -24,8 +26,8 @@ class SelectiveBootTrial:
         """Stage while stopped. Explicit enable is the final durable operation."""
         with self.base.locked():
             self.model.stopped()
-            if self.model.debug.exists():
-                raise ValueError('This experiment requires whole-overlay persistence OFF')
+            if self.model.debug.exists() != self.requires_global_persistence:
+                raise ValueError('Unexpected whole-overlay persistence policy')
             if any(self.base.path(n).exists() for n in (PACKAGE, ENABLED)):
                 raise ValueError('Recover the existing selective package first')
             self.base.plan()
@@ -89,7 +91,7 @@ class SelectiveBootTrial:
             enabled = self.base.path(ENABLED)
             if not enabled.exists() or enabled.read_bytes() != ENABLE_VALUE:
                 return disabled('not-enabled')
-            if self.model.debug.exists():
+            if self.model.debug.exists() != self.requires_global_persistence:
                 return disabled('unexpected-global-persistence')
             if record['firmware_identity'] != self.model.firmware_identity():
                 return disabled('firmware-changed')

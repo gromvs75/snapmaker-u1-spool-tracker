@@ -12,6 +12,12 @@ Klipper startup. Two process benches reproduced this. Do not enable `/oem/.debug
 using this guide: it persists the entire system overlay. Physical deployment is
 not ready. See the [boot-policy experiment](../development/rfid-boot-lifecycle-2026-11-17.md).
 
+Bespok3d was also reviewed: its installer creates `.debug` and modifies system
+init scripts. It does not provide a ready-made no-debug solution. No supported
+persistent invocation point for our loader was found in the inspected stock
+startup path; retaining a package in user storage does not create one.
+See [sources, bench evidence and alternatives](../development/rfid-bespok-boot-anchor-2026-11-17.md).
+
 Manual assignments need no module. RFID requires a compatible Python extra,
 `tracker_uid.cfg` and a Klipper include. A config line alone is insufficient.
 No firmware image is flashed: the observer wraps approved reader methods in memory

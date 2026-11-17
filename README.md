@@ -65,6 +65,13 @@ Start with read-only mode before enabling usage delivery. Real U1 printing with 
 
 ## Start here
 
+**Testing the separate 2.0 candidate (rc16+):** reliable Snorca bed numbers
+require a one-time start-G-code comment in each printer preset, selecting that
+saved preset in the project, and re-slicing. Without it, a usage forecast may
+still appear with an unknown bed number. This is separate from the 1.x setup
+above. [Setup (RU)](docs/guides/snorca-bed-identity-ru.md) ·
+[Setup (EN)](docs/guides/snorca-bed-identity-en.md).
+
 | What you need | Link |
 |---|---|
 | Installation, inventory and backups | [English guide](docs/guides/en.md) · [Russian guide](docs/guides/ru.md) |

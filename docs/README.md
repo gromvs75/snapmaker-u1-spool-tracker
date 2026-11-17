@@ -17,7 +17,8 @@
 
 ## Tracker 2.0 development
 
-- [Номера столов Snorca: настройка передачи при нарезке](guides/snorca-bed-identity-ru.md)
+- [Номера столов Snorca: обязательная настройка для надёжного определения (RU)](guides/snorca-bed-identity-ru.md) · [English](guides/snorca-bed-identity-en.md)
+- [Пользовательский кандидат 2.0: запуск и настройка](guides/user-candidate-2.0-ru.md)
 - [Запуск отдельной стендовой сборки 2.0](guides/tracker-2.0-bench-ru.md)
 - [История, ручная сверка и итоговая сборка](development/ready-build-2026-11-14.md)
 

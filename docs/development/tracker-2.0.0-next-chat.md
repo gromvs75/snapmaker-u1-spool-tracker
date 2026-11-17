@@ -1,4 +1,40 @@
-# Актуальная точка продолжения — 17.11.2026, read-only service audit
+# Актуальная точка продолжения — 17.11.2026, получен U1 audit / optional boot
+
+Пользователь выполнил read-only команду; JSON получен и разобран, повтор пароля
+для этого снимка не нужен. Ветка `integrate/2.0-rfid-optional-boot`, код `d9d44a1`,
+checkpoint `checkpoint/rc17-before-rfid-optional-boot` → `a572837`.
+[Полный отчёт](rfid-audit-findings-optional-boot-2026-11-17.md).
+
+`output/u1-rfid-readonly/overlay-service-audit.json`: 79 219 байт, SHA-256
+`d15c8487fafe2b0dd0df6f6b62fce33e7eb7056369b1a263fd9663f6e4c30fb7`.
+Сохранена отдельная локальная копия с именем по SHA в `audit-snapshots/`.
+Драйвер и пять ранее сохранённых init-скриптов совпали по хешам. .debug отсутствует.
+В upper 213 записей: 35 директорий, 178 файлов, из них 168 в __pycache__.
+Остальное включает Wi-Fi/MQTT/SSH/logs: не считать слой пустым или только RFID,
+не считать наличие этих файлов доказательством пользовательских изменений.
+4 permission errors; приватный SSH host key не читать и root для него не просить.
+Klipper PID 1267/start1216 стабилен, Moonraker/lmd стабильны. Исчезнувший PID 4371
+не был классифицирован; это не доказательство перезапуска Klipper.
+
+Новый отдельный ЛАБОРАТОРНЫЙ эксперимент `optional.py`/`optional_run.py`:
+module + activating cfg в одном volatile слое, постоянный main содержит exact-name
+glob `[t]racker_uid_boot.cfg`. После очистки всего слоя Klipper ready, канал
+module_missing, старые UID очищены. .debug/boot hooks/автопереустановки нет.
+Это session-only защита запуска, НЕ постоянное RFID. Удаление только module при
+оставшемся cfg всё ещё ломает старт; отрицательный сценарий и откат проверены.
+Проверялся parser лабораторного Klipper, реальный configfile.py U1 отдельно
+не сверялся. Основной installer и экспортированный recovery не менять этим
+экспериментом автоматически.
+
+107 focused passed, 23 проверки двух процессов, очистка без ошибок; полная
+регрессия 1061 passed / 3 skipped, 157.97 с. output/rfid-optional-*.
+Новых сетевых обращений к U1 в этом этапе нет, только чтение JSON на Mac.
+Установленная версия/базы/Spoolman не затронуты, GUI остаётся rc17, нового app/EXE нет.
+Дальше требуется постоянный механизм загрузки, точная совместимость parser и
+план управления службами/надзором; физические метки не проверены. Пользователь
+явно запретил записи и перезапуски на принтере. Ничего не публиковать.
+
+# Предыдущая точка продолжения — 17.11.2026, read-only service audit
 
 Ветка `integrate/2.0-rfid-readonly-audit`, код `2a50696`, checkpoint
 `checkpoint/rc17-before-rfid-readonly-audit` → `f414ff0`.

@@ -73,7 +73,15 @@
    for(const title of [t('Головка','Head','Kopf','Головка','Cabezal'),t('Катушка','Spool','Spule','Котушка','Bobina'),t('Нужно','Needed','Benötigt','Потрібно','Necesario'),t('Остаток','Remaining','Rest','Залишок','Restante')])head.append(node('th',title));table.append(head);
    for(const r of g.rows){const row=node('tr');for(const value of [r.tool,r.spool_name||'—',displayGrams(r.required_g)+' '+gramUnit(),r.remaining_g==null?'—':displayGrams(r.remaining_g)+' '+gramUnit()])row.append(node('td',value));table.append(row)}details.append(table);
   }
-  box.append(details);if(actions)box.append(actions);content.append(box);
+  box.append(details);if(actions)box.append(actions);
+  const ongoing=same&&['printing','paused'].includes(m.state);
+  if(!ongoing&&!actions){
+   const past=node('details');past.id='desktop-past-check';
+   past.append(node('summary',t('Проверка при старте — сохранённый результат','Start check — saved result','Startprüfung — gespeichertes Ergebnis','Перевірка на старті — збережений результат','Comprobación inicial — resultado guardado')));
+   box.classList.add('is-ok');
+   box.querySelector('p').textContent=t('Данные на момент запуска задания. Изменение остатка не пересчитывает эту проверку.','Data recorded at job start. Adjusting the balance does not recalculate this check.','Daten beim Auftragsstart. Eine Restmengenkorrektur berechnet diese Prüfung nicht neu.','Дані на момент старту завдання. Зміна залишку не перераховує цю перевірку.','Datos del inicio del trabajo. Ajustar el saldo no recalcula esta comprobación.');
+   past.append(box);content.append(past);
+  }else content.append(box);
  };
  const forecast=el('slice-forecast'),header=forecast.querySelector('.overview-heading'),meta=forecast.querySelector('.forecast-meta');
  const separate=node('span');separate.id='desktop-forecast-separate';header.append(separate);

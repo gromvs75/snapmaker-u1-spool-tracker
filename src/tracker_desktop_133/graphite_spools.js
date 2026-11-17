@@ -25,21 +25,47 @@
   const {body,footer:foot}=shell(actions,t('Действия с катушкой','Spool actions','Spulenaktionen','Дії з котушкою','Acciones de bobina'),context(s));foot.hidden=true;body.classList.add('gs-action-list');
   const action=(key,caption,fn)=>{const b=button('',()=>{actions.close();fn()},'gs-action');b.dataset.action=key;b.append(icon(key),node('span',caption));body.append(b)};
   action('params',t('Параметры','Parameters','Parameter','Параметри','Parámetros'),()=>params.click());
-  if(!s.spoolman)action('balance',words.balance(),()=>balance(row.dataset.spoolId,s));
+  if(!s.spoolman)action('balance',words.balance(),()=>act(()=>balance(row.dataset.spoolId,s)));
   const transfer=row.querySelector('[id^=desktop-transfer-]');if(transfer)action('transfer',t('Перенести между принтерами','Transfer between printers','Zwischen Druckern verschieben','Перенести між принтерами','Transferir entre impresoras'),()=>transfer.click());
   const archive=row.querySelector('.desktop-archive-action');if(archive)action('archive',archive.textContent,()=>archive.click());
   const remove=row.querySelector('.delete-spool');if(remove)action('delete',remove.textContent,()=>remove.click());
   open(actions);
  };
- function balance(id,s){
+ async function balance(id,s){
+  await loadData();s=desktopFormData.spools[id];if(!s)return;
+  let revision=desktopFormData.inventory_revision;
   const {body,footer:foot}=shell(adjust,words.balance(),context(s));
   const current=node('div',undefined,'gs-current-balance');current.append(node('small',t('Сейчас в Tracker','Current balance','Aktuell in Tracker','Зараз у Tracker','Saldo actual')),node('strong',displayGrams(s.remaining_g)+' '+gramUnit()));
   const input=node('input');input.id='graphite-balance-value';input.type='number';input.min='0';input.step='any';input.value=s.remaining_g;
   const ack=node('input');ack.type='checkbox';ack.id='graphite-balance-ack';const ackLabel=node('label',undefined,'gs-check');ackLabel.append(ack,node('span',t('Подтверждаю новое значение остатка.','I confirm the new balance.','Ich bestätige die neue Restmenge.','Підтверджую нове значення залишку.','Confirmo el nuevo saldo.')));
   body.append(current,field(t('Новый остаток, г','New balance, g','Neue Restmenge, g','Новий залишок, г','Nuevo saldo, g'),input),node('p',t('Для расхода конкретного задания используйте ручной учёт в истории: там сохраняется защита от повторного списания.','For a particular job, use manual accounting in History to retain protection against duplicate deductions.','Für einen bestimmten Auftrag die manuelle Erfassung im Verlauf verwenden, damit keine doppelten Abbuchungen entstehen.','Для витрат конкретного завдання використовуйте ручний облік в історії із захистом від повторного списання.','Para un trabajo concreto, use el registro manual del historial para evitar descuentos duplicados.'),'gs-notice'),ackLabel);
-  let busy=false;
-  const save=button(t('Установить остаток','Set balance','Restmenge setzen','Встановити залишок','Establecer saldo'),()=>act(async()=>{if(busy||!ack.checked||!input.reportValidity())return;busy=true;save.disabled=true;try{await api('/api/spools/update',{id,remaining_g:input.value});adjust.close();await loadData()}finally{busy=false;validate()}}),'gs-primary');save.id='graphite-balance-save';
-  const validate=()=>save.disabled=busy||!ack.checked||input.value===''||!input.checkValidity();input.oninput=ack.onchange=validate;validate();footer(adjust,foot,save);open(adjust);input.focus();
+  const notice=node('p','','gs-notice');notice.id='graphite-balance-result';notice.setAttribute('role','status');notice.hidden=true;body.append(notice);
+  const explain=node('p',t('Это изменение остатка катушки. Оно не подтверждает назначение на головку и не закрывает задания в истории.','This changes the spool balance. It does not confirm its toolhead assignment or settle jobs in History.','Dies ändert die Restmenge, bestätigt aber keine Kopfzuordnung und schließt keine Aufträge im Verlauf ab.','Це зміна залишку котушки. Вона не підтверджує призначення на голівку й не закриває завдання в історії.','Esto cambia el saldo de la bobina. No confirma su asignación al cabezal ni cierra trabajos del historial.'),'subtitle');ackLabel.before(explain);
+  let busy=false,succeeded=false;
+  const save=button(t('Установить остаток','Set balance','Restmenge setzen','Встановити залишок','Establecer saldo'),()=>act(async()=>{if(busy||!ack.checked||!input.reportValidity())return;busy=true;save.disabled=true;try{
+   notice.hidden=true;
+   const response=await fetch('/api/spools/update',{method:'POST',headers:{'Content-Type':'application/json'},trackerInventoryRevision:revision,trackerInventoryConfirmed:true,body:JSON.stringify({id,remaining_g:input.value})});
+   const result=await response.json();
+   if(!response.ok){
+    if(response.status===409&&result.error?.startsWith('Катушки или назначения изменились')){
+     await loadData();const latest=desktopFormData.spools[id];revision=desktopFormData.inventory_revision;
+     current.lastChild.textContent=latest?displayGrams(latest.remaining_g)+' '+gramUnit():'—';input.disabled=false;ack.checked=false;
+     notice.textContent=t('Изменение не сохранено. Данные обновлены автоматически. Проверьте текущий и введённый остаток и подтвердите снова.','Change not saved. Data refreshed automatically. Review the current and entered balances and confirm again.','Änderung nicht gespeichert. Daten automatisch aktualisiert. Aktuelle und eingegebene Restmenge prüfen und erneut bestätigen.','Зміну не збережено. Дані оновлено автоматично. Перевірте поточний і введений залишок та підтвердьте знову.','Cambio no guardado. Datos actualizados automáticamente. Revise el saldo actual y el introducido y confirme de nuevo.');
+     // The backend guard remains authoritative; no automatic mutation retry.
+     notice.hidden=false;return;
+    }
+    throw Error(result.error||String(response.status));
+   }
+   succeeded=true;await loadData();adjust.close();
+   let saved=el('graphite-balance-saved');if(!saved){saved=node('p',undefined,'gs-notice');saved.id='graphite-balance-saved';saved.setAttribute('role','status');el('inventory-toolbar').after(saved)}
+   saved.textContent=t('Остаток сохранён: ','Balance saved: ','Restmenge gespeichert: ','Залишок збережено: ','Saldo guardado: ')+displayGrams(result.remaining_mg/1000)+' '+gramUnit();
+  }catch(error){
+   notice.textContent=succeeded?t('Остаток сохранён. Сейчас не удалось загрузить обновлённые данные.','Balance saved. Updated data could not be loaded right now.','Restmenge gespeichert. Aktualisierte Daten konnten nicht geladen werden.','Залишок збережено. Оновлені дані поки не вдалося завантажити.','Saldo guardado. No se pudieron cargar los datos actualizados.'):
+    error instanceof TypeError?t('Ответ не получен: результат сохранения пока неизвестен. Повторное подтверждение проверит тот же запрос.','No response: the save result is unknown. Confirm again to check the same request.','Keine Antwort: Speicherergebnis unbekannt. Erneut bestätigen, um dieselbe Anfrage zu prüfen.','Відповіді немає: результат збереження невідомий. Повторне підтвердження перевірить той самий запит.','Sin respuesta: se desconoce el resultado. Confirme de nuevo para comprobar la misma solicitud.'):error.message;
+   if(error instanceof TypeError){input.disabled=true;ack.checked=false}
+   notice.hidden=false;
+  }finally{busy=false;validate()}}),'gs-primary');save.id='graphite-balance-save';
+  const validate=()=>save.disabled=busy||succeeded||!ack.checked||input.value===''||!input.checkValidity();input.oninput=ack.onchange=validate;validate();footer(adjust,foot,save);open(adjust);input.focus();
  }
  function color(id,s){
   const {body,footer:foot}=shell(colors,words.color(),context(s));body.append(summary(s));let selected=s.color||'',busy=false;

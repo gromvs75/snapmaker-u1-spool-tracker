@@ -36,7 +36,7 @@ class DesktopInventory:
                 if old['payload']!=payload:raise AccountingConflict('Повтор запроса содержит другое изменение.')
                 return dict(json.loads(old['result']),status='duplicate')
             ctx=context(self.library,fleet)
-            if expected_revision!=ctx['revision']:raise AccountingConflict('Катушки или назначения изменились. Обновите экран и повторите проверку.')
+            if expected_revision!=ctx['revision']:raise AccountingConflict('Катушки или назначения изменились. Изменение не сохранено.')
             if action=='spools/add':result=self.create(data,ctx,fleet)
             elif action=='slots':result=self.slots(data,ctx,fleet)
             elif action in ('spools/color','spools/update'):result=self.edit(action,data,ctx)

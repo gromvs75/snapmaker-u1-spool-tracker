@@ -144,6 +144,15 @@ def main():
             page.locator('[data-settings-section=backup]').click();page.screenshot(path=str(out/'backup.png'),full_page=True)
             page.locator('#lang-picker').click();page.locator('#graphite-language-dialog[open]').wait_for();page.screenshot(path=str(out/'languages.png'),full_page=True);page.keyboard.press('Escape')
             checks.append('packaged completed job, statistics, toolhead assignments, name comparison, accounting, backup page and language dialog')
+            # Reproduce a concurrent balance edit against the packaged owner.
+            sys.path.insert(0,str(ROOT/'tests'))
+            from test_balance_feedback import exercise_balance
+            def change_balance_elsewhere():
+                current=api('desktop/data');sid=page.locator('#spools-table tr').first.get_attribute('data-spool-id')
+                api('desktop/spools/update',dict(id=sid,remaining_g='90',_inventory_revision=current['inventory_revision'],_request_id=__import__('uuid').uuid4().hex,_confirmed=True))
+            exercise_balance(page,change_balance_elsewhere,out/'balance-conflict.png')
+            page.screenshot(path=str(out/'balance-saved.png'),full_page=True)
+            checks.append('packaged balance conflict refreshes automatically, keeps entered amount, requires new acknowledgement; no duplicate confirmation')
             assert not errors,errors
             browser.close()
         assert not api('state')['connections']['connected'] and not writes

@@ -19,9 +19,9 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
     if(!pending){
      if(!desktopFormData)throw Error('Reload the inventory before changing it.');
      const remote=resource.startsWith('/api/spoolman/');
-     const revision=remote?desktopSpoolmanData?.inventory_revision:desktopFormData.inventory_revision;
+     const revision=options.trackerInventoryRevision??(remote?desktopSpoolmanData?.inventory_revision:desktopFormData.inventory_revision);
      const catalogRevision=desktopSpoolmanData?.catalog_revision;
-     if(window.desktopConfirmInventory&&!await window.desktopConfirmInventory(resource,body))return new Response('{}',{status:200});
+     if(!options.trackerInventoryConfirmed&&window.desktopConfirmInventory&&!await window.desktopConfirmInventory(resource,body))return new Response('{}',{status:200});
      pending={...body,_inventory_revision:revision,_request_id:crypto.randomUUID(),_confirmed:true};
      if(resource==='/api/spoolman/attach')pending.catalog_revision=catalogRevision;
      sessionStorage.setItem(pendingKey,JSON.stringify(pending));

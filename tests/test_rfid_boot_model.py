@@ -1,6 +1,8 @@
 """Boot policy and transaction-boundary fault injection, in disposable roots only."""
 import json
 import sys
+import os
+import subprocess
 
 import pytest
 
@@ -210,3 +212,126 @@ def test_retry_install_requires_recovery_instead_of_overwrite(model):
     trial.rollback()
     trial.install(trial.plan(), accept_whole_overlay=True)
     assert model.cold_boot()['loadable']
+
+
+def system_baseline(model):
+    for root in (model.root, model.lower):
+        p = root / 'system/etc/vendor.conf'
+        p.parent.mkdir()
+        p.write_bytes(b'vendor defaults\n')
+
+
+@pytest.mark.parametrize('change', ['add', 'edit', 'delete', 'mode', 'directory', 'symlink'])
+def test_foreign_changes_outside_klipper_survive_rollback_and_boot(model, change):
+    system_baseline(model)
+    trial = trial_install(model)
+    p = model.root / 'system/etc/vendor.conf'
+    if change == 'add':
+        p.with_name('user.conf').write_text('keep me')
+    elif change == 'edit':
+        p.write_text('edited')
+    elif change == 'delete':
+        p.unlink()
+    elif change == 'mode':
+        p.chmod(0o600)
+    elif change == 'directory':
+        p.parent.chmod(0o700)
+    elif change == 'symlink':
+        p.with_name('link').symlink_to('/not/a/real/target')
+    before = model.system_inventory()
+    assert trial.inspect()['state'] == 'foreign-system-edits-review-required'
+    with pytest.raises(ValueError, match='Foreign system edits'):
+        trial.rollback()
+    assert model.debug.exists() and trial.record.exists()
+    assert tool.BLOCK not in model.base.path(tool.MAIN).read_bytes()
+    model.cold_boot()
+    assert model.system_inventory() == before
+
+
+def test_existing_volatile_edits_are_not_silently_made_persistent(model):
+    (model.root / 'system/preexisting').write_text('volatile third-party change')
+    trial = PersistenceTrial(model)
+    with pytest.raises(ValueError, match='Pre-existing volatile'):
+        trial.plan()
+    assert not trial.record.exists() and not model.debug.exists()
+
+
+def test_existing_persistent_foreign_edits_prevent_update_but_not_owned_rollback(model):
+    model.debug.write_bytes(b'user marker')
+    foreign = model.root / 'system/user.conf'
+    foreign.write_text('keep')
+    trial = trial_install(model)
+    with pytest.raises(ValueError, match='lost on update'):
+        trial.prepare_update()
+    assert tool.BLOCK in model.base.path(tool.MAIN).read_bytes()
+    trial.rollback()
+    model.cold_boot()
+    assert foreign.read_text() == 'keep' and model.debug.read_bytes() == b'user marker'
+
+
+@pytest.mark.parametrize('part', ['system', 'config', 'klipper'])
+def test_firmware_change_blocks_old_backup_restore_without_any_writes(model, part):
+    trial = trial_install(model)
+    (model.lower / part / 'new-vendor-file').write_text('new firmware')
+    model.firmware_reset()
+    model.cold_boot()
+    before = {str(p): p.read_bytes() for p in model.root.rglob('*') if p.is_file()}
+    assert trial.inspect()['state'] == 'firmware-changed-review-required'
+    assert trial.inspect()['automatic_reinstall'] is False
+    with pytest.raises(ValueError, match='Firmware changed'):
+        trial.rollback()
+    assert {str(p): p.read_bytes() for p in model.root.rglob('*') if p.is_file()} == before
+    assert tool.BLOCK not in model.base.path(tool.MAIN).read_bytes()
+
+
+@pytest.mark.parametrize('kind', ['fifo', 'hardlink'])
+def test_unsupported_entries_fail_closed_without_reading_special_files(model, kind):
+    p = model.root / 'system/unsupported'
+    if kind == 'fifo':
+        os.mkfifo(p)
+    else:
+        os.link(model.base.path(tool.DRIVER), p)
+    trial = PersistenceTrial(model)
+    with pytest.raises(ValueError, match='Unsupported special or hardlinked'):
+        trial.plan()
+    assert not trial.record.exists() and not model.debug.exists()
+
+
+def test_stale_foreign_system_plan_rejected_before_marker_write(model):
+    trial = PersistenceTrial(model)
+    plan = trial.plan()
+    (model.root / 'system/changed').write_text('new')
+    with pytest.raises(ValueError):
+        trial.install(plan, accept_whole_overlay=True)
+    assert not trial.record.exists() and not model.debug.exists()
+
+
+def test_recovery_kit_runs_without_repository_or_app(model, tmp_path):
+    from dev.labs.uid_boot_bench.export_recovery import export
+    trial = trial_install(model)
+    kit = export(tmp_path / 'standalone')
+    def run(action):
+        return subprocess.run([sys.executable, '-I', str(kit / 'recover.py'), action,
+                               '--simulator-root', str(model.root)], cwd=tmp_path,
+                              capture_output=True, text=True, timeout=15)
+    result = run('inspect')
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert json.loads(result.stdout)['state'] == 'rollback-available'
+    result = run('rollback')
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not trial.record.exists() and not model.debug.exists()
+    assert model.cold_boot()['loadable']
+    assert run('rollback').returncode == 0
+
+
+def test_damaged_recovery_kit_cannot_execute_mutations(model, tmp_path):
+    from dev.labs.uid_boot_bench.export_recovery import export
+    trial_install(model)
+    kit = export(tmp_path / 'damaged')
+    (kit / 'dev/labs/uid_boot_bench/model.py').write_text('raise RuntimeError("executed")')
+    result = subprocess.run([sys.executable, '-I', str(kit / 'recover.py'), 'rollback',
+                             '--simulator-root', str(model.root)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1 and 'integrity failure' in result.stdout
+    assert 'executed' not in result.stderr
+    assert model.debug.exists() and tool.BLOCK in model.base.path(tool.MAIN).read_bytes()

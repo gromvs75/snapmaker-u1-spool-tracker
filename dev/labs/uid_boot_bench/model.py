@@ -7,6 +7,7 @@ commands. `klipper/` represents the merged system tree; `printer_data/` and
 atomicity, physical power loss and vendor firmware update internals are not modeled.
 """
 import json
+import os
 from pathlib import Path
 import shutil
 import stat
@@ -14,6 +15,42 @@ import stat
 from scripts import rfid_module_tool as tool
 
 BOOT_MARKER = {'kind': 'u1-materialized-boot-model', 'version': 1}
+
+
+def inventory(path, *, exclude_uid=False):
+    """Inventory a materialized tree without following symlinks.
+
+    Deletions are represented by missing entries, not real OverlayFS whiteouts.
+    Special files/hardlinks are deliberately unsupported, never silently skipped.
+    """
+    result = {}
+
+    def visit(p, rel):
+        info = p.lstat()
+        item = {'mode': stat.S_IMODE(info.st_mode), 'uid': info.st_uid, 'gid': info.st_gid}
+        if stat.S_ISLNK(info.st_mode):
+            item.update(kind='symlink', target=os.readlink(p))
+        elif stat.S_ISDIR(info.st_mode):
+            item['kind'] = 'directory'
+            for child in sorted(p.iterdir()):
+                name = '/'.join(filter(None, (rel, child.name)))
+                if exclude_uid and (name == 'klippy/extras/tracker_uid.py' or
+                                    child.name == '__pycache__' or child.suffix == '.pyc'):
+                    continue
+                visit(child, name)
+        elif stat.S_ISREG(info.st_mode) and info.st_nlink == 1:
+            item.update(kind='file', sha256=tool.sha(p.read_bytes()))
+        else:
+            raise ValueError('Unsupported special or hardlinked system entry: ' + rel)
+        result[rel or '.'] = item
+
+    visit(path, '')
+    return result
+
+
+def differences(before, after):
+    return {name: {'before': before.get(name), 'after': after.get(name)}
+            for name in sorted(before.keys() | after.keys()) if before.get(name) != after.get(name)}
 
 
 def tree(path):
@@ -53,9 +90,12 @@ class BootModel:
         if any(base.path(p).exists() for p in tool.TARGETS[:2]) or base.journal.exists():
             raise ValueError('Capture a stock baseline before installing UID')
         tree(base.path('klipper'))  # reject source links before copytree
+        base.path('system').mkdir(exist_ok=True)
+        inventory(base.path('system'))
         for name in ('persistent', 'persistent/tracker-deployment', '_boot_lower'):
             base.path(name).mkdir(exist_ok=True)
         shutil.copytree(base.path('klipper'), base.path('_boot_lower/klipper'))
+        shutil.copytree(base.path('system'), base.path('_boot_lower/system'), symlinks=True)
         shutil.copytree(base.path('printer_data/config'), base.path('_boot_lower/config'))
         for name in ('.fluidd', '.printer_data'):
             tool.atomic(base.path('persistent/' + name), b'')
@@ -70,9 +110,10 @@ class BootModel:
         self.stopped()
         cleared = not self.debug.is_file()
         if cleared:
-            dest = self.base.path('klipper')
-            shutil.rmtree(dest)
-            shutil.copytree(self.lower / 'klipper', dest)
+            for name in ('klipper', 'system'):
+                dest = self.base.path(name)
+                shutil.rmtree(dest)
+                shutil.copytree(self.lower / name, dest, symlinks=True)
         initial = not self.prepared.is_file()
         restore_config = initial or not (self.fluidd.is_file() or self.factory.is_file())
         if restore_config:
@@ -95,10 +136,21 @@ class BootModel:
     def firmware_reset(self, *, clear_debug=True, clear_prepared=True):
         """Model the two marker removals seen in systemUpgrade.sh, not a real OTA."""
         self.stopped()
-        if clear_debug:
-            self.debug.unlink(missing_ok=True)
         if clear_prepared:
             self.prepared.unlink(missing_ok=True)
+        if clear_debug:
+            self.debug.unlink(missing_ok=True)
+
+    def system_inventory(self, *, lower=False):
+        prefix = self.lower if lower else self.root
+        return {name + '/' + rel: item
+                for name in ('klipper', 'system')
+                for rel, item in inventory(prefix / name, exclude_uid=name == 'klipper').items()}
+
+    def firmware_identity(self):
+        # Full modeled lower tree/config, not merely the RFID driver's hash.
+        return tool.sha(tool.canonical({name: inventory(self.lower / name)
+                                       for name in ('klipper', 'system', 'config')}))
 
 
 class PersistentInstaller(tool.Installer):
@@ -132,12 +184,16 @@ class PersistenceTrial:
         if self.record.exists():
             raise ValueError('Persistence trial already exists; recover it first')
         debug = self.model.debug
+        system = self.model.system_inventory()
+        if not debug.exists() and system != self.model.system_inventory(lower=True):
+            raise ValueError('Pre-existing volatile system edits: review before retaining the whole overlay')
         data = {
-            'schema': 1, 'root': str(self.model.root),
+            'schema': 2, 'root': str(self.model.root),
             'scope': 'whole-system-overlay-not-only-rfid',
             'debug_before': tool.encode(debug.read_bytes()) if debug.exists() else None,
             'debug_mode': stat.S_IMODE(debug.stat().st_mode) if debug.exists() else None,
-            'system_before': tree(self.model.base.path('klipper')),
+            'system_before': system,
+            'firmware_identity': self.model.firmware_identity(),
             'config_policy': self.policy(), 'install': self.installer.plan()}
         return dict(data, revision=tool.sha(tool.canonical(data)))
 
@@ -148,12 +204,26 @@ class PersistenceTrial:
     def read_record(self):
         data = json.loads(self.record.read_text())
         digest = data.pop('revision')
-        if (tool.sha(tool.canonical(data)) != digest or data.get('schema') != 1 or
+        if (tool.sha(tool.canonical(data)) != digest or data.get('schema') != 2 or
                 data.get('root') != str(self.model.root) or
                 data.get('scope') != 'whole-system-overlay-not-only-rfid'):
             raise ValueError('Corrupt or foreign persistence record')
         data['revision'] = digest
         return data
+
+    def inspect(self):
+        """Read-only recovery decision, usable without the Tracker GUI/database."""
+        if not self.record.exists():
+            return {'state': 'no-trial', 'automatic_reinstall': False}
+        plan = self.read_record()
+        changed = differences(plan['system_before'], self.model.system_inventory())
+        firmware_changed = plan['firmware_identity'] != self.model.firmware_identity()
+        return {'state': 'firmware-changed-review-required' if firmware_changed else
+                'foreign-system-edits-review-required' if changed else 'rollback-available',
+                'firmware_changed': firmware_changed, 'system_changes': changed,
+                'module_present': self.model.base.path(tool.TARGETS[0]).exists(),
+                'integration_enabled': tool.BLOCK in self.model.base.path(tool.MAIN).read_bytes(),
+                'persistence_enabled': self.model.debug.exists(), 'automatic_reinstall': False}
 
     def install(self, plan, *, accept_whole_overlay=False, fail_after=None):
         self.model.stopped()
@@ -181,6 +251,8 @@ class PersistenceTrial:
         if not self.record.exists():
             return 'no-trial'
         plan = self.read_record()
+        if plan['firmware_identity'] != self.model.firmware_identity():
+            raise ValueError('Firmware changed: preserve new firmware/config; manual recovery review required')
         self.installer.rollback(fail_after=fail_after if fail_after in (1, 2, 3) else None)
         # Only this extra's cache; never blanket-delete the printer's caches.
         cache = self.model.base.path('klipper/klippy/extras/__pycache__')
@@ -192,7 +264,7 @@ class PersistenceTrial:
         if fail_after == 4:
             raise RuntimeError('Injected interruption before persistence restoration')
         if plan['debug_before'] is None:
-            if tree(self.model.base.path('klipper')) != plan['system_before']:
+            if self.model.system_inventory() != plan['system_before']:
                 raise ValueError('Foreign system edits: keep persistence enabled for review')
             if self.model.debug.exists():
                 if self.model.debug.read_bytes() != b'' or stat.S_IMODE(self.model.debug.stat().st_mode) != 0o644:
@@ -213,7 +285,11 @@ class PersistenceTrial:
 
     def prepare_update(self):
         """Safe modeled update path: remove module integration BEFORE marker reset."""
+        self.model.stopped()
+        if self.model.system_inventory() != self.model.system_inventory(lower=True):
+            raise ValueError('Foreign system edits would be lost on update; preserve and review them first')
         self.rollback()
-        if tool.BLOCK in self.model.base.path(tool.MAIN).read_bytes():
+        if (tool.BLOCK in self.model.base.path(tool.MAIN).read_bytes() or
+                any(self.model.base.path(p).exists() for p in tool.TARGETS[:2])):
             raise ValueError('UID integration still active')
         return 'stock-before-update'

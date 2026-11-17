@@ -9,12 +9,14 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import subprocess
 import tempfile
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / 'src'))
 from dev.labs.uid_boot_bench.model import BootModel, PersistenceTrial, tool
+from dev.labs.uid_boot_bench.export_recovery import export
 from tracker_uid_client import UidClient, PrinterEndpoint
 
 spec = importlib.util.spec_from_file_location('boot_multi_process', REPO / 'dev/labs/uid_multi_bench/run.py')
@@ -30,6 +32,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix='rfid-boot-process-', dir='/private/tmp'))
     multi.ROOT = root
+    kit = export(root / 'independent-recovery-kit')
     source = REPO / 'output/uid-bridge-bench/sources/base/tests_support/snapmaker_source/2.1.0.157/klippy/extras/fm175xx_reader.py'
     driver_raw = source.read_bytes()
     assert tool.sha(driver_raw) == 'ce7363f8b512e5474d18bd57cdf0660e6e2df57dc256e22f743b3b28c1b70be8'
@@ -162,6 +165,39 @@ def main():
             ready(p, client, state='module_missing')
             check(pid + ': pre-update removal survives loss of persistence marker',
                   (p.root / tool.MAIN).read_bytes() == p.before)
+
+            stopped(p)
+            trial.install(trial.plan(), accept_whole_overlay=True)
+            foreign = p.root / 'system/foreign-service.conf'
+            foreign.write_bytes(b'# unrelated system change\n')
+
+            def recover(action):
+                return subprocess.run([sys.executable, '-I', str(kit / 'recover.py'), action,
+                                       '--simulator-root', str(p.root)], cwd=root,
+                                      capture_output=True, text=True, timeout=30)
+
+            independent = recover('rollback')
+            check(pid + ': independent recovery removes UID but retains foreign system persistence',
+                  independent.returncode == 1 and 'Foreign system edits' in independent.stdout and
+                  model.debug.exists() and tool.BLOCK not in (p.root / tool.MAIN).read_bytes())
+            model.cold_boot()
+            p.start()
+            ready(p, client, state='module_missing')
+            check(pid + ': stock process starts with foreign file preserved after recovery refusal',
+                  foreign.read_bytes() == b'# unrelated system change\n')
+            stopped(p)
+            review = recover('inspect')
+            check(pid + ': independent diagnostic identifies exact foreign file',
+                  review.returncode == 0 and
+                  'system/foreign-service.conf' in json.loads(review.stdout)['system_changes'])
+            # Explicit bench-owner resolution, NOT a recovery tool deleting foreign data.
+            foreign.unlink()
+            independent = recover('rollback')
+            check(pid + ': independent recovery completes after bench-owner resolves foreign edit',
+                  independent.returncode == 0 and not model.debug.exists() and not trial.record.exists())
+            model.cold_boot()
+            p.start()
+            ready(p, client, state='module_missing')
         check('two independent stock processes ready after completed rollback',
               all(c.snapshot()['state'] == 'module_missing' for c in clients))
         result['success'] = True

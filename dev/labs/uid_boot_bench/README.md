@@ -8,6 +8,8 @@ firmware flashing, or service/MCU control. Never copy these fixtures to a printe
 
 - `klipper/`: materialized system subtree, restored from `_boot_lower/klipper/`
   when the simulated `persistent/.debug` is absent;
+- `system/`: other modeled system files (for example service/config files),
+  restored from `_boot_lower/system/` under the same policy;
 - `printer_data/`: persistent configuration/data, representing `/oem/printer_data`;
 - `persistent/`: markers and durable deployment records outside the discarded tree;
 - config is restored from origin if `.printer_data` is absent, or when neither
@@ -25,12 +27,18 @@ Two compared paths:
    A durable plan precedes the marker, the module precedes activation, and rollback
    disables the include first. Installer metadata is in the modeled OEM area.
    Pending installation must be rolled back before retry. Existing persistence is
-   retained. Foreign source changes within the modeled system subtree prevent
+   retained. Foreign changes within both modeled system trees prevent
    automatically disabling a persistence marker created by the trial.
 
 The second path is a candidate, not a recommendation to set `.debug` on U1. That
-marker affects the entire system overlay. A real implementation would need inventory
-and recovery of the entire actual overlay, not only the Klipper subtree in this model.
+marker affects the entire system overlay. The model now inventories files, directories,
+modes, ownership and symlink targets outside Klipper too; symlinks are never followed.
+Additions, modifications and missing entries are compared. Special files/hardlinks
+are rejected. Python cache entries in Klipper are excluded. Pre-existing volatile
+changes block installation, since retaining them would change their next-boot behavior.
+A real implementation still needs inventory and recovery of the entire actual overlay:
+this materialized fixture does not model real whiteouts, opaque directories, ACLs,
+xattrs, mount boundaries, concurrent system writers or all system services.
 It must also address external firmware updates. Removing only `.debug` remains an
 unsafe state while the module is configured; the experiment intentionally exposes it.
 
@@ -39,6 +47,25 @@ that first boundary and both removals. A test removing only `.debug` is an indep
 marker-loss scenario, **not a claim about the observed updater's operation order**.
 The controlled update scenario rolls back UID integration before either removal;
 the bench cannot enforce that procedure for a user's future OTA update.
+Changes to the modeled firmware lower tree/config block old-backup rollback before
+any writes. They do not trigger reinstallation. Foreign system changes also block
+update preparation because the vendor cleanup could erase them. The diagnostic
+shows exact changed entries. Resolving those changes is deliberately not automated.
+
+Independent recovery kit (Python 3 standard library; POSIX simulators only):
+
+```sh
+python -m dev.labs.uid_boot_bench.export_recovery --output output/rfid-recovery-kit
+python3 -I output/rfid-recovery-kit/recover.py inspect --simulator-root /absolute/bench
+python3 -I output/rfid-recovery-kit/recover.py rollback --simulator-root /absolute/bench
+```
+
+Use a new output directory. Keep the simulator's `persistent/tracker-deployment/`
+and `_boot_lower/` intact; the kit reads its recovery records there, not in the GUI
+database. It has no install, SSH, restart or real-printer mode. Checksums validate
+packaged code before importing it. They detect corruption, not malicious replacement
+of both code and manifest. The kit does not back up or overwrite foreign system files.
+An interrupted trial from the older schema 1 is refused for manual review, not migrated.
 
 Run filesystem cases (synthetic driver; no network):
 

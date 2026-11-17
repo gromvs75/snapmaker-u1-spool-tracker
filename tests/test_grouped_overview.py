@@ -85,7 +85,8 @@ def test_grouped_overview_all_languages_and_guard_actions(tmp_path):
             page.wait_for_function("document.querySelector('#view-overview #guard-content').children.length===0")
             page.locator('#nav-history').click()
             page.locator('#history-start-checks #desktop-past-check > summary').click()
-            page.locator('#desktop-check-details > summary').click()
+            if page.locator('#desktop-check-details').get_attribute('open') is None:
+                page.locator('#desktop-check-details > summary').click()
             assert page.locator('#history-start-checks table').is_visible()
             page.screenshot(path=str(screens/'historical-start-check.png'),full_page=True)
             assert not errors

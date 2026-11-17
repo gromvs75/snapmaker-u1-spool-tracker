@@ -95,6 +95,9 @@ def main():
             click('RFID / UID · 0');capture('tags-empty');click('Закрыть')
             click('История');capture('history');click('Открыть');capture('history-complete');click('Закрыть')
             click('Настройки');click('Принтер');capture('printer-settings')
+            # Only the known synthetic loopback endpoint, never imported user URLs.
+            assert all(p['url']=='http://127.0.0.1:19991' for p in api('desktop/data')['printers'])
+            click('Проверить соединение');time.sleep(5);capture('printer-probe-result')
             click('Учёт');capture('accounting-settings')
             click('Резервная копия');capture('backup-settings')
             after=api('state');assert after['debits']==before['debits'] and after['spools']==before['spools'] and not after['connections']['connected']

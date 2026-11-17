@@ -54,7 +54,7 @@
  const form=el('printer-form'),connection=node('section',undefined,'graphite-connection-section'),connectionHeading=node('div',undefined,'graphite-connection-heading');
  connectionHeading.append(label(node('h3'),'Соединение','Connection','Verbindung','З’єднання','Conexión'),el('printer-status'));
  const connectionActions=node('div',undefined,'graphite-connection-actions');connectionActions.append(el('desktop-connections-toggle'),el('heads-read'));
- connection.append(connectionHeading,el('desktop-connections-message'),el('printer-test-result'),connectionActions,el('heads-content'));form.append(connection);
+ connection.append(connectionHeading,el('desktop-connections-message'),connectionActions,el('heads-content'));form.append(connection);form.querySelector('.printer-actions').after(el('printer-test-result'));
  const address=el('printer-host').parentElement;
  for(const [id,words] of [['printer-host',['Адрес Moonraker','Moonraker address','Moonraker-Adresse','Адреса Moonraker','Dirección Moonraker']],['printer-port',['Порт','Port','Port','Порт','Puerto']]]){const input=el(id),field=node('label');field.append(label(node('span'),...words),input);address.append(field)}
  bindings.push(()=>{el('printer-title').textContent=t('Принтер','Printer','Drucker','Принтер','Impresora');el('printer-help').textContent=t('Параметры выбранного U1 и состояние соединения','Selected U1 settings and connection status','Einstellungen des gewählten U1 und Verbindungsstatus','Параметри вибраного U1 та стан з’єднання','Ajustes del U1 seleccionado y estado de conexión')});

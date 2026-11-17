@@ -45,6 +45,7 @@
    const spool=data.spools?.[data.slots?.[String(index+1)]];
    const visual=head.querySelector('.printhead-visual');if(!visual||visual.querySelector('.graphite-head-art'))continue;
    const image=node('span',undefined,'graphite-head-art');image.append(window.trackerSpoolArt(spool?.color));visual.append(image);
+   if(spool){const state=data.slot_status?.[String(index+1)];head.append(node('small',state==='recognized'?t('Метка распознана','Tag recognized','Tag erkannt','Мітку розпізнано','Etiqueta reconocida'):state==='manual_confirmed'?t('Назначение подтверждено','Assignment confirmed','Zuordnung bestätigt','Призначення підтверджено','Asignación confirmada'):t('Назначение требует проверки','Assignment needs review','Zuordnung prüfen','Призначення потребує перевірки','Revise la asignación'),'graphite-assignment'))}
    if(spool?.uid)head.append(node('div','UID '+spool.uid,'graphite-uid'));
   }
  }

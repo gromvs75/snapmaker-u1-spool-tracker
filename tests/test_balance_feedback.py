@@ -71,7 +71,8 @@ def test_balance_conflict_refresh_and_saved_start_check(tmp_path):
             assert not app.call('inspect')['debits']
             page.locator('#nav-overview').click()
             page.evaluate("""() => {window.savedCheck={last_guard:{state:'warning',filename:'old.gcode',rows:[{tool:'T3',status:'unassigned',required_g:54.7,remaining_g:886.58}],time:'2026-11-16T14:00:28Z'},monitor:{connected:true,state:'complete',filename:'old.gcode'}};renderGuard(savedCheck,true)}""")
-            assert page.locator('#desktop-past-check').count()==1
+            assert page.locator('#view-history #desktop-past-check').count()==1
+            assert not page.locator('#view-overview .desktop-check').count()
             assert not page.locator('#desktop-past-check').get_attribute('open')
             assert not page.locator('#guard-content table').is_visible()
             page.evaluate("savedCheck.monitor.state='printing';renderGuard(savedCheck,true)")

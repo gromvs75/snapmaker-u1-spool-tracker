@@ -102,7 +102,7 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
                 assert not app.connected
             p1,p2=[p['id'] for p in app.call('settings')['values']['printers']]
             with page.expect_response('**/api/test_printer'):page.locator('#printer-test').click()
-            page.wait_for_function("document.getElementById('desktop-connections-message').textContent.includes('UID')")
+            page.wait_for_function("document.getElementById('printer-test-result').textContent.includes('UID')")
             assert probe==['http://127.0.0.1:19102']
             with page.expect_response('**/api/connections_start') as response:page.locator('#desktop-connections-toggle').click()
             assert response.value.ok

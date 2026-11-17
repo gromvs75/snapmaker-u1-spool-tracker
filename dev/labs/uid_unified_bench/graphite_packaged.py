@@ -46,10 +46,16 @@ def main():
             d['plans'][pid]=dict(filename=filename,sha256=str(i)*64,size=10,weights=[grams,0,0,0],spool_ids=['0','','',''],created_at=1794825600+i,status='committed',printer=dict(d['printer']))
             d['runs']['layout-run-'+str(i)]=dict(job_id='layout-history-'+str(i),plan_id=pid,start_time=1794829200+i*600,status='committed',filename=filename,physical_weights=[grams,0,0,0],physical_spool_ids=['0','','',''],tool_mapping=[0,1,2,3])
     old.update(seed);package=create_backup(old,'1.3.3')
-    writes=[]
+    writes=[];probe_calls=[];probe_fault=False
     class FakeSpoolman(BaseHTTPRequestHandler):
         def log_message(self,*args):pass
         def do_GET(self):
+            if self.path.startswith('/printer/'):
+                probe_calls.append(self.path)
+                if probe_fault:self.send_error(503);return
+                time.sleep(.2)
+                value={'result':{'objects':[]}} if self.path=='/printer/objects/list' else {'result':{'status':{'print_stats':{'state':'standby','filename':''}}}}
+                raw=json.dumps(value).encode();self.send_response(200);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw);return
             value={'version':'0.27.1'} if self.path=='/api/v1/info' else [dict(id=i+1,remaining_weight=masses[i],filament=dict(name=names[i],material='PLA',color_hex=colors[i][1:])) for i in range(4)]
             raw=json.dumps(value).encode();self.send_response(200);self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
         def do_PUT(self):writes.append(self.path);self.send_error(405)
@@ -153,6 +159,19 @@ def main():
             exercise_balance(page,change_balance_elsewhere,out/'balance-conflict.png')
             page.screenshot(path=str(out/'balance-saved.png'),full_page=True)
             checks.append('packaged balance conflict refreshes automatically, keeps entered amount, requires new acknowledgement; no duplicate confirmation')
+            page.locator('#nav-settings').click();page.locator('[data-settings-section=printer]').click()
+            page.locator('#printer-host').fill('127.0.0.1');page.locator('#printer-port').fill(str(fake.server_port))
+            page.locator('#printer-test').click()
+            assert page.locator('#printer-test-result').get_attribute('data-state')=='pending'
+            page.wait_for_function("document.getElementById('printer-test-result').dataset.state==='ok'")
+            page.screenshot(path=str(out/'probe-success.png'),full_page=True)
+            assert 'Moonraker отвечает' in page.locator('#printer-test-result').inner_text()
+            assert not api('state')['connections']['connected']
+            probe_fault=True
+            page.locator('#printer-test').click();page.wait_for_function("document.getElementById('printer-test-result').dataset.state==='error'")
+            page.screenshot(path=str(out/'probe-failure.png'),full_page=True)
+            assert len(probe_calls)==3 and not api('state')['connections']['connected']
+            checks.append('packaged one-shot probe: pending, success without UID module, HTTP failure; collectors remain stopped')
             assert not errors,errors
             browser.close()
         assert not api('state')['connections']['connected'] and not writes

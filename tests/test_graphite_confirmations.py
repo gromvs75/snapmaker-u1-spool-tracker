@@ -32,11 +32,15 @@ def test_custom_confirmation_cancel_stale_assignment_and_language(tmp_path):
             with page.expect_response('**/api/desktop/slots') as response:page.locator('#graphite-confirm-apply').click()
             assert response.value.status==409
             assert not app.call('inspect')['manual_assignments'] and not app.call('inspect')['debits']
-            page.evaluate('loadData()');page.wait_for_function('Object.keys(desktopFormData.spools).length===2')
+            page.wait_for_function('Object.keys(desktopFormData.spools).length===2')
+            assert page.locator('select[name=slot_1]').input_value()==sid
+            assert 'обновлены автоматически' in page.locator('#desktop-assignment-result').inner_text()
             page.locator('select[name=slot_1]').select_option(sid);page.locator('#t-save-slots').click()
             with page.expect_response('**/api/desktop/slots') as response:page.locator('#graphite-confirm-apply').click()
             assert response.value.ok
             assert len(app.call('inspect')['manual_assignments'])==1 and not app.call('inspect')['debits']
+            page.wait_for_function("document.querySelector('.gd-head-copy').textContent.includes('Подтверждено вручную')")
+            assert 'Остатки не изменены' in page.locator('#desktop-assignment-result').inner_text()
             for language in ['de','uk','es','en','ru']:
                 page.locator('#lang-picker').click()
                 page.locator(f'#graphite-language-dialog input[value={language}]').check()

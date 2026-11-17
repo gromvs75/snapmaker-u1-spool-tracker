@@ -28,9 +28,22 @@
   if(guardModes[id]==='strict'&&!await window.graphiteConfirm((guardText[currentLang]||guardText.en).confirm))return;
   await desktopCore('settings',{values:{printers,printer_names:Object.fromEntries(printers.map(p=>[p.id,p.name])),selected_printer:id,guard_modes:guardModes},expected_revision:expectedRevision});await loadData();window.reportSettingsSaved?.();
  })},true);
- el('printer-test').addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();work(async()=>{
-  const result=await desktopCore('test_printer',{url:url()});message.textContent=result.state+' · '+(result.uid_available?t('Модуль UID доступен','UID module available','UID-Modul verfügbar','Модуль UID доступний','Módulo UID disponible'):t('Модуль UID не обнаружен','UID module not found','UID-Modul nicht gefunden','Модуль UID не знайдено','Módulo UID no encontrado'));
- })},true);
+ const probe=el('printer-test'),probeResult=el('printer-test-result');let probeBusy=false,probeSequence=0;
+ const clearProbe=()=>{probeSequence++;probeResult.textContent='';delete probeResult.dataset.state};
+ add.addEventListener('click',clearProbe);
+ for(const id of ['printer-host','printer-port','desktop-printer-picker'])el(id).addEventListener(id==='desktop-printer-picker'?'change':'input',clearProbe);
+ probe.addEventListener('click',async e=>{
+  e.preventDefault();e.stopImmediatePropagation();if(probeBusy)return;
+  const sequence=++probeSequence,target=url();probeBusy=true;probe.disabled=true;
+  probeResult.dataset.state='pending';probeResult.textContent=t('Проверяем соединение…','Checking connection…','Verbindung wird geprüft…','Перевіряємо з’єднання…','Comprobando conexión…')+' '+target;
+  try{
+   const result=await desktopCore('test_printer',{url:target});if(sequence!==probeSequence)return;
+   probeResult.dataset.state='ok';
+   const state=({printing:t('Печать идёт','Printing','Druck läuft','Друк триває','Imprimiendo'),paused:t('Пауза','Paused','Pausiert','Пауза','En pausa'),standby:t('Ожидание','Standby','Bereit','Очікування','En espera'),complete:t('Печать завершена','Print complete','Druck abgeschlossen','Друк завершено','Impresión finalizada')})[result.state]||result.state;
+   probeResult.textContent=t('Moonraker отвечает','Moonraker responds','Moonraker antwortet','Moonraker відповідає','Moonraker responde')+' · '+state+' · '+(result.uid_available?t('Модуль UID доступен','UID module available','UID-Modul verfügbar','Модуль UID доступний','Módulo UID disponible'):t('Модуль UID не обнаружен','UID module not found','UID-Modul nicht gefunden','Модуль UID не знайдено','Módulo UID no encontrado'))+' · '+target+' · '+new Date().toLocaleTimeString(currentLang)+'. '+t('Разовая проверка; постоянное подключение не запускалось.','One-time check; continuous connection was not started.','Einmalige Prüfung; keine dauerhafte Verbindung gestartet.','Разова перевірка; постійне підключення не запускалося.','Comprobación puntual; no se inició una conexión continua.');
+  }catch(error){if(sequence!==probeSequence)return;probeResult.dataset.state='error';probeResult.textContent=t('Не удалось проверить соединение: ','Connection check failed: ','Verbindungsprüfung fehlgeschlagen: ','Не вдалося перевірити з’єднання: ','No se pudo comprobar la conexión: ')+target+' · '+error.message}
+  finally{probeBusy=false;probe.disabled=false}
+ },true);
  toggle.onclick=()=>work(async()=>{const connected=data.connections.connected,expectedRevision=data.settings_revision;
   if(!connected&&!await window.graphiteConfirm(t('Подключить сохранённые принтеры?','Connect the saved printers?','Gespeicherte Drucker verbinden?','Підключити збережені принтери?','¿Conectar las impresoras guardadas?')+'\n'+data.printers.map(p=>p.name+' · '+p.url).join('\n')))return;
   await desktopCore(connected?'connections_stop':'connections_start',{confirmed:true,...(connected?{}:{expected_revision:expectedRevision})});await loadData();

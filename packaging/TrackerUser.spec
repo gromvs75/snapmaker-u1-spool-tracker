@@ -20,10 +20,10 @@ pyz=PYZ(analysis.pure)
 version_options={}
 if sys.platform=='win32':
     from PyInstaller.utils.win32.versioninfo import VSVersionInfo,FixedFileInfo,StringFileInfo,StringTable,StringStruct,VarFileInfo,VarStruct
-    version_options['version']=VSVersionInfo(ffi=FixedFileInfo(filevers=(2,0,0,13),prodvers=(2,0,0,13),mask=0x3f,flags=2,OS=0x40004,fileType=1,subtype=0,date=(0,0)),
-        kids=[StringFileInfo([StringTable('040904B0',[StringStruct('FileVersion','2.0.0rc13'),StringStruct('ProductVersion','2.0.0rc13'),StringStruct('ProductName','Snapmaker Tracker 2.0 Candidate'),StringStruct('BuildCommit',commit)])]),VarFileInfo([VarStruct('Translation',[1033,1200])])])
+    version_options['version']=VSVersionInfo(ffi=FixedFileInfo(filevers=(2,0,0,14),prodvers=(2,0,0,14),mask=0x3f,flags=2,OS=0x40004,fileType=1,subtype=0,date=(0,0)),
+        kids=[StringFileInfo([StringTable('040904B0',[StringStruct('FileVersion','2.0.0rc14'),StringStruct('ProductVersion','2.0.0rc14'),StringStruct('ProductName','Snapmaker Tracker 2.0 Candidate'),StringStruct('BuildCommit',commit)])]),VarFileInfo([VarStruct('Translation',[1033,1200])])])
 exe=EXE(pyz,analysis.scripts,[],exclude_binaries=True,name='Snapmaker-Tracker-2.0-Candidate',console=False,strip=False,upx=False,**version_options)
 coll=COLLECT(exe,analysis.binaries,analysis.datas,strip=False,upx=False,name='Snapmaker-Tracker-2.0-Candidate')
 if sys.platform=='darwin':
     app=BUNDLE(coll,name='Snapmaker-Tracker-2.0-Candidate.app',bundle_identifier='app.snapmaker.tracker.v2.candidate',icon=str(ROOT/'packaging/AppIcon.icns'),
-        version='2.0.0rc13',info_plist={'LSUIElement':True,'CFBundleShortVersionString':'2.0.0rc13','CFBundleVersion':'2.0.0.13','TrackerSourceCommit':commit,'TrackerBuildDirty':dirty})
+        version='2.0.0rc14',info_plist={'LSUIElement':True,'CFBundleShortVersionString':'2.0.0rc14','CFBundleVersion':'2.0.0.14','TrackerSourceCommit':commit,'TrackerBuildDirty':dirty})

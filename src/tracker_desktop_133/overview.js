@@ -50,10 +50,12 @@
   .replaceAll('insufficient material including reserve',t('материала не хватает с учётом резерва','not enough material including reserve','Material einschließlich Reserve reicht nicht','матеріалу не вистачає з урахуванням резерву','material insuficiente con la reserva'))
   .replaceAll('Material mismatch: advisory only; check spool type',t('Материал не совпадает: проверьте тип катушки','Material mismatch: check spool type','Materialabweichung: Spulentyp prüfen','Матеріал не збігається: перевірте тип котушки','Material distinto: compruebe el tipo de bobina'))
   .replaceAll('late observation: pause not requested',t('Наблюдение началось позже старта; пауза не запрашивалась','Observation began after start; no pause requested','Beobachtung nach Druckbeginn; keine Pause angefordert','Спостереження почалось після старту; пауза не запитувалась','Observación posterior al inicio; no se solicitó pausa'));
+ const historyArchive=node('section');historyArchive.id='history-start-checks';el('view-history').append(historyArchive);
  const originalGuard=renderGuard;let signature='';
  renderGuard=(data,force=false)=>{
   const g=data.last_guard||data.last_preflight,m=data.monitor;
   const next=JSON.stringify([g,m.state,m.connected,m.filename,currentLang]);if(!force&&next===signature)return;signature=next;
+  historyArchive.replaceChildren();
   const content=el('guard-content'),open=content.querySelector('details')?.open;
   originalGuard(data,true);const actions=content.querySelector('.form-inline');content.replaceChildren();if(!g)return;
   const stateText=guardText[currentLang]||guardText.en;
@@ -80,7 +82,7 @@
    past.append(node('summary',t('Проверка при старте — сохранённый результат','Start check — saved result','Startprüfung — gespeichertes Ergebnis','Перевірка на старті — збережений результат','Comprobación inicial — resultado guardado')));
    box.classList.add('is-ok');
    box.querySelector('p').textContent=t('Данные на момент запуска задания. Изменение остатка не пересчитывает эту проверку.','Data recorded at job start. Adjusting the balance does not recalculate this check.','Daten beim Auftragsstart. Eine Restmengenkorrektur berechnet diese Prüfung nicht neu.','Дані на момент старту завдання. Зміна залишку не перераховує цю перевірку.','Datos del inicio del trabajo. Ajustar el saldo no recalcula esta comprobación.');
-   past.append(box);content.append(past);
+   past.append(box);historyArchive.append(past);
   }else content.append(box);
  };
  const forecast=el('slice-forecast'),header=forecast.querySelector('.overview-heading'),meta=forecast.querySelector('.forecast-meta');

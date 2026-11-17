@@ -81,6 +81,13 @@ def test_grouped_overview_all_languages_and_guard_actions(tmp_path):
                 page.locator('#graphite-confirm-apply').click()
             page.wait_for_function('!fullLoadInFlight')
             assert requests and requests[0]['action']=='resume'
+            live['state']='complete'
+            page.wait_for_function("document.querySelector('#view-overview #guard-content').children.length===0")
+            page.locator('#nav-history').click()
+            page.locator('#history-start-checks #desktop-past-check > summary').click()
+            page.locator('#desktop-check-details > summary').click()
+            assert page.locator('#history-start-checks table').is_visible()
+            page.screenshot(path=str(screens/'historical-start-check.png'),full_page=True)
             assert not errors
             browser.close()
         assert not s.call('inspect')['debits'] and not s.call('delivery_list')

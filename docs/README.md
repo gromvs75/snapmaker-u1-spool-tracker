@@ -17,6 +17,7 @@
 
 ## Tracker 2.0 development
 
+- [Ручной режим без модуля и канал RFID (RU)](guides/manual-and-rfid-2.0-ru.md) · [English](guides/manual-and-rfid-2.0-en.md)
 - [Номера столов Snorca: обязательная настройка для надёжного определения (RU)](guides/snorca-bed-identity-ru.md) · [English](guides/snorca-bed-identity-en.md)
 - [Пользовательский кандидат 2.0: запуск и настройка](guides/user-candidate-2.0-ru.md)
 - [Запуск отдельной стендовой сборки 2.0](guides/tracker-2.0-bench-ru.md)

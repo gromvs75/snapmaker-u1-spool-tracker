@@ -78,7 +78,9 @@ def snapshot(library, history_review, fleet):
                 printer=dict(host=address.hostname if address else '',port=address.port or (443 if address.scheme=='https' else 80) if address else 7125,
                              enabled=connected,guard_mode=settings.get('guard_modes',{}).get(pid,'warn')),monitor=monitor,printers=printers,selected_printer=pid,
                 settings_revision=catalog['settings']['revision'],inventory_revision=inventory['revision'],saved_history=details,
-                observations=locations,guard_modes=settings.get('guard_modes',{}))
+                observations=locations,guard_modes=settings.get('guard_modes',{}),
+                uid_channels={p['id']:dict(state=fleet.get(p['id'],{}).get('state','stopped'),
+                    channels=fleet.get(p['id'],{}).get('channels',{})) for p in printers})
 
 
 def forecast_view(forecast,printer_id):

@@ -16,7 +16,7 @@ def test_user_data_separate_and_override(tmp_path, monkeypatch):
     assert data_directory().name == 'Snapmaker Tracker 2.0'
     monkeypatch.setenv('TRACKER20_DATA_DIR', str(tmp_path))
     assert data_directory() == tmp_path
-    assert build_info()['version'] == '2.0.0rc14'
+    assert build_info()['version'] == '2.0.0rc15'
     assert main(['--data','ignored-lab-directory']) == 2
     assert not (tmp_path/'tracker.sqlite').exists()
 

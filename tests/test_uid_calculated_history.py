@@ -5,7 +5,7 @@ from test_uid_accounting import snapshot
 from tracker_uid_motion_lifecycle import MotionLifecycle
 
 
-def scenario(bench,auto=True):
+def scenario(bench,auto=True,profile_overrides=None):
     store,c,fleet,adapter=bench
     fleet.states={'a':snapshot('a',{'3':'04112233','1':'04AABBCC'}),'b':snapshot('b',{})}
     with c.db:c.db.execute("UPDATE uid_spools SET remaining_mg=20000 WHERE uid='04112233'")
@@ -16,6 +16,7 @@ def scenario(bench,auto=True):
     # U1 groups are physical pairs: T1 is left, T3 is right.
     feed={'filament_feed left':{'extruder1':feed['filament_feed right']['extruder1']},'filament_feed right':{'extruder3':feed['filament_feed right']['extruder3']}}
     profile=dict(filename='job.gcode',started_at=1010.,file_sha256='a'*64,mapping=[0,1,2,3],replenished=[0,1,2,3],logical_weights=[0,0,0,70],parameters=[dict(diameter_mm=1.75,density_g_cm3=1.24)]*4,auto_replenish=auto,feed_start=feed)
+    profile.update(profile_overrides or {})
     life.recovery_profile('a',history('in_progress'),profile);life.disconnected('a','Computer asleep')
     status=dict(print_stats=dict(state='complete',filename='job.gcode'),print_task_config=dict(auto_replenish_filament=auto,extruder_map_table=[0,1,2,1],extruders_replenished=[0,1,2,1]),**copy.deepcopy(feed))
     status['filament_feed right']['extruder3']['filament_detected']=False
@@ -105,4 +106,38 @@ def test_duplicate_uid_across_printers_blocks_automatic_recovery(bench):
     life,key,status,c,fleet=scenario(bench)
     fleet.states['b']=snapshot('b',{'1':'04AABBCC'})
     assert life.recovery_terminal('a',history('completed'),status,'a'*64)['status']=='review'
+    assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+
+
+def test_tester_material_two_to_t3_timeout_then_completion_and_replay(bench):
+    # Sanitized facts from the Windows 1.3.3 report: material 2, 1.55 g, T3.
+    mapping=[0,3,2,3]
+    life,key,status,c,fleet=scenario(bench,auto=False,profile_overrides=dict(
+        mapping=mapping,logical_weights=[0,1.55,0,0]))
+    status['print_task_config'].update(extruder_map_table=mapping,extruders_replenished=[0,1,2,3])
+    status['filament_feed right']['extruder3']['filament_detected']=True
+    life.history('a',[history('completed')])
+    preview=life.recovery_preview(key)
+    assert preview['totals_mg']=={'3':1550} and not preview['authorizes_debit']
+    assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+    # Missing terminal evidence cannot be replaced with guessed identity mapping.
+    missing=copy.deepcopy(status);missing['print_task_config']['extruder_map_table']=[]
+    assert life.recovery_terminal('a',history('completed'),missing,'a'*64)['status']!='applied'
+    assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+    result=life.recovery_terminal('a',history('completed'),status,'a'*64)
+    assert result['status']=='applied' and result['totals_mg']['3']==1550
+    assert c.spool('04112233')['remaining_mg']==18450
+    assert c.spool('04AABBCC')['remaining_mg']==300000
+    restarted=MotionLifecycle(life.adapter)
+    for _ in range(3):
+        assert restarted.recovery_terminal('a',history('completed'),status,'a'*64)['status']=='duplicate'
+    assert c.db.execute('SELECT count(*) FROM uid_debits WHERE delta_mg>0').fetchone()[0]==1
+
+
+def test_shared_head_for_used_materials_still_requires_distribution_review(bench):
+    life,key,status,c,fleet=scenario(bench,auto=False,profile_overrides=dict(
+        mapping=[0,3,2,3],logical_weights=[0,1.55,0,2]))
+    life.history('a',[history('completed')])
+    with pytest.raises(ValueError,match='distribution review'):
+        life.recovery_preview(key)
     assert not c.db.execute('SELECT * FROM uid_debits').fetchall()

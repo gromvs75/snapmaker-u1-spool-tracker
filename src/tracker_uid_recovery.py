@@ -52,11 +52,14 @@ class Recovery:
         if profile['filename']!=history['filename'] or profile['started_at']!=history['start_time']:
             raise ValueError('Plan/history identity changed')
         mapping=profile['mapping'];weights=profile['logical_weights']
-        if (len(mapping)!=4 or sorted(mapping)!=[0,1,2,3] or profile['replenished']!=[0,1,2,3]
+        if (len(mapping)!=4 or any(type(h) is not int or not 0<=h<=3 for h in mapping) or profile['replenished']!=[0,1,2,3]
                 or len(weights)!=4 or any(type(v) not in (int,float) or not math.isfinite(v) or v<0 for v in weights)):
             raise ValueError('Unsupported mapping or plan')
         used=[i for i,w in enumerate(weights) if w>0]
         if not used:raise ValueError('Empty plan')
+        # Unused logical materials may share a head (e.g. [0,3,2,3]).
+        # Multiple used materials on one head still need a distribution review.
+        if len({mapping[i] for i in used})!=len(used):raise ValueError('Used materials share a head; distribution review required')
         bindings={t['channel']:t['spool_id'] for t in self.db.execute('SELECT * FROM uid_job_tools WHERE job_key=?',(key,))}
         if any(str(mapping[i]) not in bindings for i in used):raise ValueError('Missing original spool binding')
         reasons=[r[0] for r in self.db.execute('SELECT reason FROM uid_motion_review WHERE job_key=?',(key,))]

@@ -46,6 +46,8 @@ stage.** The existing installer is deliberately restricted to marked filesystem
 simulators, with backups and rollback. It is not a user-facing printer installer.
 Do not apply bench commands to a real printer.
 
+[Installation/rollback kit instructions and limits](rfid-module-install-en.md).
+
 The RFID button and registration panel distinguish ready, missing module, reader
 not ready, incompatible/invalid data, stopped connections and offline. Ready channels
 show per-head read/no-tag/unreadable/stale/conflict states. Zero pending tags does

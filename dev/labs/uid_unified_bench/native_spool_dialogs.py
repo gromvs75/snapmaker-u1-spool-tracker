@@ -48,7 +48,7 @@ def main():
     def buttons(root,depth=0):
         if depth>25:return []
         found=[];role=text(get(root,'AXRole'))
-        if role=='AXButton':found.append((root,[text(get(root,k)) for k in ('AXTitle','AXDescription','AXValue')]))
+        if role in ('AXButton','AXCheckBox','AXRadioButton','AXDisclosureTriangle'):found.append((root,[text(get(root,k)) for k in ('AXTitle','AXDescription','AXValue')]))
         children=get(root,'AXChildren')
         if children:
             for i in range(count(children)):found.extend(buttons(at(children,i),depth+1))

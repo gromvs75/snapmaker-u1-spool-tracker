@@ -98,6 +98,9 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             assert '9,1' in page.locator('.history-usage').first.inner_text()
             assert page.locator('.graphite-history-job .history-date').count()==3
             page.screenshot(path=str(out/'history.png'),full_page=True)
+            page.locator('.history-row .uid-expand').first.click();page.locator('#uid-history-dialog[open]').wait_for()
+            assert page.locator('.uid-history-state').get_attribute('data-state')=='complete'
+            page.keyboard.press('Escape')
             page.locator('#nav-spools').click()
             page.locator('#inventory-create').click();page.locator('#inventory-add-dialog[open]').wait_for();page.screenshot(path=str(out/'add-spool.png'),full_page=True)
             page.locator('#inventory-add-dialog .dialog-close').click()

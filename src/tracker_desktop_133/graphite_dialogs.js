@@ -23,7 +23,7 @@
   const closing=d.querySelector(':scope > button');if(closing)actions.push(closing);
   const nodes=[...d.children].filter(n=>n!==h&&!groups.includes(n)&&n!==closing);
   const primary=actions.find(b=>b.classList.contains('uid-history-primary'));if(primary){actions.splice(actions.indexOf(primary),1);actions.push(primary)}
-  if(!actions.length)actions.push(cancel(d));else if(actions.length===1)actions.unshift(cancel(d));
+  if(!actions.length)actions.push(button(closeText(),()=>d.close()));else if(actions.length===1)actions.unshift(cancel(d));
   const {body}=frame(d,title,nodes,actions,null,close);d.classList.add('gd-wide');
   const fields=[...body.children].filter(n=>n.tagName==='LABEL');
   if(fields.length){const grid=node('div',undefined,'gd-two');fields[0].before(grid);for(const f of fields){f.classList.add('gd-field');if(!f.querySelector('.uid-extra-amount'))f.classList.add('gd-span');grid.append(f)}}

@@ -1,4 +1,32 @@
-# Актуальная точка продолжения — 17.11.2026, overlay recovery laboratory
+# Актуальная точка продолжения — 17.11.2026, read-only service audit
+
+Ветка `integrate/2.0-rfid-readonly-audit`, код `2a50696`, checkpoint
+`checkpoint/rc17-before-rfid-readonly-audit` → `f414ff0`.
+[Отчёт](rfid-service-preflight-2026-11-17.md) ·
+[Команда для пользователя](../guides/u1-rfid-overlay-audit-ru.md).
+
+По сохранённому S60klipper подтверждено отсутствие явного ожидания выхода процесса
+в stop перед выключением MCU. Нулевой exit code/PID-файл не считать допуском
+к записи. S90lmd не раскрывает правила надзора бинарного lmd.
+Подготовлен `scripts/rfid_readonly_audit.py`: bounded upper inventory, no-follow,
+только метаданные/хеши, два наблюдения PID/start ticks, без установки/остановки.
+installation_allowed всегда false. На macOS xattrs API отсутствует — неполнота
+честно отмечается, Linux/U1 запуск пока не состоялся.
+
+Попытка ранее разрешённого SSH-чтения с BatchMode=yes/StrictHostKeyChecking=yes
+остановилась на `Permission denied (publickey,password)`, exit 255. Скрипт на U1
+не выполнялся. Пользователю дана команда с обычным вводом пароля в Terminal.
+Ждём заполненный `output/u1-rfid-readonly/overlay-service-audit.json`: сейчас
+он пуст после неудачного SSH. Не выдавать его за новый снимок. Пароль не запрашивать
+в чате, ключ хоста не обходить, sudo/изменения/перезапуски не выполнять.
+
+20 новых тестов, focused 96 passed, полная регрессия 1050 passed / 3 skipped,
+159.44 с. Приложение rc17 и его функции/языки/учёт не менялись; нового app/EXE нет.
+После получения диагностики разобрать полноту upper, xattrs и процессы; чтение
+не означает разрешения создавать .debug, устанавливать модуль или перезапускать.
+Ничего не публиковать. Прежние 33 процессных сценария не доказывают аппаратный stop.
+
+# Предыдущая точка продолжения — 17.11.2026, overlay recovery laboratory
 
 Ветка `integrate/2.0-rfid-overlay-recovery`; код `fbbbc05`, checkpoint
 `checkpoint/rc17-before-rfid-overlay-recovery` → `31e4f61`.

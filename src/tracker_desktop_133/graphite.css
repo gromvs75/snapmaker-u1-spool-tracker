@@ -346,3 +346,94 @@ body.graphite{padding:0;margin:0}
 @media(max-width:560px){.graphite .graphite-spool-dialog .gs-header,.graphite .graphite-spool-dialog .gs-body{padding:18px}.graphite .graphite-spool-dialog .gs-footer{padding:14px 18px}.graphite .gs-two{grid-template-columns:1fr}.graphite .gs-palette{grid-template-columns:repeat(6,28px);gap:8px}.graphite .gs-route{gap:8px}.graphite .gs-route>div{padding:10px}.graphite .gs-tag{flex-wrap:wrap}.graphite .inventory-name .sm-art{width:24px;height:24px;flex-basis:24px}}
 .graphite .graphite-spool-dialog .gs-palette button.gs-swatch[aria-pressed=true]{border-color:#eceff4;box-shadow:0 0 0 2px #20242b inset}
 .graphite .graphite-spool-dialog .gs-field select{appearance:none;-webkit-appearance:none;padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,#a3abb8 50%),linear-gradient(135deg,#a3abb8 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px;background-repeat:no-repeat}
+/* Shared atlas frame for every owned dialog: header, scrollable body, footer. */
+.graphite dialog.graphite-dialog{box-sizing:border-box;width:min(620px,calc(100vw - 32px));max-width:calc(100vw - 32px);max-height:calc(100dvh - 32px);padding:0!important;border:1px solid #414956;border-radius:10px;background:#20242b;color:var(--text);overflow:hidden;box-shadow:0 16px 60px #0008}
+.graphite dialog.graphite-dialog[open]{display:flex;flex-direction:column}
+.graphite dialog.graphite-dialog.gd-wide{width:min(780px,calc(100vw - 32px))}
+.graphite .gd-header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:22px 24px 18px;border-bottom:1px solid var(--border);flex:none}
+.graphite .gd-header>div{min-width:0}
+.graphite .gd-header h2{font-size:19px!important;line-height:1.4;margin:0!important;overflow-wrap:anywhere}
+.graphite .gd-header p{margin:8px 0 0!important;font-size:12px;color:var(--muted)}
+.graphite .gd-header .gd-close{float:none;margin:0;padding:4px;flex:none;width:32px;height:32px;min-height:32px;border:0;background:none;color:var(--muted);font-size:0!important}
+.graphite .gd-close::after{content:'×';font-size:25px;line-height:24px}
+.graphite .gd-body{padding:22px 24px;display:grid;gap:18px;overflow:auto;min-height:0;overscroll-behavior:contain}
+.graphite .gd-body>*{min-width:0;max-width:100%;box-sizing:border-box}
+.graphite .gd-body p{margin:0;font-size:13px;color:var(--muted)}
+.graphite .gd-body h3{margin:0;font-size:15px}
+.graphite .gd-body form{margin:0;min-width:0}
+.graphite .gd-footer{padding:16px 24px;display:flex;justify-content:flex-end;flex-wrap:wrap;align-items:center;gap:12px;background:#1d2128;border-top:1px solid var(--border);flex:none}
+.graphite .gd-footer button{margin:0!important;min-height:36px}
+.graphite .gd-primary,.graphite .gd-footer .uid-history-primary{background:var(--accent-btn)!important;color:#15213b!important;border:1px solid var(--accent-btn)!important;font-weight:600}
+.graphite .gd-secondary,.graphite .gd-footer .uid-history-secondary{background:transparent!important;border-color:transparent!important;color:var(--muted)!important}
+.graphite .gd-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.graphite .gd-span{grid-column:1/-1}
+.graphite .gd-field{display:flex;flex-direction:column;gap:8px;margin:0;font-size:13px;color:var(--muted);min-width:0}
+.graphite .gd-field input:not([type=checkbox]),.graphite .gd-field select,.graphite .gd-body textarea{width:100%;margin:0!important;min-width:0;min-height:38px}
+.graphite .gd-body label:has(input[type=checkbox]){display:flex!important;flex-direction:row;align-items:flex-start;gap:10px;line-height:1.6;font-size:13px;margin:0!important}
+.graphite .gd-body label input[type=checkbox]{order:-1;margin:3px 0 0!important;flex:none;width:16px!important;height:16px;min-height:0!important}
+.graphite .gd-notice{padding:13px 14px;background:#202a38;border:1px solid #37475d;border-radius:10px;font-size:13px;line-height:1.6}
+.graphite #inventory-add-dialog #add-spool-form{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.graphite #inventory-add-dialog #new-color-picker{border:0;margin:0;padding:0}
+.graphite #inventory-add-dialog #new-color-title{margin-bottom:10px;font-size:13px;pointer-events:auto}
+.graphite #inventory-add-dialog #new-color-grid{margin:0 0 10px;display:grid;grid-template-columns:repeat(8,28px);gap:10px;justify-content:start}
+.graphite #inventory-add-dialog #new-color-grid button.color-choice{width:28px!important;height:28px!important;min-height:28px;padding:0!important;border-radius:50%;margin:0!important}
+.graphite #inventory-add-dialog #create-head-row{margin:0;color:var(--muted);font-size:13px}
+.graphite #inventory-add-dialog #create-head{display:block;width:100%;height:38px}
+.graphite #uid-history-dialog .gd-body .uid-history-state{margin:0;justify-self:start;color:#e8c181}
+.graphite #uid-history-dialog .gd-body .uid-saved-plan{margin:0}
+.graphite #uid-history-dialog .gd-body label input{margin:0;width:100%}
+.graphite .gd-file{display:flex;flex-wrap:wrap;gap:12px;align-items:center;padding:14px;border:1px solid var(--border);border-radius:10px}
+.graphite .gd-file>span{flex:1;overflow-wrap:anywhere;min-width:100px;font-size:12px;color:var(--muted)}
+.graphite #desktop-tags-dialog.graphite-dialog{height:auto!important;margin:16px 16px 16px auto!important;max-height:calc(100dvh - 32px)!important;width:min(520px,calc(100vw - 32px))!important}
+.graphite #desktop-tags-dialog .gd-body form label{margin:0 0 18px!important;color:var(--muted);font-size:13px}
+.graphite #desktop-tags-dialog .gd-body select{min-height:38px}
+.graphite #desktop-tags-message:empty{display:none}
+.graphite .gd-steps{display:flex;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:18px;font-size:12px;color:var(--muted)}
+.graphite .gd-steps>span{display:flex;align-items:center;gap:6px}
+.graphite .gd-steps b{display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#2b303a;font-weight:500}
+.graphite .gd-steps .active{color:#b3c5ff}.graphite .gd-steps .active b{background:#334469}
+.graphite #sc-dialog .gd-body .sc-layout{gap:20px;min-width:0}
+.graphite #sc-dialog .sc-editor{padding-left:20px}
+.graphite #sc-dialog .gd-footer #sc-sync{width:auto;min-height:36px}
+.graphite #sc-message{min-height:0}
+.graphite #graphite-counters-dialog .head-counters-grid{gap:12px;grid-template-columns:repeat(2,minmax(0,1fr))}
+.graphite #graphite-counters-dialog .counter-card{background:var(--input);border:1px solid var(--border);padding:14px;border-radius:10px}
+.graphite #graphite-counters-dialog .counter-number{font-size:22px}
+@media(max-width:560px){.graphite .gd-two{grid-template-columns:1fr}.graphite .gd-header,.graphite .gd-body{padding:18px}.graphite .gd-footer{padding:14px 18px;gap:8px}.graphite #sc-dialog .sc-editor{padding:0}.graphite #inventory-add-dialog #new-color-grid{grid-template-columns:repeat(6,28px)}}
+/* The palette renderer inserts its own grid inside the mount point. */
+.graphite #inventory-add-dialog #new-color-grid{display:block}
+.graphite #inventory-add-dialog #new-color-grid .color-grid{grid-template-columns:repeat(8,28px)!important}
+.graphite #uid-history-dialog.graphite-dialog{width:min(780px,calc(100vw - 32px))}
+.graphite #uid-history-dialog .gd-header .gd-close{padding:4px!important;font-size:0!important;background:transparent!important;border:0!important;color:var(--muted)!important}
+@media(max-width:560px){.graphite #inventory-add-dialog #new-color-grid .color-grid{grid-template-columns:repeat(6,28px)!important}}
+.graphite dialog [hidden][hidden][hidden]{display:none!important}
+.graphite #desktop-backup-preview[data-error=true]{padding:14px;border:1px solid #7a4444;border-radius:10px;color:#ffb4b4;background:#352528}
+.graphite .gd-section{max-width:720px;border-top:1px solid var(--border);padding:20px 0;display:grid;gap:14px}
+.graphite .gd-section h3,.graphite .gd-section p{margin:0}
+.graphite .gd-section>button{justify-self:start}
+.graphite .gd-section.gd-create-backup{border:1px solid var(--border);border-radius:10px;background:var(--card);padding:20px;margin:24px 0}
+.graphite #settings-account-title{margin-bottom:24px}
+.graphite .guard-control{display:grid;gap:8px;max-width:720px}
+.graphite .guard-control select{width:100%;min-height:38px}
+.graphite .gd-language-list{display:grid;gap:0}
+.graphite .gd-language-list label{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+.graphite .gd-decisions{display:grid;gap:8px}
+.graphite .gd-decisions .gd-decision{display:flex;align-items:center;gap:10px;text-align:left;background:none;border-color:var(--border);color:var(--muted);padding:12px}
+.graphite .gd-decision::before{content:'';width:14px;height:14px;flex:none;border:1px solid var(--muted);border-radius:50%}
+.graphite .gd-decision[aria-checked=true]{border-color:var(--accent-btn);color:var(--text);background:#293449}
+.graphite .gd-decision[aria-checked=true]::before{background:var(--accent-btn);box-shadow:inset 0 0 0 3px #293449}
+.graphite #sm-queue .gd-delivery-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,1fr) 75px 135px;align-items:center;gap:16px}
+.graphite #sm-queue .gd-delivery-row>button{grid-column:auto;grid-row:auto;justify-self:end;min-width:0}
+.graphite .gd-delivery-row small{display:block;margin-top:4px}
+.graphite .gd-delivery-state{font-size:11px;color:var(--muted)}
+.graphite .gd-delivery-state[data-state=uncertain]{color:#ebc185}.graphite .gd-delivery-state[data-state=sent]{color:#8bdbb8}
+.graphite .gd-delivery-mass{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+@media(max-width:760px){.graphite #sm-queue .gd-delivery-row{grid-template-columns:minmax(0,1fr) auto;gap:10px}.graphite #sm-queue .gd-delivery-state{grid-column:1}.graphite #sm-queue .gd-delivery-row>button{grid-column:2;grid-row:2}}
+
+.graphite #inventory-add-dialog #new-color-grid .color-clear{width:auto;min-height:32px;margin-top:12px;border:0;background:none;color:var(--muted);padding:4px 0}
+
+.graphite .gd-backup-counts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:16px 0}.graphite .gd-backup-counts>div{display:flex;justify-content:space-between;gap:12px;font-size:13px}.graphite .gd-backup-counts dt{color:var(--muted)}.graphite .gd-backup-counts dd{margin:0;font-variant-numeric:tabular-nums}
+
+.graphite #desktop-tags-dialog .gd-body{flex:1;align-content:start}
+
+.graphite .gd-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin:20px 0}.graphite .gd-stat-grid h3{margin-bottom:12px}.graphite .gd-stat-grid table{width:100%}.graphite .gd-stat-grid td:first-child{overflow-wrap:anywhere}.graphite .gd-stat-grid td:last-child{white-space:nowrap}@media(max-width:620px){.graphite .gd-stat-grid{grid-template-columns:1fr}}

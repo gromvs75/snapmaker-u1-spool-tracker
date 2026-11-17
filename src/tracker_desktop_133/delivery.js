@@ -9,7 +9,7 @@
   if(!data.delivery.length)root.textContent=t('Операций пока нет','No operations yet','Noch keine Vorgänge','Операцій ще немає','Todavía no hay operaciones');
   for(const row of [...data.delivery].reverse()){
    const box=node('div');box.style.cssText='border-bottom:1px solid var(--border);padding:12px 0';box.dataset.operation=row.operation_id;
-   box.append(node('strong',(desktopFormData?.spools[row.spool_id]?.name||'#'+row.remote_id)+' · '+displayGrams(row.delta_mg/1000)+' g'),node('p',caption(row.state)));
+   box.className='gd-delivery-row';const identity=node('div'),badge=node('span',caption(row.state),'gd-delivery-state');badge.dataset.state=row.state;identity.append(node('strong',desktopFormData?.spools[row.spool_id]?.name||'#'+row.remote_id),node('small','Spoolman #'+row.remote_id));box.append(identity,badge,node('span',displayGrams(row.delta_mg/1000)+' g','gd-delivery-mass'));
    box.append(button(t('Просмотр и сверка','View and reconcile','Anzeigen und abgleichen','Перегляд і звірка','Ver y conciliar'),'',()=>open(row,data)));root.append(box);
   }
  };
@@ -23,7 +23,7 @@
   dialog.append(close,node('h2',caption(row.state)),node('p',row.url+' · #'+row.remote_id+' · '+displayGrams(row.delta_mg/1000)+' g'),node('p',t('Остаток сервера сам по себе не доказывает, была ли отправка применена. Неизвестные операции автоматически не повторяются.','Server balance alone does not prove whether a write was applied. Unknown operations never retry automatically.','Der Serverrest allein beweist keine Buchung. Unklare Vorgänge werden nie automatisch wiederholt.','Залишок сервера сам по собі не доводить списання. Невідомі операції автоматично не повторюються.','El saldo del servidor no demuestra por sí solo si se aplicó el envío. Las operaciones inciertas nunca se repiten automáticamente.')));
   const review=button(t('Прочитать Spoolman и журнал','Read Spoolman and audit','Spoolman und Protokoll lesen','Прочитати Spoolman і журнал','Leer Spoolman y registro'),'desktop-delivery-review',()=>work(async()=>{const r=await desktopCore('delivery_review',{operation_id:row.operation_id,expected_revision:row.revision});evidence.replaceChildren(node('p',(r.remote.name||'')+' · '+(r.remote.remaining_g===null?'—':displayGrams(r.remote.remaining_g)+' g')));for(const entry of r.audit)evidence.append(node('p',caption(entry.previous)+' → '+caption(entry.state)+' · '+entry.note));}));
   dialog.append(review,evidence,node('p',t('Основание решения','Reason for the decision','Begründung','Підстава рішення','Motivo de la decisión')),note,ackLabel,actions,message);
-  async function work(fn){if(busy)return;busy=true;for(const b of dialog.querySelectorAll('button'))b.disabled=true;try{await fn()}catch(e){message.textContent=e.message}finally{busy=false;for(const b of dialog.querySelectorAll('button'))b.disabled=false}}
+  async function work(fn){if(busy)return;busy=true;for(const b of dialog.querySelectorAll('button'))b.disabled=true;try{await fn()}catch(e){message.textContent=e.message}finally{busy=false;for(const b of dialog.querySelectorAll('button'))b.disabled=false;window.graphiteDeliveryValidate?.()}}
   const choices=row.state==='held'?[['approve',t('Разрешить отправку','Approve sending','Versand freigeben','Дозволити надсилання','Autorizar envío')],['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:row.state==='uncertain'?[['applied',t('Уже учтено в Spoolman','Already applied in Spoolman','In Spoolman bereits gebucht','Уже враховано у Spoolman','Ya aplicado en Spoolman')],['not_applied',t('Не учтено — разрешить новую попытку','Not applied — approve a new attempt','Nicht gebucht — neuen Versuch freigeben','Не враховано — дозволити нову спробу','No aplicado — autorizar otro intento')],['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:[];
   for(const [decision,label] of choices)actions.append(button(label,'desktop-delivery-'+decision,()=>work(async()=>{
    if(!ack.checked||!note.value.trim())throw Error(t('Укажите основание и подтвердите решение.','Enter a reason and confirm the decision.','Begründung eingeben und bestätigen.','Укажіть підставу та підтвердьте рішення.','Indique un motivo y confirme la decisión.'));
@@ -39,6 +39,7 @@
    // Reopen to bind subsequent actions to the new state/revision.
    const next=desktopSpoolmanData.delivery.find(r=>r.operation_id===row.operation_id);busy=false;if(next)open(next,desktopSpoolmanData);
   })));
+  window.graphiteDeliveryDialog?.(dialog,row);
  }
  dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault()});
 })();

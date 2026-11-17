@@ -1,3 +1,4 @@
+from desktop_ui_helpers import accept_graphite_confirmations, audit_dialog
 import copy
 import json
 import threading
@@ -120,7 +121,7 @@ def test_full_shell_parameters_archive_statistics_backup_and_restart(tmp_path,de
     errors=[]
     try:
         with sync_playwright() as pw:
-            browser=pw.chromium.launch();page=browser.new_page(viewport=dict(width=1360,height=1080));page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
+            browser=pw.chromium.launch();page=browser.new_page(viewport=dict(width=1360,height=1080));page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());accept_graphite_confirmations(page)
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop');page.locator('#nav-spools').click()
             page.wait_for_function('(n)=>desktopFormData?.spools && Object.keys(desktopFormData.spools).length===n',arg=initial_count)
             for lang,caption in [('en','Archive'),('de','Archiv'),('uk','Архів'),('es','Archivo'),('ru','Архив')]:
@@ -151,12 +152,14 @@ def test_full_shell_parameters_archive_statistics_backup_and_restart(tmp_path,de
             with page.expect_response('**/api/validate_backup') as r:page.locator('#desktop-backup-check').click()
             assert r.value.ok and r.value.json()['spools']==initial_count
             assert page.locator('#desktop-backup-apply').is_disabled()
+            audit_dialog(page,'restore-validated')
             page.screenshot(path=str(screens/'restore-preview.png'),full_page=True)
             # Changed file invalidates previously checked data, including confirmation.
             bad=tmp_path/'corrupt.json';bad.write_text(json.dumps(dict(package,sha256='0'*64)))
             page.locator('#desktop-backup-file').set_input_files(bad)
             with page.expect_response('**/api/validate_backup') as r:page.locator('#desktop-backup-check').click()
             assert r.value.status==409 and page.locator('#desktop-backup-apply').is_disabled()
+            audit_dialog(page,'restore-invalid')
             assert len(app.call('library_snapshot')['spools'])==initial_count+1
             page.locator('#desktop-backup-file').set_input_files(saved)
             with page.expect_response('**/api/validate_backup'):page.locator('#desktop-backup-check').click()

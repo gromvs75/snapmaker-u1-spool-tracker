@@ -98,7 +98,14 @@ def main():
             page.locator('#nav-history').click();page.screenshot(path=str(out/'history.png'),full_page=True)
             assert page.locator('.history-row').count()==3
             assert page.locator('.history-usage').first.inner_text()=='9,1 гр.'
+            page.locator('.history-row .uid-expand').first.click();page.locator('#uid-history-dialog[open]').wait_for()
+            page.screenshot(path=str(out/'history-complete.png'),full_page=True);page.keyboard.press('Escape')
+            page.locator('#desktop-statistics > summary').click();page.locator('#desktop-statistics-body table').first.wait_for()
+            page.screenshot(path=str(out/'statistics.png'),full_page=True)
             page.locator('#nav-spools').click()
+            page.locator('[data-inventory-tab=slots]').click();page.screenshot(path=str(out/'heads.png'),full_page=True)
+            page.locator('[data-inventory-tab=library]').click()
+            page.locator('#inventory-toolbar .sc-open').click();page.locator('#sc-dialog[open]').wait_for();page.screenshot(path=str(out/'compare.png'),full_page=True);page.keyboard.press('Escape')
             page.locator('.graphite-actions-open').first.click();page.screenshot(path=str(out/'spool-actions.png'),full_page=True)
             page.locator('#graphite-spool-actions [data-action=transfer]').click()
             assert page.locator('#desktop-operation-dialog .gs-field').count()==2
@@ -111,7 +118,7 @@ def main():
             assert page.locator('#graphite-color-dialog').evaluate('(e)=>e.scrollHeight<=e.clientHeight+1')
             page.screenshot(path=str(out/'color.png'),full_page=True);page.keyboard.press('Escape')
             checks.append('packaged spool actions, parameters, transfer and 34-color grid; cancel without writes')
-            page.locator('#inventory-create').click();page.screenshot(path=str(out/'add.png'),full_page=True);page.locator('#inventory-add-dialog .dialog-close').click()
+            page.locator('#inventory-create').click();page.locator('#inventory-add-dialog[open]').wait_for();page.screenshot(path=str(out/'add.png'),full_page=True);page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('#desktop-tags-open').click()
             page.wait_for_function('document.getElementById("desktop-tags-message").textContent.length>0 && !document.getElementById("desktop-tags-refresh").disabled')
             page.screenshot(path=str(out/'uid.png'),full_page=True);page.locator('#desktop-tags-close').click()
@@ -133,6 +140,10 @@ def main():
             page.set_viewport_size({'width':945,'height':800})
             checks.append('packaged library, history and settings at reference width; single-line navigation at 800–1280 px')
             page.screenshot(path=str(out/'settings.png'),full_page=True)
+            page.locator('[data-settings-section=accounting]').click();page.screenshot(path=str(out/'accounting.png'),full_page=True)
+            page.locator('[data-settings-section=backup]').click();page.screenshot(path=str(out/'backup.png'),full_page=True)
+            page.locator('#lang-picker').click();page.locator('#graphite-language-dialog[open]').wait_for();page.screenshot(path=str(out/'languages.png'),full_page=True);page.keyboard.press('Escape')
+            checks.append('packaged completed job, statistics, toolhead assignments, name comparison, accounting, backup page and language dialog')
             assert not errors,errors
             browser.close()
         assert not api('state')['connections']['connected'] and not writes

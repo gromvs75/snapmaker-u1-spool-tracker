@@ -1,3 +1,4 @@
+from desktop_ui_helpers import accept_graphite_confirmations, audit_dialog
 import hashlib
 import json
 from pathlib import Path
@@ -44,6 +45,7 @@ def test_full_frontend_languages_offline_plan_manual_account_and_restart(bench,t
             page.locator('#uid-history-dialog[open]').wait_for()
             assert 'Печать завершилась успешно?' in page.locator('#uid-history-dialog').inner_text()
             assert '1 г' in page.locator('.uid-saved-plan').inner_text()
+            audit_dialog(page,'history-restart')
             page.get_by_role('button',name='Закрыть',exact=True).click()
             for language,overview,forecast_title in [('en','Overview','Slice forecast'),('de','Übersicht','Slicing-Prognose'),('uk','Огляд','Прогноз нарізки'),('es','Resumen','Previsión del laminado'),('ru','Обзор','Прогноз нарезки')]:
                 page.locator('#lang-picker').select_option(language)
@@ -65,6 +67,7 @@ def test_full_frontend_languages_offline_plan_manual_account_and_restart(bench,t
             page.get_by_role('button',name='Да — проверить списание',exact=True).click()
             page.locator('.uid-extra-amount').fill('0.750');page.locator('#uid-review-note').fill('Проверено завершённое задание')
             page.locator('#uid-review-ack').check()
+            audit_dialog(page,'history-manual')
             lost=[]
             def lose_response(route):
                 if not lost:
@@ -111,7 +114,7 @@ def test_published_inventory_forms_lost_response_assignment_and_exact_edits(tmp_
         with sync_playwright() as pw:
             browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1050})
             page.on('pageerror',lambda e:errors.append(str(e)))
-            page.on('dialog',lambda d:d.accept())
+            page.on('dialog',lambda d:d.accept());accept_graphite_confirmations(page)
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.locator('#nav-spools').click();page.locator('#inventory-create').click()
             page.locator('#new-name').fill('Precision PLA');page.locator('#new-mat').fill('PLA');page.locator('#new-weight').fill('125.259')

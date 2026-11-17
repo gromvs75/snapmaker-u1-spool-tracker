@@ -77,6 +77,8 @@ def test_grouped_overview_all_languages_and_guard_actions(tmp_path):
             def action(route):requests.append(route.request.post_data_json);route.fulfill(json={})
             page.route('**/api/desktop/guard/decision',action)
             page.locator('#guard-content .form-inline button').last.click()
+            with page.expect_response('**/api/desktop/guard/decision'):
+                page.locator('#graphite-confirm-apply').click()
             page.wait_for_function('!fullLoadInFlight')
             assert requests and requests[0]['action']=='resume'
             assert not errors

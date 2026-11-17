@@ -21,14 +21,14 @@
  `;document.body.append(compact);
  el('new-weight').step='any';el('new-weight').min='0';
  const text=(ru,en,de,uk,es)=>({ru,en,de,uk,es}[currentLang]||en);
- window.desktopConfirmInventory=(path,body)=>{
-  if(path==='/api/spools/update')return confirm(text(
+ window.desktopConfirmInventory=async(path,body)=>{
+  if(path==='/api/spools/update')return window.graphiteConfirm(text(
    'Установить остаток катушки: ','Set spool balance to: ','Spulenrest setzen auf: ','Встановити залишок котушки: ','Establecer el saldo de la bobina: ')+body.remaining_g+' g?');
   if(path==='/api/slots'||(path==='/api/spools/add'&&body.assign_slot)){
    const d=desktopFormData,p=d.printers.find(p=>p.id===d.selected_printer);
    const slots=path==='/api/slots'?body:{[body.assign_slot]:'new'};
    const rows=Object.entries(slots).map(([slot,id])=>'T'+(Number(slot)-1)+' → '+(id==='new'?body.name:id?(d.spools[id]?.name||id):'—'));
-   return confirm(text('Подтвердите физическое расположение катушек','Confirm the physical spool positions','Physische Spulenpositionen bestätigen','Підтвердьте фізичне розташування котушок','Confirme las posiciones físicas de las bobinas')+'\n'+(p?.name||d.selected_printer)+'\n'+rows.join('\n'));
+   return window.graphiteConfirm(text('Подтвердите физическое расположение катушек','Confirm the physical spool positions','Physische Spulenpositionen bestätigen','Підтвердьте фізичне розташування котушок','Confirme las posiciones físicas de las bobinas')+'\n'+(p?.name||d.selected_printer)+'\n'+rows.join('\n'));
   }
   return true;
  };

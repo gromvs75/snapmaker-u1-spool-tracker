@@ -1,3 +1,4 @@
+from desktop_ui_helpers import accept_graphite_confirmations, audit_dialog
 import threading
 from playwright.sync_api import sync_playwright
 from tracker_uid_session import Session
@@ -18,11 +19,12 @@ def test_full_shell_interrupted_unlock_and_confirmed_transfer(tmp_path):
     server=serve(app,app.fleet,status_reader=lambda _: 'standby',app_info={'mode':'user','version':'2.0.0rc2'});thread=threading.Thread(target=server.serve_forever);thread.start()
     try:
         with sync_playwright() as pw:
-            browser=pw.chromium.launch();page=browser.new_page();page.on('dialog',lambda d:d.accept());errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            browser=pw.chromium.launch();page=browser.new_page();page.on('dialog',lambda d:d.accept());accept_graphite_confirmations(page);errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}')
             page.locator('#uid-history-dialog[open]').wait_for();page.get_by_role('button',name='Закрыть',exact=True).click()
             page.locator('#nav-history').click();page.locator('.desktop-unlock').click()
             assert page.locator('#desktop-unlock-apply').is_disabled()
+            audit_dialog(page,'unlock')
             page.locator('#desktop-unlock-stopped').check();page.locator('#desktop-unlock-gap').check()
             with page.expect_response('**/api/resolve') as r:page.locator('#desktop-unlock-apply').click()
             assert r.value.ok and r.value.json()['deadline'] is not None

@@ -21,7 +21,7 @@
    const sid=row.dataset.spoolId,s=data.spools[sid];if(!s)continue;
    row.dataset.archived=String(Boolean(s.archived));
    const b=button('',s.archived?labels.take():labels.put(),async()=>{
-    if(!confirm((s.archived?labels.take():labels.put())+' — '+s.name+'?'))return;
+    if(!await window.graphiteConfirm((s.archived?labels.take():labels.put())+' — '+s.name+'?'))return;
     await api('/api/spools/archive',{id:sid,archived:!s.archived});await loadData();
    });b.className='desktop-archive-action';row.lastElementChild.append(b);
   }
@@ -44,13 +44,14 @@
   try{
    const data=await api('/api/statistics');
    if(request!==statsRequest||data.printer_id!==desktopFormData?.selected_printer)return;
-   statsBody.replaceChildren();
+   const moreOpen=!!statsBody.querySelector('.gd-stat-more[open]');statsBody.replaceChildren();
    const printer=desktopFormData.printers.find(p=>p.id===data.printer_id);
    statsBody.append(node('h3',printer?.name||data.printer_id),node('p',t('Уже списано локально: ','Already deducted locally: ','Lokal abgebucht: ','Вже списано локально: ','Ya descontado localmente: ')+displayGrams(data.total_mg/1000)+' '+gramUnit()));
    statsBody.append(node('p',t('Включает частичный учёт и отменённые задания. Очередь Spoolman не прибавляется повторно.','Includes partial and cancelled jobs. Spoolman delivery is not counted again.','Enthält Teilverbrauch und abgebrochene Aufträge. Spoolman wird nicht erneut gezählt.','Включає частковий облік і скасовані завдання. Черга Spoolman не додається повторно.','Incluye trabajos parciales y cancelados. Spoolman no se cuenta de nuevo.')));
    const status={active:t('Печатается','Printing','Druck läuft','Друкується','Imprimiendo'),review:t('Требует проверки','Needs review','Prüfung erforderlich','Потребує перевірки','Requiere revisión'),completed:t('Учтено','Accounted','Erfasst','Враховано','Contabilizado'),cancelled:t('Отменено','Cancelled','Abgebrochen','Скасовано','Cancelado'),resolved:t('Закрыто','Closed','Geschlossen','Закрито','Cerrado')};
    statsBody.append(node('p',Object.entries(data.counts).map(([k,v])=>(status[k]||k)+': '+v).join(' · ')));
-   function table(title,rows){statsBody.append(node('h3',title));const table=node('table');for(const [name,amount] of rows){const row=node('tr');row.append(node('td',name),node('td',displayGrams(amount/1000)+' '+gramUnit()));table.append(row)}statsBody.append(table)}
+   const primary=node('div',undefined,'gd-stat-grid'),more=node('details',undefined,'gd-stat-more'),secondary=node('div',undefined,'gd-stat-grid');more.open=moreOpen;more.append(node('summary',t('Основание учёта и месяцы','Accounting basis and months','Buchungsgrundlage und Monate','Підстава обліку та місяці','Base del cómputo y meses')),secondary);statsBody.append(primary,more);let tableCount=0;
+   function table(title,rows){const section=node('section');section.append(node('h3',title));const table=node('table');for(const [name,amount] of rows){const row=node('tr');row.append(node('td',name),node('td',displayGrams(amount/1000)+' '+gramUnit()));table.append(row)}section.append(table);(tableCount++<2?primary:secondary).append(section)}
    table(t('По катушкам','By spool','Nach Spule','За котушками','Por bobina'),Object.entries(data.by_spool).map(([sid,n])=>[data.spool_names[sid]||sid,n]));
    table(t('По головкам','By toolhead','Nach Druckkopf','За голівками','Por cabezal'),[...data.head_mg.map((n,i)=>['T'+i,n]),[t('Без доказанной головки','Head not established','Druckkopf nicht belegt','Голівку не підтверджено','Cabezal sin confirmar'),data.unattributed_mg]]);
    const methods={legacy_import:t('Перенесено из 1.x','Imported from 1.x','Aus 1.x übernommen','Перенесено з 1.x','Importado de 1.x'),motion_estimate:t('Оценка по движению','Motion estimate','Bewegungsschätzung','Оцінка за рухом','Estimación por movimiento'),executed_gcode:t('Выполненный G-code','Executed G-code','Ausgeführter G-Code','Виконаний G-code','G-code ejecutado'),completed_gcode:t('Завершённый план','Completed plan','Abgeschlossener Plan','Завершений план','Plan completado'),calculated_history:t('Расчёт по истории','History estimate','Historienberechnung','Розрахунок за історією','Estimación por historial'),manual_reconciliation:t('Ручное подтверждение','Manual confirmation','Manuelle Bestätigung','Ручне підтвердження','Confirmación manual')};
@@ -61,7 +62,7 @@
  }
  stats.ontoggle=()=>{if(stats.open)void refreshStats()};
  const dialog=node('dialog');dialog.id='desktop-backup-dialog';dialog.className='inventory-dialog';document.body.append(dialog);
- const close=button('desktop-backup-close',labels.close(),()=>dialog.close()),info=node('p'),preview=node('div'),file=node('input');file.id='desktop-backup-file';file.type='file';file.accept='.json';file.hidden=true;
+ const close=button('desktop-backup-close',labels.close(),()=>dialog.close()),info=node('p'),preview=node('div'),file=node('input');preview.id='desktop-backup-preview';preview.setAttribute('role','status');file.id='desktop-backup-file';file.type='file';file.accept='.json';file.hidden=true;
  const fileName=node('span'),choose=button('desktop-backup-choose','',()=>file.click());
  const ackLabel=node('label'),ack=node('input'),ackText=node('span');ack.type='checkbox';ack.id='desktop-backup-ack';ack.style.width='auto';ackLabel.append(ack,ackText);
  let packageData=null,checked=null,restoreBusy=false;
@@ -69,9 +70,12 @@
  const check=button('desktop-backup-check',labels.check(),async()=>{
   const candidate=packageData;checked=null;ack.checked=false;apply.disabled=true;
   if(!candidate)throw Error(t('Выберите копию.','Select a backup.','Sicherung wählen.','Виберіть копію.','Seleccione una copia.'));
-  const result=await desktopCore('validate_backup',{package:candidate});
+  let result;try{result=await desktopCore('validate_backup',{package:candidate})}catch(e){preview.textContent=e.message;preview.dataset.error='true';return}
+  delete preview.dataset.error;
   if(packageData!==candidate)return;
-  checked=result;preview.textContent=t('Целостность проверена. Катушки / задания / списания / операции Spoolman: ','Integrity verified. Spools / jobs / debits / Spoolman operations: ','Integrität geprüft. Spulen / Aufträge / Abbuchungen / Spoolman-Vorgänge: ','Цілісність перевірено. Котушки / завдання / списання / операції Spoolman: ','Integridad verificada. Bobinas / trabajos / cargos / operaciones Spoolman: ')+[result.spools,result.jobs,result.debits,result.remote_operations].join(' / ');
+  checked=result;preview.replaceChildren(node('strong',t('Целостность проверена','Integrity verified','Integrität geprüft','Цілісність перевірено','Integridad verificada')));
+  const counts=node('dl',undefined,'gd-backup-counts');
+  for(const [value,words] of [[result.spools,['Катушки','Spools','Spulen','Котушки','Bobinas']],[result.jobs,['Задания','Jobs','Aufträge','Завдання','Trabajos']],[result.debits,['Списания','Debits','Abbuchungen','Списання','Cargos']],[result.remote_operations,['Операции Spoolman','Spoolman operations','Spoolman-Vorgänge','Операції Spoolman','Operaciones Spoolman']]]){const pair=node('div');pair.append(node('dt',t(...words)),node('dd',String(value)));counts.append(pair)}preview.append(counts);
   if(result.source_format==='legacy')preview.append(node('p',t(
    'Копия 1.x → 2.0. Настройки, катушки, планы и история будут перенесены. Остатки сохранятся без новых списаний. Подключения и отправка Spoolman останутся выключены; назначения и старые незавершённые отправки требуют проверки.',
    '1.x backup → 2.0. Settings, spools, plans and history will be imported. Balances are preserved without new deductions. Connections and Spoolman sending stay off; assignments and unfinished sends require review.',

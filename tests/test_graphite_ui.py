@@ -1,3 +1,4 @@
+from desktop_ui_helpers import accept_graphite_confirmations, audit_dialog
 """Presentation regression against real adapters and a temporary SQLite store."""
 import json
 from pathlib import Path
@@ -30,13 +31,13 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
     app.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     remote_state,url=remote
     sender=Sender(app,[url])
-    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc11'})
+    server=serve(app,app.fleet,sender=sender,app_info={'mode':'user','version':'2.0.0rc12'})
     thread=threading.Thread(target=server.serve_forever);thread.start()
     out=Path('output/graphite-ui');out.mkdir(parents=True,exist_ok=True)
     try:
         with sync_playwright() as pw:
             browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1280,'height':1000})
-            errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
+            errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());accept_graphite_confirmations(page)
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.wait_for_function('desktopFormData?.spools && Object.keys(desktopFormData.spools).length===4')
             assert page.locator('body.graphite').count()==1
@@ -46,6 +47,7 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
                 page.locator('#lang-picker').select_option(language)
                 page.wait_for_function('(l)=>currentLang===l',arg=language)
                 assert page.locator('.graphite-head-art').count()==4
+                assert page.locator('[data-settings-section=backup]').inner_text().strip()==dict(ru='Резервная копия',en='Backup',de='Sicherung',uk='Резервна копія',es='Copia de seguridad')[language]
             page.locator('#lang-picker').select_option('ru')
             page.screenshot(path=str(out/'overview.png'),full_page=True)
             page.locator('#nav-settings').click();page.locator('[data-settings-section=spoolman]').click();page.locator('[data-sm-tab=connection]').click()
@@ -92,7 +94,7 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             assert page.locator('.graphite-history-job .history-date').count()==3
             page.screenshot(path=str(out/'history.png'),full_page=True)
             page.locator('#nav-spools').click()
-            page.locator('#inventory-create').click();page.screenshot(path=str(out/'add-spool.png'),full_page=True)
+            page.locator('#inventory-create').click();page.locator('#inventory-add-dialog[open]').wait_for();page.screenshot(path=str(out/'add-spool.png'),full_page=True)
             page.locator('#inventory-add-dialog .dialog-close').click()
             page.locator('.inventory-param-button').first.click();page.screenshot(path=str(out/'parameters.png'),full_page=True)
             assert page.locator('#inventory-param-dialog .gs-field').count()==2
@@ -144,7 +146,25 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             assert [s['remaining_mg'] for s in app.call('library_snapshot')['spools']]==[s['remaining_mg'] for s in original]
             assert page.locator('.inventory-name .sm-art').count()==4
 
-            page.locator('#desktop-tags-open').click();page.screenshot(path=str(out/'uid.png'),full_page=True)
+            # Audit every remaining static dialog in all five languages.
+            for language in ['ru','en','de','uk','es']:
+                page.locator('#lang-picker').select_option(language)
+                page.wait_for_function('(l)=>currentLang===l',arg=language)
+                page.locator('#nav-spools').click();page.locator('#inventory-create').click()
+                page.locator('#inventory-add-dialog[open]').wait_for()
+                assert page.locator('#inventory-add-dialog .gd-field').count()==3
+                assert page.locator('#new-color-grid .color-grid').evaluate('(e)=>new Set([...e.children].map(c=>c.getBoundingClientRect().x)).size')>=6
+                assert page.locator('#new-color-grid .color-clear').evaluate('(e)=>e.scrollWidth<=e.clientWidth && e.getBoundingClientRect().width>55')
+                audit_dialog(page,'add-'+language);page.keyboard.press('Escape')
+                page.locator('#desktop-tags-open').click()
+                page.wait_for_function('!document.getElementById("desktop-tags-refresh").disabled')
+                audit_dialog(page,'tags-empty-'+language);page.keyboard.press('Escape')
+                page.locator('#inventory-toolbar .sc-open').click()
+                audit_dialog(page,'compare-'+language);page.keyboard.press('Escape')
+                page.locator('#nav-settings').click();page.locator('[data-settings-section=backup]').click()
+                page.locator('#backup-import').click();audit_dialog(page,'restore-empty-'+language);page.keyboard.press('Escape')
+            page.locator('#lang-picker').select_option('ru')
+            page.locator('#desktop-tags-open').click();page.locator('#desktop-tags-dialog[open]').wait_for();page.screenshot(path=str(out/'uid.png'),full_page=True)
             page.locator('#desktop-tags-close').click()
             page.locator('#nav-settings').click();page.locator('[data-settings-section=printer]').click();page.screenshot(path=str(out/'printer.png'),full_page=True)
             # Main navigation stays reachable when long content is scrolled.

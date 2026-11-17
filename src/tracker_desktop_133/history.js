@@ -22,6 +22,7 @@
  function actions(...buttons){const group=node('div',undefined,'uid-history-actions');group.append(...buttons);dialog.append(group);return group}
  function primary(button){button.className='uid-history-primary';return button}
  function reasonText(reason){
+  const known={'Computer slept':['Компьютер переходил в сон.','Computer slept.','Computer war im Ruhezustand.','Комп’ютер переходив у сон.','El equipo entró en reposo.'],'Motion lifecycle restarted':['Наблюдение за расходом перезапущено.','Usage observation restarted.','Verbrauchsbeobachtung neu gestartet.','Спостереження витрат перезапущено.','Se reinició el seguimiento del consumo.']};if(known[reason])return text(...known[reason]);
   if(reason==='Connection lost during pause')return text('Соединение потеряно во время паузы.','Connection lost during pause.','Verbindung während der Pause verloren.','З’єднання втрачено під час паузи.','Se perdió la conexión durante la pausa.');
   if(reason.startsWith('Automatic replenishment cannot be ruled out'))return text(
    'Нельзя исключить автозамену катушки. Исходная катушка и оценка расхода сохранены; проверьте фактическое распределение перед списанием.',
@@ -65,13 +66,15 @@
     d.review_block==='observing'?text('Ручной учёт доступен после завершения наблюдения за печатью.','Manual accounting is available once print observation ends.','Manuelle Erfassung ist nach Ende der Druckbeobachtung möglich.','Ручний облік доступний після завершення спостереження друку.','La contabilización manual estará disponible al terminar el seguimiento.'):
     text('Ручной учёт для этого состояния недоступен.','Manual accounting is unavailable for this state.','Manuelle Erfassung ist in diesem Zustand nicht verfügbar.','Ручний облік для цього стану недоступний.','La contabilización manual no está disponible en este estado.'),'uid-history-help'));
   }
+  window.graphiteHistoryDialog?.(dialog);
   if(!dialog.open)dialog.showModal();
  }
  function closeJob(d,data){view(d,data);const ack=field(text('Печать закончена и не продолжится. Закрыть без дополнительного списания.','The print has ended and will not resume. Close without an additional deduction.','Der Druck ist beendet und wird nicht fortgesetzt. Ohne weitere Abbuchung schließen.','Друк завершено і не буде продовжено. Закрити без додаткового списання.','La impresión terminó y no se reanudará. Cerrar sin descuento adicional.'),'checkbox');
   dialog.append(historyButton(labels.close(),()=>{if(!ack.checked)throw Error(labels.ask());return decide({job_key:d.job.job_key,action:'close',expected_revision:d.revision,request_id:crypto.randomUUID(),confirmed:true})}));
+  window.graphiteHistoryDialog?.(dialog);
  }
  function edit(d,data){view(d,data);
-  if(d.uncertain){dialog.append(node('p',text('Сначала сверьте неопределённую отправку Spoolman. Этот расход уже учтён локально.','Reconcile the uncertain Spoolman delivery first. This usage is already accounted locally.','Zuerst die unklare Spoolman-Übertragung abgleichen. Dieser Verbrauch ist lokal bereits erfasst.','Спочатку звірте невизначену відправку Spoolman. Ці витрати вже враховано локально.','Primero concilie el envío incierto de Spoolman. Este consumo ya está contabilizado localmente.')));return}
+  if(d.uncertain){dialog.append(node('p',text('Сначала сверьте неопределённую отправку Spoolman. Этот расход уже учтён локально.','Reconcile the uncertain Spoolman delivery first. This usage is already accounted locally.','Zuerst die unklare Spoolman-Übertragung abgleichen. Dieser Verbrauch ist lokal bereits erfasst.','Спочатку звірте невизначену відправку Spoolman. Ці витрати вже враховано локально.','Primero concilie el envío incierto de Spoolman. Este consumo ya está contabilizado localmente.')));window.graphiteHistoryDialog?.(dialog);return}
   dialog.append(node('h3',text('Дополнительно списать, г','Additional deduction, g','Zusätzliche Abbuchung, g','Додатково списати, г','Descuento adicional, g')));
   const inputs=d.candidates.map(s=>{const i=field(s.name,'number',s.suggested_additional_mg===null?'':s.suggested_additional_mg/1000);i.step='0.001';i.min='0';i.max=s.remaining_mg/1000;i.dataset.spool=s.spool_id;i.className='uid-extra-amount';if(s.reserved){i.value='0';i.disabled=true}return [s,i]});
   const note=field(text('Основание и исправления','Reason and adjustments','Begründung und Korrekturen','Підстава та виправлення','Motivo y correcciones'),'text');note.id='uid-review-note';
@@ -83,6 +86,7 @@
    const encoded=JSON.stringify(payload);if(submitted&&submitted!==encoded)throw Error(text('Запрос уже отправлен. Повторите без изменений или откройте задание заново.','Request already sent. Retry unchanged or reopen the job.'));
    submitted=encoded;await decide(payload);
   });apply.id='uid-review-apply';actions(primary(apply));dialog.append(node('p',text('Для связанной катушки Spoolman расход попадёт в очередь. Неопределённая отправка автоматически не повторяется.','For a linked Spoolman spool, usage enters the queue. Uncertain delivery is never retried automatically.','Bei verknüpften Spoolman-Spulen kommt der Verbrauch in die Warteschlange. Unklare Übertragungen werden nicht automatisch wiederholt.','Для пов’язаної котушки Spoolman витрати потраплять до черги. Невизначена відправка автоматично не повторюється.','Para bobinas de Spoolman, el consumo entra en la cola. Los envíos inciertos nunca se repiten automáticamente.')));
+  window.graphiteHistoryDialog?.(dialog);
  }
  let initial=true;
  renderReviews=function(data){

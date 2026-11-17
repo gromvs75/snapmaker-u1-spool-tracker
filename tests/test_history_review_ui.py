@@ -19,7 +19,7 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.locator('#uid-history-dialog[open]').wait_for()
-            page.locator('.uid-history-heading button').click()
+            page.locator('#uid-history-dialog .gd-header .gd-close').click()
             page.screenshot(path=str(screens/'review-list.png'),full_page=True)
             for lang in ('ru','en','de','uk','es'):
                 page.locator('#lang-picker').select_option(lang)
@@ -28,7 +28,7 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
                 page.locator('#uid-history-dialog[open]').wait_for()
                 for width in (1202,700):
                     page.set_viewport_size(dict(width=width,height=950))
-                    buttons=page.locator('#uid-history-dialog .uid-history-actions button')
+                    buttons=page.locator('#uid-history-dialog .gd-footer button')
                     boxes=[buttons.nth(i).bounding_box() for i in range(buttons.count())]
                     assert len(boxes)==3
                     for i,a in enumerate(boxes):
@@ -37,7 +37,7 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
                     assert page.locator('#uid-history-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
                 page.set_viewport_size(dict(width=1202,height=950))
                 if lang=='ru':page.screenshot(path=str(screens/'review-dialog.png'),full_page=True)
-                page.locator('.uid-history-heading button').click()
+                page.locator('#uid-history-dialog .gd-header .gd-close').click()
             page.locator('#lang-picker').select_option('ru')
             page.locator('.uid-review-row').filter(has_text='saved-2.gcode').locator('button').click()
             page.get_by_role('button',name='Закрыть без списания',exact=True).click()

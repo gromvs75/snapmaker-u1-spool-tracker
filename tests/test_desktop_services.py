@@ -1,3 +1,4 @@
+from desktop_ui_helpers import accept_graphite_confirmations, audit_dialog
 """Full published shell against isolated fleets and a loopback Spoolman server."""
 import copy
 import json
@@ -87,7 +88,7 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
     screens=Path('output/full-133-services-ui');screens.mkdir(parents=True,exist_ok=True)
     try:
         with sync_playwright() as pw:
-            browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1360,'height':1080});page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
+            browser=pw.chromium.launch();page=browser.new_page(viewport={'width':1360,'height':1080});page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());accept_graphite_confirmations(page)
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop');page.locator('#nav-settings').click();page.locator('[data-settings-section=printer]').click()
             for language,caption in [('en','Printer name'),('de','Druckername'),('uk','Назва принтера'),('es','Nombre de impresora'),('ru','Имя принтера')]:
                 page.locator('#lang-picker').select_option(language)
@@ -109,13 +110,16 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             with page.expect_response('**/api/desktop/printer/head-counters') as response:page.locator('#heads-read').click()
             assert response.value.ok and response.value.json()['heads'][3]['switches_since_maintenance']==13
             assert probe[-1]=='http://127.0.0.1:19102'
+            audit_dialog(page,'counters')
             page.screenshot(path=str(screens/'connections.png'),full_page=True)
+            page.locator('#graphite-counters-dialog .gd-close').click()
             f=app.fleet.fleet
             f.value[p1]['channels']['0']=dict(state='present',uid='04112233',sequence=1)
             f.value[p2]['channels']['1']=dict(state='present',uid='04AABBCC',sequence=1)
             existing=app.call('create_spool',name='Existing PETG',remaining_g='123.456',details={'material':'PETG'})['spool_id']
             page.evaluate('loadData()');page.locator('#nav-spools').click();page.locator('#desktop-tags-open').click()
-            page.locator('[data-uid="04112233"]').click();page.locator('#desktop-tag-name').fill('RFID PLA');page.locator('#desktop-tag-material').fill('PLA');page.locator('#desktop-tag-mass').fill('200.123');page.locator('#desktop-tag-ack').check()
+            page.locator('[data-uid="04112233"]').click();page.locator('#desktop-tag-name').fill('RFID PLA');page.locator('#desktop-tag-material').fill('PLA');page.locator('#desktop-tag-mass').fill('200.123');page.locator('#desktop-tag-next').click();page.locator('#desktop-tag-ack').check()
+            audit_dialog(page,'tags-new')
             lost=[]
             def lose(route):
                 if not lost:assert route.fetch().ok;lost.append(True);route.abort()
@@ -125,13 +129,15 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             page.locator('#desktop-tag-save').click()
             page.wait_for_function("document.querySelectorAll('#desktop-tags-dialog [data-uid]').length===1")
             assert page.locator('#desktop-tags-dialog').is_visible()
-            page.locator('#desktop-tag-mode').select_option('existing');page.locator('#desktop-tag-existing').select_option(existing);page.locator('#desktop-tag-ack').check()
+            page.locator('#desktop-tag-mode').select_option('existing');page.locator('#desktop-tag-existing').select_option(existing);page.locator('#desktop-tag-next').click();page.locator('#desktop-tag-ack').check()
+            audit_dialog(page,'tags-existing')
             # Changing the observed generation must reject the already confirmed form.
             f.value[p2]['generation']=2
             with page.expect_response('**/api/tag_register') as response:page.locator('#desktop-tag-save').click()
             assert response.value.status==409
+            audit_dialog(page,'tags-stale')
             assert next(s for s in app.call('inspect')['spools'] if s['spool_id']==existing)['uid'] is None
-            page.locator('#desktop-tags-refresh').click();page.locator('#desktop-tag-mode').select_option('existing');page.locator('#desktop-tag-existing').select_option(existing);page.locator('#desktop-tag-ack').check()
+            page.locator('#desktop-tags-refresh').click();page.locator('#desktop-tag-mode').select_option('existing');page.locator('#desktop-tag-existing').select_option(existing);page.locator('#desktop-tag-next').click();page.locator('#desktop-tag-ack').check()
             with page.expect_response('**/api/tag_register') as response:page.locator('#desktop-tag-save').click()
             assert response.value.ok
             page.wait_for_function("document.querySelectorAll('#desktop-tags-dialog [data-uid]').length===0")
@@ -159,15 +165,17 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             history=[dict(job_id='desktop-services',start_time=1010.,filename='job.gcode',status='completed')];app.call('history',p2,history)
             assert len(app.call('delivery_list'))==1
             page.evaluate('refreshSpoolmanAfterRestore()');page.locator('[data-sm-tab=usage]').click();page.locator('#sm-queue button').click()
-            page.locator('#desktop-delivery-note').fill('Reviewed local ledger and server');page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-approve').click()
+            audit_dialog(page,'delivery-held')
+            page.locator('#desktop-delivery-note').fill('Reviewed local ledger and server');page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-approve').click();page.locator('#graphite-delivery-confirm').click()
             page.wait_for_function("!document.getElementById('desktop-delivery-dialog').open")
-            page.locator('#sm-queue button').click();value['fault']='drop_after';page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-send').click()
+            page.locator('#sm-queue button').click();audit_dialog(page,'delivery-pending');value['fault']='drop_after';page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-send').click()
             page.wait_for_function("document.getElementById('desktop-delivery-not_applied')!==null")
+            audit_dialog(page,'delivery-uncertain')
             assert len(value['writes'])==1 and app.call('delivery_list')[0]['state']=='uncertain'
             assert sender.send_one()=='blocked' and len(value['writes'])==1
             page.locator('#desktop-delivery-review').click();page.wait_for_function("document.getElementById('desktop-delivery-dialog').textContent.includes('499,7')")
             page.screenshot(path=str(screens/'uncertain-spoolman.png'),full_page=True)
-            page.locator('#desktop-delivery-note').fill('PUT was applied on fixture, verified audit');page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-applied').click()
+            page.locator('#desktop-delivery-note').fill('PUT was applied on fixture, verified audit');page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-applied').click();page.locator('#graphite-delivery-confirm').click()
             page.wait_for_function("!document.getElementById('desktop-delivery-dialog').open")
             before=app.call('inspect')['debits'];app.call('history',p2,history);assert app.call('inspect')['debits']==before
             assert sender.send_one()=='idle' and len(value['writes'])==1

@@ -59,10 +59,13 @@ def integration_html(token,version):
         ('Облік котушок і прогноз витрат для Snapmaker U1 — без зміни прошивки.','Облік котушок для Snapmaker U1. Для RFID потрібен модуль принтера.'),
         ('Gestión de bobinas y previsión de consumo para Snapmaker U1 — sin modificar el firmware.','Gestión de bobinas para Snapmaker U1. RFID requiere el módulo de impresora.')]:
         html=html.replace(old,new)
+    # Legacy handlers are async except the published Spoolman form entry.
+    html=html.replace("$('attach').onsubmit=e=>","$('attach').onsubmit=async e=>")
+    html=html.replace('confirm(', 'await window.graphiteConfirm(')
     bootstrap=Path(__file__).with_name('bridge.js').read_text(encoding='utf-8')
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
-    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history','maintenance','operations','monitor','overview','graphite','graphite_spools','graphite_layout'))
+    extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history','maintenance','operations','monitor','overview','graphite','graphite_spools','graphite_layout','graphite_dialogs'))
     style=Path(__file__).with_name('graphite.css').read_text(encoding='utf-8')
     html=html.replace('</body>','<script>'+extension+'</script><style>'+style+'</style></body>')
     return html.replace('· 1.3.3','· '+version)

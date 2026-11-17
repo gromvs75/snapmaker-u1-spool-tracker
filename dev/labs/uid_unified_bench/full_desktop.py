@@ -66,7 +66,8 @@ def main():
                 assert response.value.ok and response.value.json()['uid_available']
             ids={p['name'][-1]:p['id'] for p in app.call('settings')['values']['printers']}
             check('GUI saves and probes both real process endpoints without starting collectors',not app.connected)
-            with page.expect_response('**/api/connections_start') as response:page.locator('#desktop-connections-toggle').click()
+            with page.expect_response('**/api/connections_start') as response:
+                page.locator('#desktop-connections-toggle').click();page.locator('#graphite-confirm-apply').click()
             assert response.value.ok
             wait(lambda:all(s['state']=='ready' for s in app.fleet.snapshot().values()))
             for pid,uid in [('a','04112233'),('b','04AABBCC')]:
@@ -75,7 +76,7 @@ def main():
                 wait(lambda:app.fleet.snapshot()[ids[pid]]['channels']['3'].get('uid')==uid)
             page.evaluate('loadData()');page.locator('#nav-spools').click();page.locator('#desktop-tags-open').click()
             for uid in ('04112233','04AABBCC'):
-                page.locator(f'#desktop-tags-dialog [data-uid="{uid}"]').click();page.locator('#desktop-tag-name').fill('Process UID '+uid);page.locator('#desktop-tag-material').fill('PLA');page.locator('#desktop-tag-mass').fill('100');page.locator('#desktop-tag-ack').check()
+                page.locator(f'#desktop-tags-dialog [data-uid="{uid}"]').click();page.locator('#desktop-tag-name').fill('Process UID '+uid);page.locator('#desktop-tag-material').fill('PLA');page.locator('#desktop-tag-mass').fill('100');page.locator('#desktop-tag-next').click();page.locator('#desktop-tag-ack').check()
                 with page.expect_response('**/api/tag_register') as response:page.locator('#desktop-tag-save').click()
                 assert response.value.ok;page.wait_for_function('(uid)=>!document.querySelector(`[data-uid="${uid}"]`)',arg=uid)
             page.screenshot(path=str(args.output/'uid-complete.png'),full_page=True);page.locator('#desktop-tags-close').click()
@@ -115,7 +116,7 @@ def main():
             page.evaluate('(id)=>window.inventoryParameters(id)',spare)
             page.locator('#cal-diameter').fill('1.751');page.locator('#cal-density').fill('1.244');page.locator('#cal-save').click()
             page.locator('#inventory-param-dialog').wait_for(state='hidden')
-            page.locator(f'#spools-table tr[data-spool-id="{spare}"] .desktop-archive-action').click()
+            page.locator(f'#spools-table tr[data-spool-id="{spare}"] .graphite-actions-open').click();page.locator('#graphite-spool-actions [data-action=archive]').click();page.locator('#graphite-confirm-apply').click()
             page.wait_for_function('(id)=>desktopFormData.spools[id].archived===true',arg=spare)
             check('parameters and archive preserve exact spare balance',next(s for s in app.call('library_snapshot')['spools'] if s['spool_id']==spare)['remaining_mg']==125259)
             page.locator('#nav-settings').click();page.locator('[data-settings-section=backup]').click()

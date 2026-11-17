@@ -90,6 +90,13 @@ def main():
             click('Параметры');capture('parameters')
             click('Цвет');capture('color');click('Закрыть')
             click('Действия с катушкой · Generic Basis');click('Перенести между принтерами');capture('transfer');click('Закрыть')
+            click('＋ Добавить');capture('add-spool');click('Закрыть')
+            click('Проверить названия');capture('compare');click('Закрыть')
+            click('RFID / UID · 0');capture('tags-empty');click('Закрыть')
+            click('История');capture('history');click('Открыть');capture('history-complete');click('Закрыть')
+            click('Настройки');click('Принтер');capture('printer-settings')
+            click('Учёт');capture('accounting-settings')
+            click('Резервная копия');capture('backup-settings')
             after=api('state');assert after['debits']==before['debits'] and after['spools']==before['spools'] and not after['connections']['connected']
             child.send_signal(signal.SIGTERM);child.wait(20);assert child.returncode==0 and not (profile/'instance.json').exists()
             (out/'results.json').write_text(json.dumps(dict(bundle=str(bundle),profile=str(profile),version=info['CFBundleShortVersionString'],commit=info['TrackerSourceCommit'],checks=checks,unchanged=True,no_dock=True,clean_exit=True),indent=2))

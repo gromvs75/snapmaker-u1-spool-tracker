@@ -22,16 +22,17 @@
  async function work(fn){if(busy)return;busy=true;toggle.disabled=add.disabled=true;try{await fn()}catch(e){message.textContent=e.message}finally{busy=false;toggle.disabled=!data?.connections||!data?.printers.length;add.disabled=!!data?.connections?.connected}}
  form.addEventListener('submit',e=>{e.preventDefault();e.stopImmediatePropagation();work(async()=>{
   if(data.connections?.connected)throw Error(t('Сначала остановите подключения.','Stop connections first.','Zuerst Verbindungen stoppen.','Спочатку зупиніть підключення.','Detenga primero las conexiones.'));
-  if(el('guard-mode').value==='strict'&&!confirm((guardText[currentLang]||guardText.en).confirm))return;
   const id=!draft&&data.selected_printer?data.selected_printer:crypto.randomUUID(),p={id,name:name.value.trim(),url:url()};
   const printers=data.printers.filter(p=>p.id!==id).concat([p]);
-  await desktopCore('settings',{values:{printers,printer_names:Object.fromEntries(printers.map(p=>[p.id,p.name])),selected_printer:id,guard_modes:{...(data.guard_modes||{}),[id]:el('guard-mode').value}},expected_revision:data.settings_revision});await loadData();window.reportSettingsSaved?.();
+  const expectedRevision=data.settings_revision,guardModes={...(data.guard_modes||{}),[id]:el('guard-mode').value};
+  if(guardModes[id]==='strict'&&!await window.graphiteConfirm((guardText[currentLang]||guardText.en).confirm))return;
+  await desktopCore('settings',{values:{printers,printer_names:Object.fromEntries(printers.map(p=>[p.id,p.name])),selected_printer:id,guard_modes:guardModes},expected_revision:expectedRevision});await loadData();window.reportSettingsSaved?.();
  })},true);
  el('printer-test').addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();work(async()=>{
   const result=await desktopCore('test_printer',{url:url()});message.textContent=result.state+' · '+(result.uid_available?t('Модуль UID доступен','UID module available','UID-Modul verfügbar','Модуль UID доступний','Módulo UID disponible'):t('Модуль UID не обнаружен','UID module not found','UID-Modul nicht gefunden','Модуль UID не знайдено','Módulo UID no encontrado'));
  })},true);
- toggle.onclick=()=>work(async()=>{const connected=data.connections.connected;
-  if(!connected&&!confirm(t('Подключить сохранённые принтеры?','Connect the saved printers?','Gespeicherte Drucker verbinden?','Підключити збережені принтери?','¿Conectar las impresoras guardadas?')+'\n'+data.printers.map(p=>p.name+' · '+p.url).join('\n')))return;
-  await desktopCore(connected?'connections_stop':'connections_start',{confirmed:true,...(connected?{}:{expected_revision:data.settings_revision})});await loadData();
+ toggle.onclick=()=>work(async()=>{const connected=data.connections.connected,expectedRevision=data.settings_revision;
+  if(!connected&&!await window.graphiteConfirm(t('Подключить сохранённые принтеры?','Connect the saved printers?','Gespeicherte Drucker verbinden?','Підключити збережені принтери?','¿Conectar las impresoras guardadas?')+'\n'+data.printers.map(p=>p.name+' · '+p.url).join('\n')))return;
+  await desktopCore(connected?'connections_stop':'connections_start',{confirmed:true,...(connected?{}:{expected_revision:expectedRevision})});await loadData();
  });
 })();

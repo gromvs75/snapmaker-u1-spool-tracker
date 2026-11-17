@@ -18,10 +18,12 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
     let pending=JSON.parse(sessionStorage.getItem(pendingKey)||'null');
     if(!pending){
      if(!desktopFormData)throw Error('Reload the inventory before changing it.');
-     if(window.desktopConfirmInventory&&!window.desktopConfirmInventory(resource,body))return new Response('{}',{status:200});
      const remote=resource.startsWith('/api/spoolman/');
-     pending={...body,_inventory_revision:remote?desktopSpoolmanData?.inventory_revision:desktopFormData.inventory_revision,_request_id:crypto.randomUUID(),_confirmed:true};
-     if(resource==='/api/spoolman/attach')pending.catalog_revision=desktopSpoolmanData?.catalog_revision;
+     const revision=remote?desktopSpoolmanData?.inventory_revision:desktopFormData.inventory_revision;
+     const catalogRevision=desktopSpoolmanData?.catalog_revision;
+     if(window.desktopConfirmInventory&&!await window.desktopConfirmInventory(resource,body))return new Response('{}',{status:200});
+     pending={...body,_inventory_revision:revision,_request_id:crypto.randomUUID(),_confirmed:true};
+     if(resource==='/api/spoolman/attach')pending.catalog_revision=catalogRevision;
      sessionStorage.setItem(pendingKey,JSON.stringify(pending));
     }
     options2.body=JSON.stringify(pending);

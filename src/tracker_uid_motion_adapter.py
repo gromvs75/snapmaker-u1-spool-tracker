@@ -38,10 +38,14 @@ class UidMotionAdapter:
         channels includes every physical head allowed to feed during this capture,
         including replacement heads. All must have a confirmed UID at start.
         """
+        if observed is not True or history.get('status') != 'in_progress':
+            key = job_key(printer_id, history['job_id'], str(history['start_time']))
+            return self._review(key, 'Start was not observed')
+        return self.bind_active(printer_id, history, capture_id, epoch, start, channels)
+
+    def bind_active(self, printer_id, history, capture_id, epoch, start, channels):
         key = job_key(printer_id, history['job_id'], str(history['start_time']))
         try:
-            if observed is not True or history.get('status') != 'in_progress':
-                raise ValueError('Start was not observed')
             for channel in channels:
                 assigned=self.db.execute('SELECT spool_id FROM manual_assignments WHERE printer_id=? AND channel=?',(printer_id,channel)).fetchone()
                 if assigned and start.get('slots',{}).get(str(int(channel)+1))!=assigned['spool_id']:

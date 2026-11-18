@@ -2,6 +2,7 @@
 import copy
 import time
 import pytest
+from test_uid_accounting import snapshot
 from test_uid_manual import manual, assign, begin, debit
 from tracker_uid_accounting import AccountingConflict
 from tracker_uid_client import UidClient, PrinterEndpoint
@@ -27,16 +28,10 @@ def test_stock_assignment_confirmation_never_changes_balance(manual):
     assert c.db.execute('SELECT remaining_mg FROM uid_spools').fetchone()[0]==499000
 
 
-@pytest.mark.parametrize('fault',['disconnected','reconnect','printing','paused','invalid_uid'])
+@pytest.mark.parametrize('fault',['disconnected','printing','paused','invalid_uid'])
 def test_stock_assignment_rejects_unsafe_state(manual,fault):
     c,a,f=manual;stock(f['a']);assign(a,f)
     if fault=='disconnected': f['a']['printer_connected']=False
-    if fault=='reconnect':
-        f['a']['generation']=2;a.observe(f)
-        assert c.inventory_snapshot('a',f)['slots']['1']==''
-        assign(a,f)  # Explicit confirmation restores future use, without a debit.
-        assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
-        return
     if fault in ('printing','paused'):f['a']['print_state']=fault
     if fault=='invalid_uid':f['a']['state']='invalid_data'
     with pytest.raises(AccountingConflict):assign(a,f)
@@ -92,3 +87,24 @@ def test_stock_detach_changes_assignment_not_usage(manual):
     assert c.inventory_snapshot('a',f)['slots']['1']==''
     assert c.db.execute('SELECT remaining_mg FROM uid_spools').fetchone()[0]==500000
     assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+
+
+def test_stock_next_job_after_reconnect_and_conflicting_tag(manual):
+    c, a, fleet = manual
+    stock(fleet['a'])
+    placement = assign(a, fleet)
+    fleet['a']['printer_connected'] = False
+    assert not c.inventory_snapshot('a', fleet)['slots']['1']
+    stock(fleet['a'])
+    fleet['a']['generation'] = 2
+    assert c.inventory_snapshot('a', fleet)['slots']['1'] == 'manual-id'
+    assert c.db.execute('SELECT version FROM manual_assignments').fetchone()[0] == placement['version']
+    key = begin(a, fleet)
+    assert debit(a, key) == 'applied'
+    assert debit(a, key) == 'duplicate'
+    fleet['a'] = snapshot('a', {'0': '04112233'})
+    a.observe(fleet)
+    fleet['a'] = snapshot('a', {})
+    a.observe(fleet)
+    stock(fleet['a'])
+    assert not c.inventory_snapshot('a', fleet)['slots']['1']

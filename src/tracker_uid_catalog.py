@@ -177,6 +177,10 @@ class UidCatalog:
     def connection_token(snapshot):
         return json.dumps([snapshot.get(k) for k in ('client_session','generation','epoch')])
 
+    # Placement is saved per head. Observations and the continuity of a
+    # particular job are still tied to a live printer connection.
+    SAVED_PLACEMENT = 'manual-placement-v1'
+
     def _manual_locations(self, fleet, tagged):
         from tracker_printer_capabilities import manual_available
         rows=[]
@@ -191,11 +195,32 @@ class UidCatalog:
                 for tagged_row in tagged:
                     if competes(tagged_row):
                         tagged_row.update(usable=False,state='conflict')
-            valid=(manual_available(snapshot) and row['token']==self.connection_token(snapshot)
-                   and not conflict and obs.get('state') in ('absent','unreadable','unknown'))
-            if not valid:
-                self.db.execute('UPDATE manual_assignments SET confirmed=0 WHERE printer_id=? AND channel=?',(row['printer_id'],row['channel']))
-                row['confirmed']=0
+            token = row['token']
+            available = manual_available(snapshot)
+            untagged = available and obs.get('state') in ('absent', 'unknown', 'unreadable')
+            obstructed = conflict or self.archived(row['spool_id']) or obs.get('state') in ('present', 'conflict')
+            if obstructed:
+                token = 'revoked'
+            elif untagged and not token:
+                # 1.x imports (including those already restored in rc18) store a
+                # unique slot twice. Ambiguous slots have no assignment row.
+                imported = self.db.execute(
+                    'SELECT 1 FROM manual_assignment_candidates WHERE printer_id=? AND channel=? '
+                    'AND spool_id=? AND reason=?',
+                    (row['printer_id'], row['channel'], row['spool_id'], 'confirmation required')
+                ).fetchone()
+                if imported:
+                    token = self.SAVED_PLACEMENT
+            if token == self.SAVED_PLACEMENT:
+                confirmed = untagged
+            else:
+                confirmed = bool(row['confirmed'] and available and not obstructed
+                                 and token == self.connection_token(snapshot)
+                                 and obs.get('state') in ('absent', 'unreadable', 'unknown'))
+            if token != row['token'] or confirmed != row['confirmed']:
+                self.db.execute('UPDATE manual_assignments SET confirmed=?, token=? WHERE printer_id=? AND channel=?',
+                                (confirmed, token, row['printer_id'], row['channel']))
+            row.update(confirmed=confirmed, token=token)
             row.update(uid=None,identity_mode='manual',state='manual_confirmed' if row['confirmed'] else 'manual_unconfirmed',usable=bool(row['confirmed']))
             row['spool']=dict(self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?',(row['spool_id'],)).fetchone())
             rows.append(row)

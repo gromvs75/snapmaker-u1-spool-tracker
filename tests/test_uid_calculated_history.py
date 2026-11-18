@@ -141,3 +141,110 @@ def test_shared_head_for_used_materials_still_requires_distribution_review(bench
     with pytest.raises(ValueError,match='distribution review'):
         life.recovery_preview(key)
     assert not c.db.execute('SELECT * FROM uid_debits').fetchall()
+
+
+@pytest.mark.parametrize('fault', [None, 'gap', 'runout', 'insertion', 'tag_change', 'mapping', 'other_head', 'wrong_file'])
+@pytest.mark.parametrize('reader_present', [False, True])
+def test_manual_completed_estimate_requires_original_placement(bench, fault, reader_present):
+    from test_manual_without_uid import stock
+    from test_uid_motion_adapter import evidence
+    store, catalog, fleet, adapter = bench
+    fleet.states['a'] = snapshot('a', {}) if reader_present else stock(snapshot('a', {}))
+    accounting = adapter.service.accounting
+    sid = catalog.register_manual('T0 PLA', 553177)['spool_id']
+    accounting.assign_manual('a', '0', sid, fleet.states, confirmed=True)
+    life = MotionLifecycle(adapter)
+    e = evidence(store)
+    e.update(start=catalog.inventory_snapshot('a', fleet.states), terminal_state='completed',
+             comparison={'matches': False, 'printer_total_mm': None}, mapping_consistent=True)
+    e['feed']['runouts'] = [False] * 4
+    feed = {'filament_feed left': {'extruder0': {'filament_detected': True}}}
+    profile = e['profile']
+    profile.update(file_sha256='a'*64, logical_weights=[18.42,0,0,0],
+                   replenished=[0,1,2,3], auto_replenish=False, feed_start=feed)
+    life.start('a', filename='job.gcode', observed_at=1010., capture_id=e['capture_id'],
+               epoch=e['epoch'], start=e['start'], channels=['0'])
+    life.recovery_profile('a', history(), profile)
+    if fault == 'gap': life.disconnected('a')
+    if fault == 'runout': e['feed']['runouts'][0] = True
+    if fault == 'insertion': e['feed']['insertions'][0] = True
+    if fault == 'tag_change': e['tags']['unchanged'][0] = False
+    if fault == 'mapping': e['mapping_consistent'] = False
+    if fault == 'other_head': e['heads'][1]['net_mm'] = 100
+    if fault == 'wrong_file': e['profile']['file_sha256'] = 'b'*64
+    life.terminal('a', e)
+    status = dict(print_stats=dict(state='complete', filename='job.gcode'),
+                  print_task_config=dict(auto_replenish_filament=False, extruder_map_table=[0,1,2,3],
+                                         extruders_replenished=[0,1,2,3]), **feed)
+    def finish():
+        return life.recovery_terminal('a', history('completed'), status, 'a'*64)['status']
+    if fault:
+        assert finish() == 'review'
+        assert catalog.db.execute('SELECT count(*) FROM uid_debits').fetchone()[0] == 0
+    else:
+        assert finish() == 'applied'
+        assert finish() == 'duplicate'
+        assert catalog.db.execute('SELECT remaining_mg FROM uid_spools WHERE spool_id=?',(sid,)).fetchone()[0] == 534757
+
+
+@pytest.mark.parametrize('fault', [None, 'placement_after_start', 'cancelled', 'socket_gap',
+                                   'feed_change', 'file_changed', 'terminal_only'])
+def test_late_attachment_two_manual_spools(bench, monkeypatch, fault):
+    import socket
+    import time
+    from test_manual_without_uid import stock
+    from test_uid_motion_adapter import evidence
+    from tracker_uid_runtime import history_read_timeout
+
+    store, catalog, fleet, adapter = bench
+    fleet.states['a'] = stock(snapshot('a', {}))
+    accounting = adapter.service.accounting
+    monkeypatch.setattr(time, 'time', lambda: 1100 if fault == 'placement_after_start' else 1000)
+    for channel, balance in [('0', 553177), ('1', 194600)]:
+        spool = catalog.register_manual('T' + channel, balance, spool_id='manual-' + channel)
+        accounting.assign_manual('a', channel, spool['spool_id'], fleet.states, confirmed=True)
+    life = MotionLifecycle(adapter)
+    job = history(start=1010.)
+    e = evidence(store)
+    profile = dict(e['profile'], filename=job['filename'], started_at=job['start_time'],
+                   history_job_id=job['job_id'], logical_weights=[64.62, .77, 0, 0],
+                   file_sha256='a'*64, auto_replenish=True, replenished=[0,1,2,3], mapping=[0,1,2,3])
+    e.update(profile=profile, terminal_state='completed', complete=False, observed_from_attachment=True,
+             mapping_consistent=True)
+    e['feed']['runouts'] = [False]*4
+    status = dict(print_stats=dict(state='complete', filename=job['filename']),
+                  print_task_config=dict(auto_replenish_filament=True, extruder_map_table=list(range(4))+[0]*28,
+                                         extruders_replenished=[0,1,2,3]))
+    status['filament_feed left'] = {'extruder'+i: {'filament_detected':True} for i in ('0','1')}
+    ended = dict(job, status='completed')
+    if fault != 'terminal_only':
+        placement = life.attach_active('a',profile,3395.59,e['epoch'],e['capture_id'])
+        if fault == 'placement_after_start':
+            assert placement is None
+        else:
+            assert placement
+            e['start'] = placement
+            assert history_read_timeout(socket.timeout())
+            life.history_timeout('a','timed out')
+            if fault == 'socket_gap':
+                life.disconnected('a','Motion stream ended')
+            if fault == 'feed_change':
+                e['feed']['runouts'][1] = True
+            if fault == 'cancelled':
+                ended['status'] = e['terminal_state'] = 'cancelled'
+                status['print_stats']['state'] = 'cancelled'
+            life.terminal('a',e)
+    digest = 'b'*64 if fault == 'file_changed' else profile['file_sha256']
+    def finish():
+        return life.recovery_terminal('a',ended,status,digest)['status']
+    if fault:
+        assert finish() != 'applied'
+        assert not catalog.db.execute('SELECT * FROM uid_debits').fetchall()
+    else:
+        assert finish() == 'applied'
+        for _ in range(3):
+            assert finish() == 'duplicate'
+        assert dict(catalog.db.execute('SELECT spool_id,delta_mg FROM uid_debits')) == {
+            'manual-0':64620, 'manual-1':770}
+        assert dict(catalog.db.execute("SELECT spool_id,remaining_mg FROM uid_spools WHERE uid IS NULL")) == {
+            'manual-0':488557, 'manual-1':193830}

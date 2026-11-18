@@ -96,8 +96,12 @@ class Recovery:
         if job is None:raise ValueError('No original job')
         if job['state']=='completed':return {'status':'duplicate'}
         if job['state']!='active' or job['last_sequence']>=0:raise ValueError('Job already resolved or partially debited')
-        if job['mapping_valid']:return {'status':'pending_motion'}
         capture=self.db.execute('SELECT * FROM uid_motion_captures WHERE key=?',(key,)).fetchone()
+        snapshot = fleet.get(job['printer_id'], {})
+        manual_channels = {r[0] for r in self.db.execute(
+            'SELECT channel FROM uid_job_manual WHERE job_key=?', (key,))}
+        if job['mapping_valid'] and not (manual_channels and capture['evidence']):
+            return {'status':'pending_motion'}
         history=json.loads(capture['history'])
         saved=self.db.execute('SELECT * FROM uid_recovery_profiles WHERE history_key=?',(capture['history_key'],)).fetchone()
         if saved is None or saved['quarantined']:raise ValueError('Saved plan unavailable or restored/quarantined')
@@ -151,17 +155,23 @@ class Recovery:
             counter=history.get('filament_used')
             if len(used)==1 and type(counter) in (float,int) and math.isfinite(counter) and counter>0:
                 i=used[0];totals[str(initial[i])]=mass(counter,plan['parameters'][i]);source_label='printer_history_estimate'
-        snapshot=fleet.get(job['printer_id'],{})
-        if snapshot.get('state')!='ready':raise ValueError('Fresh spool observations unavailable')
-        # Only identifiable original spools auto-recover after a gap. Manual
-        # assignments need an explicit later confirmation, not an inferred UID.
+        manual_used = {ch for ch in manual_channels if totals.get(ch)}
+        if manual_used:
+            if changed or not job['mapping_valid']:
+                raise ValueError('Manual spool continuity lost')
+            self.verify_manual_capture(key, capture, snapshot, accounting, tools, totals, plan, ctx, manual_used)
+        elif job['mapping_valid']:
+            return {'status': 'pending_motion'}
         for ch,t in tools.items():
             if not totals[ch]:continue
-            obs=snapshot.get('channels',{}).get(ch,{})
-            if not t['uid'] or obs.get('state')!='present' or obs.get('uid')!=t['uid']:
-                raise ValueError('Original spool identity is not confirmed; manual review required')
-            if sum(o.get('uid')==t['uid'] and o.get('state')=='present' for printer in fleet.values() for o in printer.get('channels',{}).values())!=1:
-                raise ValueError('Original UID conflicts across printers')
+            if ch not in manual_used:
+                if snapshot.get('state') != 'ready':
+                    raise ValueError('Fresh spool observations unavailable')
+                obs=snapshot.get('channels',{}).get(ch,{})
+                if not t['uid'] or obs.get('state')!='present' or obs.get('uid')!=t['uid']:
+                    raise ValueError('Original spool identity is not confirmed; manual review required')
+                if sum(o.get('uid')==t['uid'] and o.get('state')=='present' for printer in fleet.values() for o in printer.get('channels',{}).values())!=1:
+                    raise ValueError('Original UID conflicts across printers')
             if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE t.spool_id=? AND j.state='active' AND j.job_key<>?",(t['spool_id'],key)).fetchone():
                 raise ValueError('Spool reserved by another print')
             sid=t['spool_id'];original=mg(ctx['start']['spools'][sid]['remaining_g'])
@@ -175,6 +185,43 @@ class Recovery:
             self.db.execute('INSERT INTO uid_recovery_receipts VALUES(?,?)',(key,receipt))
         result=accounting.apply(key,1,totals,state='completed',source=job['source'],basis='calculated_history',recovery_validator=validate)
         return dict(status=result,totals_mg=totals,estimate_source=source_label,auto_replenish=start_mode)
+
+    def verify_manual_capture(self, key, capture, snapshot, accounting, tools, totals, plan, context, manual_used):
+        from tracker_printer_capabilities import manual_available
+        evidence = json.loads(capture['evidence'])
+        token = self.db.execute('SELECT token FROM uid_job_connections WHERE job_key=?', (key,)).fetchone()
+        late_attachment = key == capture['history_key']
+        observed = evidence.get('observed_from_attachment' if late_attachment else 'complete') is True
+        if (not manual_available(snapshot) or not token or token[0] != accounting.catalog.connection_token(snapshot)
+                or not observed
+                or evidence.get('continuous') is not True
+                or evidence.get('mapping_consistent') is not True or evidence.get('terminal_state') != 'completed'):
+            raise ValueError('Incomplete manual placement observations')
+        profile = evidence['profile']
+        if (evidence['start'] != context['start'] or profile['filename'] != plan['filename']
+                or profile['started_at'] != plan['started_at'] or profile['file_sha256'] != plan['file_sha256']):
+            raise ValueError('Terminal capture does not match the original print')
+        feed = evidence['feed']
+        if feed['valid'] is not True:
+            raise ValueError('Invalid feeder observations')
+        if any(head['net_mm'] > .1 and not totals.get(str(head['head'])) for head in evidence['heads']):
+            raise ValueError('Motion on a head outside the saved print plan')
+        for ch in manual_used:
+            if snapshot.get('channels', {}).get(ch, {}).get('state') not in ('absent', 'unknown', 'unreadable'):
+                raise ValueError('Conflicting spool observation')
+            i = int(ch)
+            tags = evidence['tags']
+            if tags.get('known') and not tags['unchanged'][i]:
+                raise ValueError('Spool tag changed during the print')
+            if not feed['covered'][i] or feed['runouts'][i] or feed['insertions'][i]:
+                raise ValueError('Filament placement changed or was unobserved')
+            placement = self.db.execute(
+                'SELECT a.* FROM manual_assignments a JOIN uid_job_manual j ON j.assignment_version=a.version '
+                'AND j.channel=a.channel WHERE j.job_key=? AND a.printer_id=? AND a.channel=?',
+                (key, capture['printer_id'], ch)).fetchone()
+            if (not placement or not placement['confirmed'] or placement['spool_id'] != tools[ch]['spool_id']
+                    or placement['token'] != accounting.catalog.SAVED_PLACEMENT):
+                raise ValueError('Original manual placement is not confirmed')
 
     def manual_segments(self,key,plan,history,ctx,status,accounting,fleet,events,digest):
         """Apply explicit paused UID segments in one transaction; never full plan on cancel."""

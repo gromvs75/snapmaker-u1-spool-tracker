@@ -13,7 +13,7 @@ from urllib.parse import quote,urlencode,urlsplit,urlunsplit
 from urllib.request import Request,build_opener,ProxyHandler,HTTPRedirectHandler
 from gcode import parse_u1_gcode_handle,parse_filament_parameters_handle
 from tool_mapping import validate_mapping
-from tracker_uid_runtime import PrinterWorkers,ModelInventoryStore
+from tracker_uid_runtime import PrinterWorkers,ModelInventoryStore,history_read_timeout
 from tracker_uid_recorder import MotionStreamRecorder
 
 
@@ -96,7 +96,21 @@ class MotionSocket:
 
 
 class ProfileHistory:
-    def __init__(self,client,store,profile_sink=None,terminal_sink=None,observation_sink=None,status_sink=None,guard_sink=None):self.status_sink=status_sink;self.guard_sink=guard_sink;self.client=client;self.store=store;self.key=None;self.error=None;self.profile_sink=profile_sink;self.observation_sink=observation_sink;self.terminal_sink=terminal_sink;self.terminal_done=set();self.terminal_checked=0.
+    def __init__(self,client,store,profile_sink=None,terminal_sink=None,observation_sink=None,status_sink=None,guard_sink=None,history_sink=None):
+        self.client = client
+        self.store = store
+        self.status_sink = status_sink
+        self.guard_sink = guard_sink
+        self.profile_sink = profile_sink
+        self.observation_sink = observation_sink
+        self.terminal_sink = terminal_sink
+        self.history_sink = history_sink
+        self.last_history = None
+        self.key = None
+        self.error = None
+        self.terminal_done = set()
+        self.terminal_checked = 0.
+
     @staticmethod
     def identity(job):return (job['job_id'],job['start_time'],job['filename'])
     @staticmethod
@@ -109,6 +123,14 @@ class ProfileHistory:
     def __call__(self):
         try:
             jobs=self.client.history()
+            if self.history_sink:
+                from tracker_uid_recovery import TERMINAL
+                ended = [j for j in jobs if j.get('status') in TERMINAL]
+                signature = [(j.get('job_id'), j.get('start_time'), j.get('filename'),
+                              j.get('status')) for j in ended]
+                if signature != self.last_history:
+                    self.history_sink(ended)
+                    self.last_history = signature
             status=self.client.status();stats=status['print_stats']
             if self.status_sink:self.status_sink(status)
             active=[j for j in jobs if j.get('status')=='in_progress' and j.get('filename')==stats.get('filename')]
@@ -135,7 +157,7 @@ class ProfileHistory:
                     if (after['print_stats'].get('filename')!=job['filename'] or after['print_stats'].get('state') not in ('printing','paused')
                             or self.mapping(after)!=(mapping,replenished) or len(latest)!=1 or self.identity(latest[0])!=key):
                         raise ValueError('Print changed during G-code verification')
-                    self.store._motion_slicer_profile=dict(profile,filename=job['filename'],started_at=job['start_time'],mapping=mapping,replenished=replenished,auto_replenish=status['print_task_config'].get('auto_replenish_filament'),feed_start={k:v for k,v in status.items() if k.startswith('filament_feed ')})
+                    self.store._motion_slicer_profile=dict(profile,history_job_id=job['job_id'],filename=job['filename'],started_at=job['start_time'],mapping=mapping,replenished=replenished,auto_replenish=status['print_task_config'].get('auto_replenish_filament'),feed_start={k:v for k,v in status.items() if k.startswith('filament_feed ')})
                     self.key=key
                 elif old.get('auto_replenish')!=status['print_task_config'].get('auto_replenish_filament'):
                     if self.profile_sink:self.profile_sink(job,dict(old,auto_replenish=status['print_task_config'].get('auto_replenish_filament')))
@@ -162,7 +184,10 @@ class ProfileHistory:
             self.error=None
             return jobs
         except Exception as exc:
-            self.store._motion_slicer_profile=None;self.key=None;self.error=str(exc)
+            if not history_read_timeout(exc):
+                self.store._motion_slicer_profile=None
+                self.key=None
+            self.error=str(exc)
             raise
 
 
@@ -170,6 +195,7 @@ def create_workers(owner,printer,directory):
     u=urlsplit(printer['url']);config={'enabled':True,'host':u.hostname,'port':u.port or (443 if u.scheme=='https' else 80)}
     store=ModelInventoryStore(owner,printer['id'],directory/('motion-'+printer['id']),config)
     client=ReadOnlyMoonraker(printer['url']);history=ProfileHistory(client,store,lambda job,profile:owner.call('recovery_profile',printer['id'],job,profile),lambda job,status,digest:owner.call('recovery_terminal',printer['id'],job,status,digest),lambda job,status:owner.call('replacement_observe',printer['id'],job,status))
+    history.history_sink=lambda jobs:owner.call('observe_history',printer['id'],jobs)
     status_client=ReadOnlyMoonraker(printer['url'])
     worker=PrinterWorkers(owner,printer['id'],lambda proxy,pid:MotionStreamRecorder(store,proxy,pid),
                           lambda:MotionSocket(printer['url']),history,config,poll_interval=.5,reconnect_interval=.5,status_reader=status_client.monitor_status)

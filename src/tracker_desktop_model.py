@@ -56,6 +56,13 @@ def snapshot(library, history_review, fleet):
                             sha256=profile['file_sha256'],created_at=profile['started_at'],status='saved',
                             physical_plan=detail['plan'],quarantined=detail['quarantined'])
         runs[key]=run
+    # This record carries no spool binding, debit or authorization. A later
+    # bound capture takes its place in the read model under the real job key.
+    for observed in history_review.unaccounted_history(pid):
+        key = 'printer-history:' + observed['history_key']
+        runs[key] = dict(job_key=key, filename=observed['filename'], start_time=observed['started_at'],
+                         status='printer_history', terminal_status=observed['status'],
+                         accounted_g=0, accounted_by_spool={}, closed_without_deduction=False)
     for p in catalog['export_plans']:
         if p['printer_id']==pid or not p['printer_id']:
             plans[p['plan_id']]=dict(filename=p['filename'],weights=p['weights'],sha256=p['file_sha256'],

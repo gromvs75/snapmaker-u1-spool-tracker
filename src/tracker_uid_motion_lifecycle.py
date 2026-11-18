@@ -43,6 +43,51 @@ class MotionLifecycle:
                             (result['job_key'], printer_id, source, observed_at, filename, self.session))
         return result
 
+    def attach_active(self, printer_id, profile, observed_at, epoch, capture_id):
+        """A verified running print can use a completed-file estimate on prior manual placements."""
+        started = float(profile['started_at'])
+        jid = profile['history_job_id']
+        key = job_key(printer_id, jid, str(started))
+        accounting = self.adapter.service.accounting
+        if accounting.job(key) or accounting.legacy_history(printer_id, jid, started):
+            return None
+        if self.db.execute('SELECT 1 FROM uid_motion_captures WHERE history_key=?', (key,)).fetchone():
+            return None
+        channels = sorted({str(profile['mapping'][i]) for i, w in enumerate(profile['logical_weights']) if w > 0})
+        if not channels or profile['replenished'] != [0, 1, 2, 3]:
+            return None
+        fleet = self.adapter.service.fleet.snapshot()
+        start = accounting.catalog.inventory_snapshot(printer_id, fleet)
+        for ch in channels:
+            row = self.db.execute("""SELECT a.spool_id FROM manual_assignments a
+                JOIN manual_placement_times p USING(printer_id,channel,version)
+                WHERE a.printer_id=? AND a.channel=? AND a.confirmed=1 AND a.token=? AND p.saved<=?""",
+                (printer_id, ch, accounting.catalog.SAVED_PLACEMENT, started)).fetchone()
+            if not row or start['slots'].get(str(int(ch)+1)) != row['spool_id']:
+                return None
+        history = dict(job_id=jid, start_time=started, filename=profile['filename'], status='in_progress')
+        result = self.adapter.bind_active(printer_id, history, capture_id, epoch, start, channels)
+        if result['status'] != 'started':
+            return None
+        with self.db:
+            self.db.execute('INSERT INTO uid_motion_captures VALUES(?,?,?,?,?,?,?,NULL,?)',
+                (key, printer_id, self.adapter.source(epoch,capture_id), observed_at, history['filename'],
+                 key, json.dumps(history), self.session))
+        self.recovery.remember(key, profile)
+        return start
+
+    def history_timeout(self, printer_id, reason):
+        # Both observed starts and late attachments have an independent motion
+        # stream. An HTTP timeout is not evidence that this stream disconnected.
+        # Keep only captures already bound to a trusted active-job plan; terminal
+        # accounting still verifies motion/feed continuity, placement and file.
+        captures = self.db.execute("""SELECT c.history_key,p.quarantined
+            FROM uid_motion_captures c JOIN uid_jobs j ON j.job_key=c.key
+            LEFT JOIN uid_recovery_profiles p ON p.history_key=c.history_key
+            WHERE c.printer_id=? AND j.state='active'""", (printer_id,)).fetchall()
+        if not captures or any(not r['history_key'] or r['quarantined'] != 0 for r in captures):
+            self.disconnected(printer_id, reason)
+
     def recovery_profile(self, printer_id, history, profile):
         if history.get('status')!='in_progress':raise ValueError('Plan must be saved while job is active')
         if profile.get('filename')!=history['filename'] or profile.get('started_at')!=history['start_time']:
@@ -108,8 +153,11 @@ class MotionLifecycle:
             if key in unique and unique[key] != job:
                 return [self.adapter._review(key, 'Conflicting history records')]
             unique[key] = job
-        captures = self.db.execute('SELECT * FROM uid_motion_captures WHERE printer_id=?', (printer_id,)).fetchall()
-        candidates = {r['key']: [k for k, j in unique.items() if j['filename'] == r['filename'] and abs(j['start_time']-r['observed']) <= 30] for r in captures}
+        # Imported receipts already have a fenced 1.x identity. They cannot
+        # be a start observation for a subsequent print with the same name.
+        captures = self.db.execute("SELECT * FROM uid_motion_captures WHERE printer_id=? AND session!='legacy'",
+                                   (printer_id,)).fetchall()
+        candidates = {r['key']: [k for k, j in unique.items() if j['filename'] == r['filename'] and (k == r['key'] if r['key'] == r['history_key'] else abs(j['start_time']-r['observed']) <= 30)] for r in captures}
         results = imported
         for row in captures:
             keys = candidates[row['key']]
@@ -148,4 +196,8 @@ class MotionLifecycle:
         evidence = json.loads(row['evidence'])
         if evidence.get('terminal_state') != history['status']:
             return self.adapter._review(key, 'Motion/history terminal states differ')
+        if row['key'] == row['history_key']:
+            if history['status'] != 'completed':
+                return self.adapter._review(key, 'Partial observation cannot account a partial print')
+            return {'status': 'pending_calculated_completion'}
         return self.adapter.finish(row['printer_id'], history, evidence, bound_key=key)

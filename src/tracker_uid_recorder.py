@@ -75,6 +75,9 @@ class MotionStreamRecorder:
         print_state = None
         filename = ''
         started_mid_print = True
+        attachment_profile = None
+        attachment_time = None
+        estimated_start = None
         last_summary = 0
         spool_snapshot = None
         observed_start = None
@@ -115,6 +118,12 @@ class MotionStreamRecorder:
                 mapping_changed = True
         def current_profile():
             profile = getattr(self.store, '_motion_slicer_profile', None)
+            if attachment_profile is not None:
+                if (isinstance(profile, dict) and profile['filename'] == filename
+                        and all(profile.get(k) == attachment_profile[k] for k in
+                                ('history_job_id', 'started_at', 'file_sha256', 'mapping'))):
+                    return profile
+                return None
             if (not isinstance(profile, dict) or profile is start_profile_baseline or profile.get('filename') != filename
                     or started_mid_print or observed_start is None
                     or isinstance(profile.get('started_at'), bool)
@@ -149,8 +158,17 @@ class MotionStreamRecorder:
             if self.lifecycle is not None:
                 report = feed.report()
                 cancelled = print_state == 'cancelled'
-                evidence = {'complete': True, 'continuous': True,
-                            'comparison': cancel_comparison if cancelled else summary.compare_printer_total(printer_total_mm),
+                try:
+                    comparison = cancel_comparison if cancelled else summary.compare_printer_total(printer_total_mm)
+                except MotionDataError:
+                    # Preserve observed feeder/placement continuity when the
+                    # printer has no usable aggregate motion counter.
+                    comparison = {'matches': False, 'printer_total_mm': None}
+                evidence = {'complete': attachment_profile is None, 'observed_from_attachment': attachment_profile is not None,
+                            'continuous': True,
+                            'comparison': comparison,
+                            'mapping_consistent': ((initial_mapping is None or initial_mapping == profile['mapping'])
+                                                   and all(m == profile['mapping'] for m in observed_mappings)),
                             'feed': report, 'tags': tags.report(report),
                             'heads': cancel_heads if cancelled else summary.result(),
                             'profile': profile, 'start': spool_snapshot, 'epoch': capture_epoch,
@@ -163,6 +181,21 @@ class MotionStreamRecorder:
         import time
         while not self.stop_event.is_set():
             now = time.monotonic()
+            if (not pending and estimated_start is not None and not start_ready
+                    and print_state in ('printing', 'paused') and now - previous_attempt >= 1):
+                profile = getattr(self.store, '_motion_slicer_profile', None)
+                if (isinstance(profile, dict) and profile.get('history_job_id') and profile['filename'] == filename
+                        and abs(profile['started_at'] - estimated_start) <= 30
+                        and profile['started_at'] <= attachment_time):
+                    previous_attempt = now
+                    capture_id = uuid.uuid4().hex
+                    placement = self.lifecycle.attach_active(self.printer_id, profile, attachment_time,
+                                                           capture_epoch, capture_id)
+                    if placement is not None:
+                        attachment_profile = profile
+                        spool_snapshot = placement
+                        start_ready = True
+                        self._write('attached_active_job', filename=filename, history_job_id=profile['history_job_id'])
             if completion_time is not None and now - completion_time >= 4 and now - previous_attempt >= 2:
                 previous_attempt = now
                 if now - completion_time > 35:
@@ -207,6 +240,10 @@ class MotionStreamRecorder:
                     filename = stats.get('filename', '')
                     started_mid_print = print_state in ('printing', 'paused')
                     if started_mid_print:
+                        duration = stats.get('total_duration')
+                        if type(duration) in (float, int) and duration >= 0:
+                            attachment_time = time.time()
+                            estimated_start = attachment_time - duration
                         spool_snapshot = self.store.read()
                 if not pending:
                     self._write('subscribed', note='Subscriptions accepted; receipt of motion is not yet verified')
@@ -241,6 +278,7 @@ class MotionStreamRecorder:
                                 started_mid_print = True
                                 print_state = state
                                 continue
+                            estimated_start = attachment_profile = None
                             summary = HeadMotionSummary()
                             started_mid_print = False
                             observed_start = time.time()

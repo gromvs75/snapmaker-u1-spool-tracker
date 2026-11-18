@@ -242,3 +242,37 @@ def test_legacy_backup_full_shell_preview_languages_and_history(tmp_path,old_bac
             browser.close()
     finally:
         server.shutdown();thread.join();server.server_close();app.close()
+
+
+def test_restored_slot_supports_new_stock_print_on_same_endpoint(tmp_path, old_backup):
+    from test_uid_accounting import snapshot
+    from test_manual_without_uid import stock
+    from tracker_uid_accounting import UidAccounting, AccountingConflict
+    from tracker_uid_catalog import UidCatalog
+    from tracker_uid_library import Library
+
+    directory = tmp_path / 'restored'
+    session = Session(directory, allowed_urls=[])
+    try:
+        restore(session, old_backup)
+        pid = session.call('settings')['values']['selected_printer']
+    finally:
+        session.close()
+    catalog = UidCatalog(directory / 'tracker.sqlite')
+    try:
+        accounting = UidAccounting(catalog)
+        library = Library(accounting)
+        fleet = {pid: stock(snapshot(pid, {}))}
+        assert catalog.inventory_snapshot(pid, fleet)['slots']['1'] == 'local'
+        with pytest.raises(AccountingConflict, match='Legacy history fenced'):
+            accounting.begin(pid, '0', '2000.0', ['0'], 'capture', fleet)
+        assert catalog.db.execute("SELECT remaining_mg FROM uid_spools WHERE spool_id='local'").fetchone()[0] == 125259
+        key = accounting.begin(pid, 'new', '2010.0', ['0'], 'capture', fleet)
+        assert accounting.apply(key, 1, {'0': 1000}, state='completed', source='capture', basis='motion_estimate') == 'applied'
+        settings = library.settings()
+        printers = settings['values']['printers']
+        next(p for p in printers if p['id'] == pid)['url'] = 'http://127.0.0.1:20000'
+        library.save_settings({'printers': printers}, settings['revision'])
+        assert not catalog.inventory_snapshot(pid, fleet)['slots']['1']
+    finally:
+        catalog.close()

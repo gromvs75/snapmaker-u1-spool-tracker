@@ -162,3 +162,26 @@ def test_cancelled_partial_can_add_remainder_but_final_receipt_cannot(bench):
     with c.db:c.db.execute("UPDATE uid_jobs SET state='cancelled' WHERE job_key=?",(key,))
     assert not review.detail(key)['can_review']
     with pytest.raises(ValueError):review.decide(**dict(args(review,key),request_id='cannot-repeat-receipt'))
+
+
+def test_printer_history_survives_missing_capture_without_spending(bench):
+    from tracker_uid_history_review import HistoryReview
+    from tracker_uid_motion_lifecycle import MotionLifecycle
+    from test_uid_motion_adapter import history
+    _, catalog, _, adapter = bench
+    lifecycle = MotionLifecycle(adapter)
+    review = HistoryReview(adapter.service.accounting)
+    job = history('completed')
+    review.observe_history('a', [job, job, history('in_progress')])
+    review.observe_history('b', [job])
+    assert [r['filename'] for r in review.unaccounted_history('a')] == [job['filename']]
+    assert len(review.unaccounted_history('b')) == 1
+    assert not catalog.db.execute('SELECT 1 FROM uid_debits').fetchone()
+    from tracker_uid_accounting import job_key
+    hk = job_key('a', job['job_id'], str(float(job['start_time'])))
+    # A subsequently bound accounting capture supersedes the history-only row.
+    with catalog.db:
+        catalog.db.execute('INSERT INTO uid_motion_captures VALUES(?,?,?,?,?,?,?,NULL,?)',
+            ('capture','a','motion',job['start_time'],job['filename'],hk,'{}',lifecycle.session))
+    assert not review.unaccounted_history('a')
+    assert len(review.unaccounted_history('b')) == 1

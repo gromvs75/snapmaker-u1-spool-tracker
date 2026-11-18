@@ -17,7 +17,35 @@ class HistoryReview:
         self.db.execute('''CREATE TABLE IF NOT EXISTS uid_history_decisions (
             request_id TEXT PRIMARY KEY, job_key TEXT NOT NULL, action TEXT NOT NULL,
             payload TEXT NOT NULL, result TEXT NOT NULL, created_at REAL NOT NULL)''')
+        self.db.execute("""CREATE TABLE IF NOT EXISTS uid_printer_history (
+            history_key TEXT PRIMARY KEY, legacy_key TEXT NOT NULL, printer_id TEXT NOT NULL, job_id TEXT NOT NULL,
+            started_at REAL NOT NULL, filename TEXT NOT NULL, status TEXT NOT NULL)""")
         self.db.commit()
+
+    def observe_history(self, printer_id, jobs):
+        """Store terminal printer facts independently of motion, spool identity and file scans."""
+        from tracker_uid_accounting import job_key
+        from tracker_uid_migration import history_identity
+        from tracker_uid_recovery import TERMINAL
+        rows = []
+        for job in jobs:
+            start, jid, name = job.get('start_time'), job.get('job_id'), job.get('filename')
+            if (job.get('status') not in TERMINAL or type(start) not in (float, int)
+                    or not math.isfinite(start) or start <= 0
+                    or not isinstance(jid, str) or not jid or not isinstance(name, str) or not name):
+                continue
+            rows.append((job_key(printer_id, jid, str(float(start))), history_identity(printer_id, jid, start), printer_id, jid,
+                         start, name, job['status']))
+        with self.db:
+            self.db.executemany('INSERT OR IGNORE INTO uid_printer_history VALUES(?,?,?,?,?,?,?)', rows)
+
+    def unaccounted_history(self, printer_id):
+        rows = self.db.execute("""SELECT h.* FROM uid_printer_history h
+            WHERE h.printer_id=? AND NOT EXISTS (
+                SELECT 1 FROM uid_motion_captures c WHERE c.history_key=h.history_key)
+            AND NOT EXISTS (SELECT 1 FROM uid_legacy_history l WHERE l.identity=h.legacy_key)
+            ORDER BY h.started_at DESC""", (printer_id,))
+        return [dict(r) for r in rows]
 
     def detail(self, job_key):
         row = self.db.execute('SELECT * FROM uid_jobs WHERE job_key=?',(job_key,)).fetchone()

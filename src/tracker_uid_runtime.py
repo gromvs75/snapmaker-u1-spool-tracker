@@ -8,11 +8,17 @@ import copy
 from concurrent.futures import Future
 from queue import Queue, Full
 import threading
+import socket
 
 from tracker_uid_catalog import UidCatalog
 from tracker_uid_accounting import TrackerUidService
 from tracker_uid_motion_adapter import UidMotionAdapter
 from tracker_uid_motion_lifecycle import MotionLifecycle
+
+
+def history_read_timeout(error):
+    # socket.timeout is a distinct OSError in the bundled Python 3.9.
+    return isinstance(getattr(error, 'reason', error), (TimeoutError, socket.timeout))
 
 
 class _SnapshotFleet:
@@ -84,6 +90,8 @@ class AccountingOwner:
                     if operation in ('tag_preview','tag_register'):
                         # Registration commits against current observations, not a queued stale scan.
                         result=getattr(tags,operation.removeprefix('tag_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation == 'observe_history':
+                        result = history_review.observe_history(*args)
                     elif operation == 'history_detail':
                         result = history_review.detail(*args, **kwargs)
                     elif operation == 'forecast_inventory':
@@ -183,7 +191,7 @@ class AccountingOwner:
                                   'debits': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_debits')],
                                   'reviews': [dict(r) for r in catalog.db.execute('SELECT * FROM uid_motion_review')]}
                     elif operation == 'refresh': result = service.refresh()
-                    elif operation in ('start', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview', 'recovery_terminal', 'replacement_observe'):
+                    elif operation in ('start', 'attach_active', 'history_timeout', 'terminal', 'history', 'disconnected', 'recovery_profile', 'recovery_preview', 'recovery_terminal', 'replacement_observe'):
                         result = getattr(lifecycle, operation)(*args, **kwargs)
                     else: raise ValueError('Unknown accounting operation')
                     if not future.cancelled(): future.set_result(result)
@@ -221,6 +229,7 @@ class QueuedLifecycle:
     """Recorder-facing facade; never exposes a connection or lifecycle object."""
     def __init__(self, owner): self.owner = owner
     def start(self, printer_id, **kwargs): return self.owner.call('start', printer_id, **kwargs)
+    def attach_active(self, *args): return self.owner.call('attach_active', *args)
     def terminal(self, printer_id, evidence): return self.owner.call('terminal', printer_id, evidence)
     def disconnected(self, printer_id, reason='Motion disconnected'):
         return self.owner.call('disconnected', printer_id, reason)
@@ -255,13 +264,16 @@ class PrinterWorkers:
     def start(self):
         for thread in self.threads: thread.start()
 
-    def _gap(self, error):
+    def _gap(self, error, *, history_timeout=False):
         self.errors.put(str(error))
         if str(error)!=getattr(self,'_last_logged_gap',None):
             import logging
             logging.getLogger('tracker20').warning('Observation gap printer=%s reason=%s',self.printer_id,str(error))
             self._last_logged_gap=str(error)
-        self.proxy.disconnected(self.printer_id, str(error))
+        if history_timeout:
+            self.owner.call('history_timeout', self.printer_id, str(error))
+        else:
+            self.proxy.disconnected(self.printer_id, str(error))
 
     def _motion(self):
         try:
@@ -292,7 +304,7 @@ class PrinterWorkers:
                 jobs = self.history_reader()
                 self.owner.call('history', self.printer_id, jobs)
             except Exception as exc:
-                self._gap(exc)
+                self._gap(exc, history_timeout=history_read_timeout(exc))
             self.stop_event.wait(self.poll_interval)
 
     def _status(self):

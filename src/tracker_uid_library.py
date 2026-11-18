@@ -73,6 +73,12 @@ class Library:
         if values.get('spoolman_url'):values=dict(values,spoolman_url=endpoint(values['spoolman_url']))
         with self.accounting.transaction():
             if self.settings()['revision']!=expected_revision:raise AccountingConflict('Настройки изменились. Обновите экран.')
+            if 'printers' in values:
+                endpoints = {p['id']: p['url'] for p in values['printers']}
+                for previous in self.settings()['values'].get('printers', []):
+                    if endpoints.get(previous['id']) != previous['url']:
+                        self.db.execute("UPDATE manual_assignments SET confirmed=0,token='revoked' WHERE printer_id=?",
+                                        (previous['id'],))
             for k,v in values.items():self.db.execute('INSERT OR REPLACE INTO uid_preferences VALUES(?,?)',(k,json.dumps(v)))
         return self.settings()
 

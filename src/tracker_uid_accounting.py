@@ -36,6 +36,9 @@ class UidAccounting:
         self.db.execute('PRAGMA foreign_keys=ON')
         self.db.execute('PRAGMA busy_timeout=5000')
         self.db.executescript('''
+            CREATE TABLE IF NOT EXISTS manual_placement_times (
+                printer_id TEXT NOT NULL, channel TEXT NOT NULL, version TEXT NOT NULL, saved REAL NOT NULL,
+                PRIMARY KEY(printer_id,channel,version));
             CREATE TABLE IF NOT EXISTS manual_transfers (
                 request_id TEXT PRIMARY KEY, payload TEXT NOT NULL, result TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS uid_legacy_history (
@@ -74,6 +77,14 @@ class UidAccounting:
             CREATE TABLE IF NOT EXISTS uid_legacy_import (
                 import_key TEXT PRIMARY KEY, payload TEXT NOT NULL);
         ''')
+
+        # Existing placements are known at upgrade/restore time. Never backdate them.
+        with self.db:
+            self.record_placement_times()
+
+    def record_placement_times(self):
+        self.db.execute("""INSERT OR IGNORE INTO manual_placement_times
+            SELECT printer_id,channel,version,? FROM manual_assignments""", (time.time(),))
 
     @contextmanager
     def transaction(self):
@@ -167,7 +178,8 @@ class UidAccounting:
         import uuid
         version=uuid.uuid4().hex
         self.db.execute('INSERT INTO manual_assignments VALUES(?,?,?,?,?,1) ON CONFLICT(printer_id,channel) DO UPDATE SET spool_id=excluded.spool_id,version=excluded.version,token=excluded.token,confirmed=1',
-                        (printer_id,channel,spool_id,version,self.catalog.connection_token(snapshot)))
+                        (printer_id,channel,spool_id,version,self.catalog.SAVED_PLACEMENT))
+        self.record_placement_times()
         self._complete_unlocks()
         return {'spool_id':spool_id,'version':version,'identity_mode':'manual'}
 
@@ -206,7 +218,8 @@ class UidAccounting:
             import uuid
             version=uuid.uuid4().hex
             self.db.execute('UPDATE manual_assignments SET printer_id=?,channel=?,version=?,token=?,confirmed=1 WHERE spool_id=?',
-                            (target_printer,target_channel,version,self.catalog.connection_token(target),spool_id))
+                            (target_printer,target_channel,version,self.catalog.SAVED_PLACEMENT,spool_id))
+            self.record_placement_times()
             result={'spool_id':spool_id,'printer_id':target_printer,'channel':target_channel,'version':version}
             self.db.execute('INSERT INTO manual_transfers VALUES(?,?,?)',(request_id,payload,json.dumps(result)))
             self._complete_unlocks()
@@ -318,7 +331,7 @@ class UidAccounting:
                             (job_key,expected_version,time.time(),json.dumps(observation,sort_keys=True),'closed_without_additional_debit'))
             self.db.execute("UPDATE uid_jobs SET state='resolved',mapping_valid=0 WHERE job_key=?",(job_key,))
             # A released reservation is not renewed trust in the physical spool.
-            self.db.execute('UPDATE manual_assignments SET confirmed=0 WHERE printer_id=? OR spool_id IN (SELECT spool_id FROM uid_job_tools WHERE job_key=?)',(job['printer_id'],job_key))
+            self.db.execute("UPDATE manual_assignments SET confirmed=0,token='revoked' WHERE printer_id=? OR spool_id IN (SELECT spool_id FROM uid_job_tools WHERE job_key=?)",(job['printer_id'],job_key))
             deadline=time.time()+900 if mode=='15_minutes' else None
             revision=(window['revision'] if window else 0)+1
             completed=not self.db.execute('SELECT 1 FROM uid_job_manual WHERE job_key=?',(job_key,)).fetchone()

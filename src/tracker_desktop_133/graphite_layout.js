@@ -77,6 +77,7 @@
    const printer=data.printers?.find(p=>p.id===(data.saved_history[run.job_key]?.job.printer_id||data.selected_printer));if(printer)date.append(document.createTextNode(' · '+printer.name));job.append(name,date);
    usage.title=usage.textContent;usage.textContent=run.status==='active'&&!run.accounted_g?'—':displayGrams(run.accounted_g||0)+' '+gramUnit();
    if(!run.closed_without_deduction)badge.textContent=run.status==='active'?t('Печатается','Printing','Druck läuft','Друкується','Imprimiendo'):run.status==='committed'?t('Учтено','Accounted','Erfasst','Враховано','Contabilizado'):t('Нужна проверка','Needs review','Prüfung erforderlich','Потрібна перевірка','Requiere revisión');
+   if(run.status==='printer_history')badge.textContent=run.terminal_status==='completed'?t('Завершено без списания','Completed without deduction','Beendet ohne Abbuchung','Завершено без списання','Completado sin descuento'):t('Без списания','No deduction','Ohne Abbuchung','Без списання','Sin descuento');
    badge.dataset.state=run.closed_without_deduction?'closed':run.status;
    open.textContent=run.status==='review'&&!run.closed_without_deduction?t('Проверить','Review','Prüfen','Перевірити','Revisar'):t('Открыть','Open','Öffnen','Відкрити','Abrir');actions.append(open);
    for(const other of [...row.children])if(![name,date,usage,badge].includes(other))actions.append(other);

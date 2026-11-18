@@ -55,6 +55,14 @@
   if(d.quarantined)notes.append(node('p',text('План из восстановленной копии требует проверки.','The restored plan requires review.','Der wiederhergestellte Plan muss geprüft werden.','Відновлений план потребує перевірки.','El plan restaurado requiere revisión.')));
  }
  async function open(key,data,ask=false){
+  const run=data.runs[key];
+  if(run?.status==='printer_history'){
+   const close=historyButton(text('Закрыть','Close','Schließen','Закрити','Cerrar'),()=>dialog.close());
+   const heading=node('div',undefined,'uid-history-heading');heading.append(node('h2',run.filename),close);
+   dialog.replaceChildren(heading,node('p',new Date(run.start_time*1000).toLocaleString(currentLang)),
+    node('p',text('Задание сохранено из истории принтера. Tracker не смог привязать расход к катушке. Учтено 0 г.','Saved from printer history. Tracker could not link usage to a spool. Accounted: 0 g.','Aus dem Druckerverlauf gespeichert. Der Verbrauch konnte keiner Spule zugeordnet werden. Erfasst: 0 g.','Збережено з історії принтера. Tracker не зміг прив’язати витрати до котушки. Враховано 0 г.','Guardado del historial de la impresora. Tracker no pudo asociar el consumo a una bobina. Contabilizado: 0 g.')));
+   window.graphiteHistoryDialog?.(dialog);if(!dialog.open)dialog.showModal();return;
+  }
   const d=await detail(key);view(d,data);
   if(d.can_review){
    const closed=['resolved','cancelled'].includes(d.job.state);

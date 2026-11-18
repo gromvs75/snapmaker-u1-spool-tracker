@@ -69,13 +69,12 @@ def test_uid_conflict_never_silently_overrides_manual(manual):
     assert begin(a,f)
 
 
-def test_reopen_requires_confirmation(tmp_path):
+def test_reopen_remembers_manual_placement(tmp_path):
     path=tmp_path/'db';c=UidCatalog(path);a=UidAccounting(c)
     c.register_manual('Manual',1000,spool_id='manual-id');f={'a':snapshot('a',{})};assign(a,f);c.close()
     c=UidCatalog(path);a=UidAccounting(c)
     try:
-        with pytest.raises(AccountingConflict):begin(a,f)
-        assign(a,f);assert begin(a,f)
+        assert begin(a,f)
     finally:c.close()
 
 
@@ -100,7 +99,7 @@ def test_manual_evidence_through_queue_and_history_reopen(tmp_path):
     try:
         assert owner.call('history','a',[h])[0]['status']=='duplicate'
         assert len(owner.call('inspect')['debits'])==1
-        assert owner.call('inspect')['manual_assignments'][0]['confirmed']==0
+        assert owner.call('inventory_snapshot','a')['slots']['1']=='manual-id'
     finally:owner.close()
 
 
@@ -121,7 +120,7 @@ def test_schema_upgrade_keeps_existing_tagged_ledger(tmp_path):
     finally:c.close()
 
 
-def test_migration_manual_slots_are_working_but_unconfirmed(tmp_path):
+def test_migration_uses_unique_manual_slots_for_future_jobs(tmp_path):
     from test_uid_migration import fixed_storage
     from tracker_uid_migration import BenchMigration
     import json
@@ -135,8 +134,6 @@ def test_migration_manual_slots_are_working_but_unconfirmed(tmp_path):
     assert receipt['local_spools']==1 and receipt['automatic_spools']==0
     c=UidCatalog(m.target);a=UidAccounting(c);f={'a':snapshot('a',{})}
     try:
-        with pytest.raises(AccountingConflict):begin(a,f)
-        assign(a,f)
         model=c.inventory_snapshot('a',f)
         assert model['slots']['1']=='manual-id'
         assert model['spools']['manual-id']['color']=='#ff0000'

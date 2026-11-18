@@ -9,7 +9,7 @@ from pathlib import Path
 MAX_BACKUP = 32 * 1024 * 1024
 
 # Additive 2.0 development schemas, never a generic "accept any missing table".
-RECOVERY_ADDITIONS = {'uid_recovery_profiles', 'uid_recovery_receipts',
+RECOVERY_ADDITIONS = {'manual_placement_times', 'uid_printer_history', 'uid_recovery_profiles', 'uid_recovery_receipts',
                      'uid_replacement_state', 'uid_replacement_events',
                      'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits', 'uid_start_checks'}
 

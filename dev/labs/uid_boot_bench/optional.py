@@ -22,6 +22,14 @@ class OptionalBootTrial:
                       ']\n# END TRACKER UID OPTIONAL BOOT\n').encode()
         self.record = self.base.path('persistent/tracker-deployment/optional-plan.json')
 
+    def configured_main(self, original):
+        # Klipper owns everything below its SAVE_CONFIG delimiter.
+        for line in original.splitlines(keepends=True):
+            if line.rstrip(b'\r\n') == b'#*# <---------------------- SAVE_CONFIG ---------------------->':
+                offset = original.index(line)
+                return original[:offset] + self.block + original[offset:]
+        return original + self.block
+
     def install(self, *, fail_after=None):
         self.model.stopped()
         if self.record.exists():
@@ -44,7 +52,7 @@ class OptionalBootTrial:
         if fail_after == 0:
             raise RuntimeError('Interrupted after experiment record')
         for n, (name, content) in enumerate(((tool.TARGETS[0], tool.MODULE.read_bytes()),
-                                            (CFG, tool.CONFIG), (tool.MAIN, old + self.block)), 1):
+                                            (CFG, tool.CONFIG), (tool.MAIN, self.configured_main(old))), 1):
             tool.atomic(self.base.path(name), content,
                         record['main_mode'] if name == tool.MAIN else 0o644)
             if fail_after == n:

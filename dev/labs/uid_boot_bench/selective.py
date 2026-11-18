@@ -99,7 +99,7 @@ class SelectiveBootTrial:
                 return disabled('activation-build-changed')
             # Config edits need a fresh review. In particular, do not reactivate
             # after a vendor reset or after a different include graph is installed.
-            expected_main = tool.decode(record['main_before']) + self.optional.block
+            expected_main = self.optional.configured_main(tool.decode(record['main_before']))
             if self.base.path(tool.MAIN).read_bytes() != expected_main:
                 return disabled('configuration-changed')
             try:

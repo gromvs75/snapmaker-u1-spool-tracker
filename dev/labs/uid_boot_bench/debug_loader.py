@@ -4,6 +4,7 @@ The init wrapper is exercised against a harmless stock-service stand-in. No vend
 service, MCU command, mount, SSH, or printer restart is executed by this module.
 """
 import argparse
+import configparser
 from functools import wraps
 import json
 from pathlib import Path
@@ -220,13 +221,41 @@ class DebugLoaderTrial:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['activate', 'rollback', 'inspect'])
+    parser.add_argument('action', choices=['plan', 'install', 'activate', 'rollback', 'inspect'])
     parser.add_argument('--simulator-root', type=Path, required=True)
+    parser.add_argument('--reviewed-revision', help='Revision returned by plan')
+    parser.add_argument('--accept-whole-overlay', action='store_true')
+    parser.add_argument('--accept-existing-changes', action='store_true')
     args = parser.parse_args()
     try:
         trial = DebugLoaderTrial(BootModel(args.simulator_root))
-        result = (trial.activate() if args.action == 'activate' else trial.rollback()
-                  if args.action == 'rollback' else dict(staged=trial.record.exists(), physical_installation=False))
+        if args.action in ('plan', 'install'):
+            include = 'include /extras/[t]racker_uid_boot.cfg'
+            header = configparser.RawConfigParser.SECTCRE.match('[' + include + ']')
+            if header is None or header.group('header') != include:
+                raise ValueError('Python configparser truncates the RFID include; use a compatible interpreter')
+            plan = trial.plan()
+            driver = tool.sha(trial.base.path(tool.DRIVER).read_bytes())
+            if tool.supported_drivers().get(driver) != '2.1.0.157':
+                raise ValueError('This package targets the reviewed 2.1.0.157 driver')
+            if args.action == 'plan':
+                result = dict(revision=plan['revision'], driver_sha256=driver,
+                              existing_changes=plan['system_before'] != plan['lower_before'],
+                              debug_present=plan['debug_before'] is not None,
+                              service=SERVICE, config=tool.MAIN, scope=plan['scope'],
+                              physical_installation=False)
+            else:
+                if args.reviewed_revision != plan['revision']:
+                    raise ValueError('Installation requires the current reviewed revision')
+                trial.install(plan, accept_whole_overlay=args.accept_whole_overlay,
+                              accept_existing_changes=args.accept_existing_changes)
+                result = dict(state='staged', recovery=KIT + '/launch.py')
+        elif args.action == 'inspect':
+            result = dict(staged=trial.record.exists(), physical_installation=False)
+        elif args.action == 'rollback':
+            result = trial.rollback()
+        else:
+            result = trial.activate()
         print(json.dumps(result))
         return 0
     except (OSError, ValueError, KeyError, TypeError) as exc:

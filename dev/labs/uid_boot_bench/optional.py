@@ -5,10 +5,47 @@ glob makes absence of BOTH files harmless to Klipper; it does NOT protect
 against loss of just the module while its activating cfg remains.
 """
 import json
+import re
 
 from dev.labs.uid_boot_bench.model import BootModel, tool
 
 CFG = 'klipper/klippy/extras/tracker_uid_boot.cfg'
+
+
+# Exact autosave delimiter shared by the audited U1 and the bench parser.
+AUTOSAVE = (b'\n#*# <---------------------- SAVE_CONFIG ---------------------->\n'
+            b'#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.\n#*#\n')
+
+
+def matches_saved_probe_offset(expected, current):
+    """Allow a rewritten numeric z_offset in an existing probe calibration only."""
+    if current == expected:
+        return True
+
+    def parts(raw):
+        if raw.count(AUTOSAVE) != 1:
+            return None
+        regular, saved = raw.split(AUTOSAVE)
+        lines = saved.rstrip(b'\n').split(b'\n')
+        section = b''
+        offsets = 0
+        for index, line in enumerate(lines):
+            if line.startswith(b'#*# ['):
+                section = line
+            # ConfigParser serializes indented mesh rows with a tab. Keep every
+            # coordinate and separator, ignoring just spaces vs tabs before a row.
+            if section.startswith(b'#*# [bed_mesh ') and re.fullmatch(
+                    rb'#\*# [ \t]+[-+0-9., eE]+', line):
+                lines[index] = b'#*# \t' + line[4:].lstrip(b' \t')
+            if section in (b'#*# [probe]', b'#*# [bltouch]') and re.fullmatch(rb'#\*# z_offset = [+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)', line):
+                lines[index] = None  # Distinct from any byte string in a file.
+                offsets += 1
+        if offsets:
+            return regular.rstrip(b'\n'), lines
+        return None
+
+    baseline = parts(expected)
+    return baseline is not None and baseline == parts(current)
 
 
 class OptionalBootTrial:

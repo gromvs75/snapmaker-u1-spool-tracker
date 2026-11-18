@@ -38,20 +38,10 @@ stop и start. Порядок и вызовы MCU существенны для 
 Python 3.9.6 на проверенном Mac обрезает заголовок include до первой закрывающей
 квадратной скобки. CLI отвергает такой интерпретатор при подготовке плана.
 
-Для сверки с принтером сверьте отпечаток парсера и разбор заголовка в системном Python.
-Ключи -I -B изолируют интерпретатор и отключают запись байткода. Пароль вводится локально в Terminal.
-
-```sh
-ssh -T -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 lava@192.168.2.133 '/usr/bin/python3 -I -B -' <<'PYTHON'
-import configparser, hashlib, pathlib
-path = pathlib.Path('/home/lava/klipper/klippy/configfile.py')
-header = 'include /extras/[t]racker_uid_boot.cfg'
-print('configfile_sha256', hashlib.sha256(path.read_bytes()).hexdigest())
-print('full_include_header', configparser.RawConfigParser.SECTCRE.match('[' + header + ']').group('header') == header)
-PYTHON
-```
-
-SHA-256 проверенного стендового configfile.py:
-`c4049b906b5341ad492105901515c6d9a4504d980098f9ce346df48388c53cf4`.
-При другом отпечатке потребуется сравнить исходники. Совпадение подтверждает
-идентичность файла, поведение также зависит от версии стандартной библиотеки.
+18 ноября получен и проверен фактический configfile.py с U1. Его SHA-256
+`36163852a7f42dc1af1a1166f745456aad66b40cf25a97106ef849e050be97fc`.
+Прошивка использует PrinterConfig и поддерживает SAVE_CONFIG RESTART=0.
+Исходный ZIP отключал RFID при следующем старте после сохранения нового
+Z-offset. В исправленном комплекте разрешено изменение численного значения
+уже существующего z_offset в секциях автосохранения probe и bltouch.
+Прочие изменения настроек по-прежнему требуют отдельной проверки.

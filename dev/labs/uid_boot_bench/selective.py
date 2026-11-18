@@ -7,7 +7,7 @@ enable .debug, restart a service, or provide physical-printer deployment.
 import json
 
 from dev.labs.uid_boot_bench.model import tool, tree
-from dev.labs.uid_boot_bench.optional import OptionalBootTrial, CFG
+from dev.labs.uid_boot_bench.optional import OptionalBootTrial, CFG, matches_saved_probe_offset
 
 PACKAGE = 'persistent/tracker-deployment/selective-package.json'
 ENABLED = 'persistent/tracker-deployment/selective-enabled'
@@ -100,7 +100,7 @@ class SelectiveBootTrial:
             # Config edits need a fresh review. In particular, do not reactivate
             # after a vendor reset or after a different include graph is installed.
             expected_main = self.optional.configured_main(tool.decode(record['main_before']))
-            if self.base.path(tool.MAIN).read_bytes() != expected_main:
+            if not matches_saved_probe_offset(expected_main, self.base.path(tool.MAIN).read_bytes()):
                 return disabled('configuration-changed')
             try:
                 data = json.loads(self.base.path(PACKAGE).read_text())

@@ -147,6 +147,7 @@ def main():
         event('complete');wait(lambda:len(state()['debits'])==3)
         assert state()['spools'][0]['remaining_mg']==516337
         check('restart and a new print of the same filename add exactly one new debit')
+        api('connections_stop',dict(confirmed=True))
         saved=api('backup_package',{});assert api('validate_backup',dict(package=saved))['spools']==1
         stop();check('backup validates and final exit releases profile')
         (out/'results.json').write_text(json.dumps(dict(success=True,version=VERSION,checks=checks,remaining_mg=516337,

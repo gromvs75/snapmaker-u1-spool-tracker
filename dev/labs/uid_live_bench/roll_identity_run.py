@@ -8,8 +8,10 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
+from zipfile import ZipFile
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT/'src')]
@@ -31,8 +33,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('klipper','driver','dictionary','spoolman','spoolman-python','research','output'):
         parser.add_argument('--'+name, type=Path, required=True)
+    parser.add_argument('--archive', type=Path)
     args = parser.parse_args()
-    for name, value in vars(args).items(): setattr(args, name, value.absolute())
+    for name, value in vars(args).items():
+        if value is not None: setattr(args, name, value.absolute())
     args.output.mkdir(parents=True, exist_ok=False)
     manifest = json.loads((args.research/'dump-manifest.json').read_text())
     cases = [('bambu', ['0DF58A36','9D1A8636','05612205']),
@@ -49,7 +53,26 @@ def main():
             instance = INSTANCE if n<2 else bytes.fromhex('12346F54D4754C33A89C15C14AFA9D11')
             (root/'home/lava/other-dumps'/(uid+'.bin')).write_bytes(pages(uid, instance))
         module = ROOT/'dev/klipper/tracker_uid.py'
-        trial.install(trial.plan(module, ['bambu','openprinttag']), module)
+        if args.archive:
+            unpacked = base/'distribution'; unpacked.mkdir()
+            with ZipFile(args.archive) as bundle:
+                package = json.loads(bundle.read('manifest.json'))
+                for name, digest in package['files'].items():
+                    assert Path(name).name == name
+                    raw = bundle.read(name)
+                    assert hashlib.sha256(raw).hexdigest() == digest
+                    (unpacked/name).write_bytes(raw)
+            module = unpacked/'tracker_uid.py'
+            command = [sys.executable, '-I', str(unpacked/'rfid_u1_trial.py')]
+            tail = ['--offline-root', str(root), '--module', str(module)]
+            plan = subprocess.run(command+['plan']+tail+['--formats','bambu,openprinttag'],
+                                  capture_output=True, text=True, check=True)
+            plan_path = base/'plan.json'; plan_path.write_text(plan.stdout)
+            subprocess.run(command+['install']+tail+['--plan',str(plan_path)],
+                           capture_output=True, text=True, check=True)
+        else:
+            trial.install(trial.plan(module, ['bambu','openprinttag']), module)
+        module_hash = hashlib.sha256(module.read_bytes()).hexdigest()
         with spoolman(args, base/'spoolman') as url, klippy(root, False) as info:
             assert info['state']=='ready'
             fleet = Fleet(root);path = base/'tracker.sqlite';owner = AccountingOwner(path, fleet)
@@ -119,7 +142,8 @@ def main():
     report = dict(success=True,real_printer_used=False,checks=checks,cases=results,radio=radio,
                   source='Bambu: public paired dumps; OpenPrintTag: synthetic instance UUID on Type 2 tags',
                   klippy='real process; simulated RF/SPI/GPIO/MCU',spoolman='official 0.27.1; loopback disposable data',
-                  module_sha256=hashlib.sha256(module.read_bytes()).hexdigest())
+                  module_sha256=module_hash,
+                  archive_sha256=hashlib.sha256(args.archive.read_bytes()).hexdigest() if args.archive else None)
     (args.output/'results.json').write_text(json.dumps(report,indent=2))
     print(json.dumps(report,indent=2))
 

@@ -2,6 +2,9 @@
 
 ## Tracker 2.1.0rc2 — next native candidate
 
+- [RFID-модуль: отдельный архив, установка на стенде, OFF и откат](guides/rfid-module-0.8-rc2-ru.md)
+- [Сравнение u1control и Tracker по исходникам](development/u1control-comparison-2026-11-19-ru.md)
+
 - [Запуск Mac/Windows](guides/start-2.1.0rc2-ru.md)
 - [Изменения](releases/2.1.0rc2-ru.md)
 - [Ответ тестировщику](releases/tester-reply-2.1.0rc2-ru.md)

@@ -1,5 +1,6 @@
 """Loopback-only, synthetic stock U1 subset; optional synthetic RFID, no printer writes."""
-import asyncio,time,sys
+import asyncio,time,sys,json
+from pathlib import Path
 from aiohttp import web
 port=int(sys.argv[1])
 stats=dict(state='standby',filename='',filament_used=0)
@@ -14,6 +15,9 @@ if '--reader' in sys.argv:
     status['tracker_uid']=dict(schema_version=1,epoch='sim-1',sequence=0,state='ready',
         channels={str(i):dict(state='absent',uid=None) for i in range(4)})
 async def handler(r):
+    if '--reader-status-file' in sys.argv:
+        source=Path(sys.argv[sys.argv.index('--reader-status-file')+1])
+        status['tracker_uid']=json.loads(source.read_text())
     path=r.path
     if path in ('/websocket','/klippysocket'):
         ws=web.WebSocketResponse();await ws.prepare(r)

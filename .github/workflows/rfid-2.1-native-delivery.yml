@@ -33,6 +33,7 @@ jobs:
           $folder = 'output/native-dist/Snapmaker-Tracker-2.1-Candidate'
           Copy-Item docs/guides/start-2.1.0rc2-ru.md "$folder/START-HERE-RU.md"
           New-Item -ItemType Directory -Force "$folder/docs/guides", "$folder/docs/development", "$folder/docs/releases" | Out-Null
+          Copy-Item docs/guides/rfid-ui-2.1-candidate-ru.md "$folder/docs/guides/"
           Copy-Item docs/guides/rfid-common-roll-id-ru.md "$folder/docs/guides/"
           Copy-Item docs/development/rfid-roll-identity-2026-11-19.md "$folder/docs/development/"
           Copy-Item docs/releases/2.1.0rc2-ru.md "$folder/docs/releases/"

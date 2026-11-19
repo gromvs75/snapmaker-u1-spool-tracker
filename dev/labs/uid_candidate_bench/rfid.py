@@ -108,7 +108,7 @@ def main():
             expect(page.locator('#desktop-tag-mass')).to_have_value('')
             checks.append('bundled offline SpoolmanDB suggests exact product/density in native EXE; remaining stays blank')
             api('connections_stop',dict(confirmed=True))
-        stop();checks.append('native window and actual tray Open/Exit verified')
+        stop();checks.append('native window and actual tray Open/Exit verified' if sys.platform=='win32' else 'packaged Mac app clean shutdown; native GUI checked separately')
         launch();api('connections_start',dict(confirmed=True))
         for side in (0,1):
             select(decoded('creality',side))
@@ -137,9 +137,12 @@ def main():
         preview=api('validate_backup',dict(package=package));api('restore_backup',dict(package=package,expected_revision=preview['current_revision'],confirmed=True))
         api('settings',dict(values=dict(spoolman_mode='send'),expected_revision=state()['settings']['revision']))
         with sync_playwright() as pw:
-            wait(lambda:request(f'http://127.0.0.1:{cdp}/json/version'))
-            browser=pw.chromium.connect_over_cdp(f'http://127.0.0.1:{cdp}')
-            page=wait(lambda:next((p for c in browser.contexts for p in c.pages if f':{descriptor["port"]}' in p.url),None))
+            if sys.platform=='win32':
+                wait(lambda:request(f'http://127.0.0.1:{cdp}/json/version'))
+                browser=pw.chromium.connect_over_cdp(f'http://127.0.0.1:{cdp}')
+                page=wait(lambda:next((p for c in browser.contexts for p in c.pages if f':{descriptor["port"]}' in p.url),None))
+            else:
+                browser=pw.chromium.launch();page=browser.new_page();page.goto(f'http://127.0.0.1:{descriptor["port"]}/desktop')
             page.reload();page.locator('#uid-history-dialog[open]').wait_for();page.locator('#uid-history-edit').click()
             expect(page.locator('.uid-extra-amount')).to_have_value('12')
             expect(page.locator('#uid-review-note')).to_have_value('')
@@ -158,8 +161,8 @@ def main():
             page.locator('#uid-history-dialog .gd-close').click();page.locator('#nav-history').click()
             expect(page.locator('.history-row')).to_contain_text('Учтено в Tracker')
             expect(page.locator('.history-row')).to_contain_text('отправлено')
-        stop();checks.append('native WebView2: saved plan prefill, edited 3.5 g, empty comment, one-window delivery, explicit history status, duplicate confirmations protected')
-        (out/'results.json').write_text(json.dumps(dict(success=True,version=VERSION,checks=checks,real_printer_used=False,native_webview2=sys.platform=='win32',remaining_mg=623500),ensure_ascii=False,indent=2),encoding='utf-8')
+        stop();checks.append(('native WebView2: ' if sys.platform=='win32' else 'Chromium against packaged Mac app: ')+'saved plan prefill, edited 3.5 g, empty comment, one-window delivery, explicit history status, duplicate confirmations protected')
+        (out/'results.json').write_text(json.dumps(dict(success=True,version=VERSION,checks=checks,commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),real_printer_used=False,native_webview2=sys.platform=='win32',remaining_mg=623500),ensure_ascii=False,indent=2),encoding='utf-8')
     finally:
         if not (out/'results.json').exists():
             (out/'ui-errors.json').write_text(json.dumps(ui_errors,ensure_ascii=False),encoding='utf-8')

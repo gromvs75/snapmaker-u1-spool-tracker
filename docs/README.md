@@ -1,6 +1,12 @@
 # Documentation
 
-## Tracker 2.1.0rc2 — next native candidate
+## Tracker 2.1.0rc3 — dashboard and RFID candidate
+
+- [Запуск Mac/Windows rc3](guides/start-2.1.0rc3-ru.md)
+- [Изменения rc3](releases/2.1.0rc3-ru.md)
+- [Ответ тестировщику rc3](releases/tester-reply-2.1.0rc3-ru.md)
+
+## Tracker 2.1.0rc2
 
 - [Новый дашборд после rc2: возможности и стендовая проверка](development/dashboard-bench-2026-11-19-ru.md)
 

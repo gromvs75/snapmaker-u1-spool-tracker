@@ -111,6 +111,15 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 expect(heads.nth(2)).to_contain_text('RFID · подтвердите метку')
                 assert heads.nth(2).locator('[role=meter]').count()==0
                 assert heads.nth(3).locator('.is-low').count()==1
+                sources=page.locator('#dashboard-sources')
+                expect(sources.locator('details')).to_have_count(4)
+                expect(sources.locator('[data-source=connection]')).to_contain_text('есть связь')
+                expect(sources.locator('[data-source=head] .dash-source-badge')).to_have_text('T1')
+                expect(sources.locator('[data-source=spoolman]')).to_contain_text('не настроен')
+                sources.locator('[data-source=rfid] summary').click()
+                page.wait_for_timeout(1200)
+                assert sources.locator('[data-source=rfid]').get_attribute('open') is not None
+                sources.locator('[data-source=rfid] summary').click()
                 page.screenshot(path=str(out/'printing.png'),full_page=True)
                 for lang in ('en','de','uk','es','ru'):
                     page.locator('#lang-picker').select_option(lang)
@@ -131,6 +140,8 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 expect(page.locator('#overview-connection')).to_have_text('Нет связи с принтером')
                 expect(page.locator('.dash-percent')).to_have_text('—')
                 expect(heads.nth(0)).to_contain_text('RFID · нет связи')
+                expect(sources.locator('[data-source=connection] .dash-source-badge')).to_have_text('нет связи')
+                expect(sources.locator('[data-source=head] .dash-source-badge')).to_have_text('неизвестно')
                 assert page.locator('#dashboard-progress').get_attribute('value') is None
                 remote.update(offline=False,state='complete')
                 expect(page.locator('.dash-percent')).to_have_text('100%')
@@ -144,6 +155,7 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 expect(page.locator('#dashboard-elapsed')).to_have_text('—')
                 fleet['state']='module_missing'
                 expect(heads.nth(3)).to_contain_text('RFID · без модуля')
+                expect(sources.locator('[data-source=rfid] .dash-source-badge')).to_have_text('нет модуля')
                 page.screenshot(path=str(out/'unknown.png'),full_page=True)
                 heads.nth(3).locator('.dash-status-button').first.click()
                 expect(page.locator('#desktop-tags-dialog')).to_be_visible()
@@ -161,3 +173,27 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 states=['printing','paused','offline','complete','cancelled','error','standby','unknown'],
                 balances_unchanged=True,debits=0,printer_writes=0,native_windows_gui_tested=False),indent=2))
         finally:server.shutdown();thread.join();server.server_close();s.close()
+
+
+def test_spoolman_source_is_cached_evidence_not_inferred_connection(tmp_path,monkeypatch):
+    s=Session(tmp_path/'sources',allowed_urls=[])
+    url='http://127.0.0.1:19998'
+    def source():return s.call('desktop_snapshot')['data_sources']['spoolman']
+    def settings(**values):s.call('save_settings',values=values,expected_revision=s.call('settings')['revision'])
+    try:
+        assert source()['state']=='unconfigured'
+        settings(spoolman_url=url,spoolman_mode='read')
+        assert source()['state']=='unchecked'
+        s.call('cache_catalog',url,{})
+        assert source()['state']=='current'
+        assert not s.call('desktop_snapshot')['monitor']['connected']
+        checked=source()['checked_at']
+        with monkeypatch.context() as patch:
+            patch.setattr('tracker_uid_library.time.time',lambda:checked+301)
+            assert source()['state']=='stale'
+        s.call('cache_catalog',url,None)
+        assert source()['state']=='unavailable'
+        settings(spoolman_mode='off')
+        assert source()['state']=='disabled'
+        assert not s.call('inspect')['debits']
+    finally:s.close()

@@ -107,6 +107,9 @@ def main():
             expect(page.locator('#desktop-rfid-density')).to_have_value('1.26')
             expect(page.locator('#desktop-tag-mass')).to_have_value('')
             checks.append('bundled offline SpoolmanDB suggests exact product/density in native EXE; remaining stays blank')
+            page.locator('#desktop-tags-dialog .gd-close').click()
+            from dev.labs.uid_candidate_bench.dashboard import verify
+            checks.append(verify(page,request,printer,out))
             api('connections_stop',dict(confirmed=True))
         stop();checks.append('native window and actual tray Open/Exit verified' if sys.platform=='win32' else 'packaged Mac app clean shutdown; native GUI checked separately')
         launch();api('connections_start',dict(confirmed=True))

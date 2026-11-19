@@ -34,6 +34,15 @@ async def handler(r):
         return ws
     if path=='/event':
         a=await r.json(); action=a['action'];method='notify_tracker_status'
+        if action=='telemetry':
+            stats.update(state=a['state'],filename=a.get('filename','dashboard-bench.gcode'))
+            for key in ('print_duration','info'):stats.pop(key,None)
+            if a.get('known',True):
+                stats.update(print_duration=11880,info=dict(current_layer=142,total_layer=230))
+                status['display_status']={'progress':.62}
+            else:status.pop('display_status',None)
+            status['toolhead']={'extruder':'extruder1'}
+            return web.json_response({'result':True})
         if action=='tag':
             reader=status['tracker_uid'];reader['sequence']+=1
             tag=a.get('tag')

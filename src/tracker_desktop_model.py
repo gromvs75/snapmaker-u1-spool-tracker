@@ -74,6 +74,16 @@ def snapshot(library, history_review, fleet):
     monitor=dict(connected=connected,state='unknown' if connected else 'disabled',filename=active['filename'] if active else '',
                  error='',checked_at=0,active_job_key=active['job_key'] if active else None)
     last_preflight=None
+    remote_url=settings.get('spoolman_url','')
+    remote_mode=settings.get('spoolman_mode','read' if remote_url else 'off')
+    remote_row=db.execute('SELECT checked_at,available FROM uid_remote_catalog WHERE url=?',(remote_url,)).fetchone()
+    remote_state=('unconfigured' if not remote_url else 'disabled' if remote_mode=='off' else
+                  'unchecked' if not remote_row else 'unavailable' if not remote_row['available'] else
+                  'current' if library.remote_catalog(remote_url)['available'] else 'stale')
+    sources=dict(spoolman=dict(state=remote_state,mode=remote_mode,
+        checked_at=remote_row['checked_at'] if remote_row else None,
+        linked=sum(1 for s in spools.values() if s.get('spoolman',{}).get('url')==remote_url),
+        pending=sum(s['pending_deliveries'] for s in spools.values() if s.get('spoolman',{}).get('url')==remote_url)))
     if catalog['export_plans']:
         p=next((p for p in catalog['export_plans'] if p['printer_id']==pid or not p['printer_id']),None)
         if p:
@@ -86,7 +96,7 @@ def snapshot(library, history_review, fleet):
                 printer=dict(host=address.hostname if address else '',port=address.port or (443 if address.scheme=='https' else 80) if address else 7125,
                              enabled=connected,guard_mode=settings.get('guard_modes',{}).get(pid,'warn')),monitor=monitor,printers=printers,selected_printer=pid,
                 settings_revision=catalog['settings']['revision'],inventory_revision=inventory['revision'],saved_history=details,
-                observations=locations,guard_modes=settings.get('guard_modes',{}),
+                observations=locations,guard_modes=settings.get('guard_modes',{}),data_sources=sources,
                 uid_channels={p['id']:dict(state=fleet.get(p['id'],{}).get('state','stopped'),
                     channels=fleet.get(p['id'],{}).get('channels',{})) for p in printers})
 

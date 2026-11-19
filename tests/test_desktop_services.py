@@ -178,7 +178,23 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             before=app.call('inspect')['debits'];app.call('history',p2,history);assert app.call('inspect')['debits']==before
             assert sender.send_one()=='idle' and len(value['writes'])==1
             assert app.call('delivery_list')[0]['state']=='sent'
-            page.locator('[data-settings-section=printer]').click();page.locator('#desktop-connections-toggle').click();page.wait_for_function('!desktopFormData.connections.connected')
+            try:
+                page.locator('[data-settings-section=printer]').click()
+                with page.expect_response('**/api/connections_stop') as stopped:
+                    page.locator('#desktop-connections-toggle').click()
+                assert stopped.value.ok,stopped.value.text()
+                assert not app.connected
+                page.wait_for_function('!desktopFormData.connections.connected')
+            except Exception:
+                page.screenshot(path=str(screens/'stop-failed.png'),full_page=True)
+                diagnostic=dict(connected=app.connected,errors=errors,ui=page.evaluate('''()=>({
+                  form:desktopFormData?.connections,latest:desktopLatestData?.connections,
+                  message:document.getElementById('desktop-connections-message').textContent,
+                  dialogs:[...document.querySelectorAll('dialog[open]')].map(d=>({id:d.id,text:d.textContent})),
+                  fullLoadInFlight,liveRequest:!!liveRequest
+                })'''))
+                (screens/'stop-failed.json').write_text(json.dumps(diagnostic,ensure_ascii=False,indent=2),encoding='utf-8')
+                raise
             assert not errors,errors
             browser.close()
         package=app.call('backup_package');checked=app.call('validate_backup',package=package);app.call('restore_backup',package=package,expected_revision=checked['current_revision'],confirmed=True)

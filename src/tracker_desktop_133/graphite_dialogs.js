@@ -43,7 +43,7 @@
   const explanation=note.previousElementSibling;explanation.id='desktop-delivery-note-label';note.setAttribute('aria-labelledby',explanation.id);
   // Keep existing decision buttons/handlers, but only a single emphasized send action.
   for(const b of f.foot.children)b.classList.add(b.id==='desktop-delivery-send'||b.id==='desktop-delivery-approve'?'gd-primary':'gd-secondary');
-  if(['held','uncertain'].includes(row.state)){
+  if(row.state==='uncertain'){
    const decisions=[...f.foot.children],group=node('div',undefined,'gd-decisions');group.setAttribute('role','radiogroup');group.setAttribute('aria-label',t('Решение','Decision','Entscheidung','Рішення','Decisión'));let selected=null;
    const apply=button(t('Подтвердить решение','Confirm decision','Entscheidung bestätigen','Підтвердити рішення','Confirmar decisión'),()=>{if(selected&&!apply.disabled)selected()},'gd-primary');apply.id='graphite-delivery-confirm';
    const validate=()=>apply.disabled=!selected||!el('desktop-delivery-ack').checked||!note.value.trim();window.graphiteDeliveryValidate=validate;

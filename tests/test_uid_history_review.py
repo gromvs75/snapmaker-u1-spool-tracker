@@ -185,3 +185,11 @@ def test_printer_history_survives_missing_capture_without_spending(bench):
             ('capture','a','motion',job['start_time'],job['filename'],hk,'{}',lifecycle.session))
     assert not review.unaccounted_history('a')
     assert len(review.unaccounted_history('b')) == 1
+
+
+@pytest.mark.parametrize('note',['','ок',' '])
+def test_manual_comment_is_optional(bench,note):
+    life,key,c,review=setup_review(bench)
+    q=args(review,key);q['note']=note
+    assert review.decide(**q)['additional_mg']==750
+    assert review.detail(key)['receipt']['note']==note.strip()

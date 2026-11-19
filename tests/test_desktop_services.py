@@ -166,9 +166,7 @@ def test_full_shell_connections_uid_spoolman_and_unknown_delivery(tmp_path,remot
             assert len(app.call('delivery_list'))==1
             page.evaluate('refreshSpoolmanAfterRestore()');page.locator('[data-sm-tab=usage]').click();page.locator('#sm-queue button').click()
             audit_dialog(page,'delivery-held')
-            page.locator('#desktop-delivery-note').fill('Reviewed local ledger and server');page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-approve').click();page.locator('#graphite-delivery-confirm').click()
-            page.wait_for_function("!document.getElementById('desktop-delivery-dialog').open")
-            page.locator('#sm-queue button').click();audit_dialog(page,'delivery-pending');value['fault']='drop_after';page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-send').click()
+            value['fault']='drop_after';page.locator('#desktop-delivery-ack').check();page.locator('#desktop-delivery-send').click()
             page.wait_for_function("document.getElementById('desktop-delivery-not_applied')!==null")
             audit_dialog(page,'delivery-uncertain')
             assert len(value['writes'])==1 and app.call('delivery_list')[0]['state']=='uncertain'

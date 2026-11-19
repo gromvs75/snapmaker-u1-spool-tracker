@@ -13,10 +13,10 @@ from tracker_uid_sender import Sender
 
 def test_user_data_separate_and_override(tmp_path, monkeypatch):
     monkeypatch.delenv('TRACKER20_DATA_DIR', raising=False)
-    assert data_directory().name == 'Snapmaker Tracker 2.0'
+    assert data_directory().name == 'Snapmaker Tracker 2.1'
     monkeypatch.setenv('TRACKER20_DATA_DIR', str(tmp_path))
     assert data_directory() == tmp_path
-    assert build_info()['version'] == '2.0.0rc21'
+    assert build_info()['version'] == '2.1.0rc1'
     assert main(['--data','ignored-lab-directory']) == 2
     assert not (tmp_path/'tracker.sqlite').exists()
 

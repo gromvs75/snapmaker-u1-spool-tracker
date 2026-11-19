@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 
-VERSION = '2.0.0rc21'
+VERSION = '2.1.0rc1'
 
 
 def data_directory():
@@ -21,7 +21,7 @@ def data_directory():
         base = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / 'AppData' / 'Local')))
     else:
         base = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local' / 'share')))
-    return base / 'Snapmaker Tracker 2.0'
+    return base / 'Snapmaker Tracker 2.1'
 
 
 def build_info():

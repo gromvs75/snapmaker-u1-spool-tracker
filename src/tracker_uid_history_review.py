@@ -82,7 +82,7 @@ class HistoryReview:
             s['reserved'] = s['spool_id'] in reservations
             planned = sum(p['planned_mg'] for p in plan if p['spool_id']==s['spool_id'])
             # Never assign the full plan to the original spool across a swap.
-            s['suggested_additional_mg'] = None if events or not plan or (profile or {}).get('legacy_import') else max(0,planned-s['accounted_mg'])
+            s['suggested_additional_mg'] = None if events or not plan or ((profile or {}).get('legacy_import') and not profile.get('legacy_mapping_verified')) else max(0,planned-s['accounted_mg'])
         remote = []
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_remote_outbox'").fetchone():
             remote = [dict(r) for r in self.db.execute('SELECT * FROM uid_remote_outbox WHERE job_key=?',(job_key,))]
@@ -135,7 +135,7 @@ class HistoryReview:
                         raise ValueError('Принтер печатает, на паузе или проверка состояния устарела. Повторите после завершения.')
             if action=='account':
                 if completed is not True: raise ValueError('Подтвердите: печать завершилась, продолжения не будет.')
-                if not isinstance(note,str) or not 3<=len(note.strip())<=2000: raise ValueError('Укажите основание и исправления расхода.')
+                if not isinstance(note,str) or len(note)>2000: raise ValueError('Комментарий должен быть текстом до 2000 символов.')
                 if detail['uncertain']: raise ValueError('Сначала сверьте неопределённые отправки этого задания в Spoolman. Они уже включены в локальный расход.')
                 if not isinstance(allocations_mg,dict) or not allocations_mg or any(type(v) is not int or not 0<=v<=100_000_000 for v in allocations_mg.values()):
                     raise ValueError('Укажите дополнительный расход в целых миллиграммах.')

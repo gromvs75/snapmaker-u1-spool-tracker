@@ -1,4 +1,4 @@
-"""Loopback-only, synthetic stock U1 subset; no RFID or printer writes."""
+"""Loopback-only, synthetic stock U1 subset; optional synthetic RFID, no printer writes."""
 import asyncio,time,sys
 from aiohttp import web
 port=int(sys.argv[1])
@@ -30,6 +30,11 @@ async def handler(r):
         return ws
     if path=='/event':
         a=await r.json(); action=a['action'];method='notify_tracker_status'
+        if action=='tag':
+            reader=status['tracker_uid'];reader['sequence']+=1
+            tag=a.get('tag')
+            reader['channels']['0']=dict(state='present',uid=tag['uid'],tag=tag,sequence=reader['sequence'],age_seconds=0) if tag else dict(state='absent',uid=None)
+            return web.json_response({'result':True})
         if action=='history_timeout':
             faults['remaining']=1
             return web.json_response({'result':True})

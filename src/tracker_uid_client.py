@@ -55,6 +55,9 @@ def validate_status(raw):
             raise ValueError('Invalid channel state')
         if c['state'] == 'present':
             result['channels'][ch]['uid'] = canonical_uid(c.get('uid'))
+            if c.get('tag') is not None:
+                from tracker_rfid_metadata import validate_tag
+                result['channels'][ch]['tag'] = validate_tag(c['tag'], result['channels'][ch]['uid'])
             age = c.get('age_seconds')
             if isinstance(age, bool) or not isinstance(age, (int, float)) or not math.isfinite(age) or age < 0:
                 raise ValueError('Invalid observation age')
@@ -62,6 +65,8 @@ def validate_status(raw):
                 raise ValueError('Invalid observation sequence')
         elif c.get('uid') is not None:
             raise ValueError('UID on unconfirmed channel')
+        else:
+            result['channels'][ch].pop('tag', None)
     return result
 
 
@@ -161,6 +166,7 @@ class UidClient:
                         c['age_seconds'] += elapsed
                         if c['age_seconds'] > self.max_observation_age:
                             c.update(state='stale', uid=None)
+                            c.pop('tag', None)
             return dict(printer_id=self.endpoint.printer_id, name=self.endpoint.name,
                         state=state, channels=channels, epoch=raw['epoch'] if raw else None,
                         printer_connected=printer_connected, print_state=self._print_state if printer_connected else None,

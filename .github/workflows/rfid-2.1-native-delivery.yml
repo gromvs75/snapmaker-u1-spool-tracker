@@ -1,0 +1,56 @@
+name: Tracker 2.1 RFID native Windows candidate
+on:
+  push:
+    branches: ['test/2.1.0rc1-delivery']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+      - name: Install isolated dependencies
+        run: python -m pip install pyinstaller==6.22.3 pystray==0.19.5 pywebview==6.2.1 Pillow==11.3.0 pywin32==311 filelock==3.16.1 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1 pywinauto==0.6.9 playwright==1.56.0 aiohttp==3.11.18
+      - run: python -m playwright install chromium
+      - name: Accounting and restored manual-profile regression
+        run: python -m pytest tests/test_windows_tester_accounting.py tests/test_manual_without_uid.py tests/test_uid_accounting.py tests/test_uid_manual.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py tests/test_uid_collectors.py tests/test_uid_recovery.py tests/test_uid_calculated_history.py tests/test_legacy_backup_restore.py tests/test_uid_history_review.py tests/test_user_launch.py tests/test_rfid_bambu.py tests/test_rfid_multibrand.py tests/test_rfid_all_formats.py tests/test_rfid_automatic_lookup.py tests/test_rfid_enrollment.py tests/test_rfid_enrollment_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_delivery_confirm_send.py tests/test_uid_delivery.py tests/test_desktop_services.py --timeout=60 --junitxml=output/rfid-2.1-windows/tests.xml -q
+      - name: Build ordinary user EXE
+        run: python -m PyInstaller --clean --noconfirm --distpath output/native-dist --workpath output/native-build packaging/TrackerUser.spec
+      - name: Actual EXE accounting and native window/tray
+        run: python dev/labs/uid_candidate_bench/run.py --exe output/native-dist/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe --output output/rfid-2.1-windows/packaged
+      - name: Actual EXE RFID and history delivery in native WebView2
+        run: python dev/labs/uid_candidate_bench/rfid.py --exe output/native-dist/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe --output output/rfid-2.1-windows/rfid-native
+      - name: Package tested EXE and matching source metadata
+        shell: pwsh
+        run: |
+          $folder = 'output/native-dist/Snapmaker-Tracker-2.1-Candidate'
+          Copy-Item docs/guides/rfid-ui-2.1-candidate-ru.md "$folder/START-HERE-RU.md"
+          New-Item -ItemType Directory -Force output/delivery | Out-Null
+          Copy-Item output/rfid-2.1-windows/rfid-native/results.json "$folder/WINDOWS-GUI-VERIFIED.json"
+          Compress-Archive -Path $folder -DestinationPath output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip
+          Copy-Item output/rfid-2.1-windows/rfid-native/results.json output/delivery/WINDOWS-RFID-VERIFIED.json
+          Copy-Item output/rfid-2.1-windows/packaged/results.json output/delivery/WINDOWS-ACCOUNTING-VERIFIED.json
+          $exeHash = (Get-FileHash "$folder/Snapmaker-Tracker-2.1-Candidate.exe" -Algorithm SHA256).Hash.ToLower()
+          "$exeHash  Snapmaker-Tracker-2.1-Candidate.exe" | Set-Content output/delivery/EXE.sha256
+          $hash = (Get-FileHash output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip" | Set-Content output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip.sha256
+          Copy-Item "$folder/_internal/tracker_build.json" output/delivery/BUILD-INFO-Windows.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rfid-2.1-windows-verification
+          path: output/rfid-2.1-windows/
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: rfid-2.1-windows-tested-exe
+          path: output/delivery/
+          retention-days: 14

@@ -7,7 +7,10 @@
  const weight=mg=>displayGrams(mg/1000)+(currentLang==='ru'||currentLang==='uk'?' г':' g');
  const base=renderHistory;
  const dialog=document.createElement('dialog');dialog.id='uid-history-dialog';dialog.className='inventory-dialog';document.body.append(dialog);
- const historyButton=(caption,callback)=>{const b=node('button',caption,'uid-history-secondary');b.type='button';b.onclick=()=>act(callback);return b};
+ let busy=false;
+ const historyButton=(caption,callback)=>{const b=node('button',caption,'uid-history-secondary');b.type='button';b.onclick=async()=>{if(busy)return;busy=true;const buttons=[...dialog.querySelectorAll('button:not(:disabled)')];buttons.forEach(b=>b.disabled=true);try{await callback()}catch(e){let error=dialog.querySelector('#uid-history-error');if(!error){error=node('p',undefined,'gd-notice');error.id='uid-history-error';error.setAttribute('role','alert');(dialog.querySelector('.gd-body')||dialog).append(error)}error.textContent=e.message}finally{busy=false;buttons.forEach(b=>b.disabled=false)}};return b};
+ dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault()});
+ const deliveryCaption=state=>window.desktopDeliveryCaption?.(state)||state;
  const labels={
   expand:()=>text('Раскрыть задание','Expand job','Auftrag anzeigen','Розкрити завдання','Desplegar trabajo'),
   ask:()=>text('Печать завершилась успешно?','Did the print finish successfully?','Wurde der Druck erfolgreich abgeschlossen?','Друк завершився успішно?','¿La impresión terminó correctamente?'),
@@ -36,7 +39,7 @@
   const heading=node('div',undefined,'uid-history-heading'),close=historyButton(text('Закрыть','Close','Schließen','Закрити','Cerrar'),()=>dialog.close());
   heading.append(node('h2',d.filename||d.job.job_id),close);dialog.replaceChildren(heading);
   const status=d.job.state==='resolved'?text('Закрыто без дополнительного списания','Closed without additional deduction','Ohne weitere Abbuchung geschlossen','Закрито без додаткового списання','Cerrado sin descuento adicional'):
-   d.review_block==='already_accounted'?text('Учёт завершён','Accounting completed','Erfassung abgeschlossen','Облік завершено','Contabilización finalizada'):
+   d.review_block==='already_accounted'?text('Учтено в Tracker','Accounted in Tracker','In Tracker erfasst','Враховано у Tracker','Contabilizado en Tracker'):
    d.review_block==='observing'?text('Печать наблюдается','Print being observed','Druck wird beobachtet','Друк спостерігається','Impresión en seguimiento'):
    text('Требуется проверка расхода','Usage review required','Verbrauch prüfen','Потрібна перевірка витрат','Revisar consumo');
   const statusBadge=node('p',status,'uid-history-state');statusBadge.dataset.state=d.review_block==='already_accounted'?'complete':d.review_block==='observing'?'active':d.job.state==='resolved'?'closed':'review';dialog.append(statusBadge);
@@ -76,6 +79,7 @@
     d.review_block==='observing'?text('Ручной учёт доступен после завершения наблюдения за печатью.','Manual accounting is available once print observation ends.','Manuelle Erfassung ist nach Ende der Druckbeobachtung möglich.','Ручний облік доступний після завершення спостереження друку.','La contabilización manual estará disponible al terminar el seguimiento.'):
     text('Ручной учёт для этого состояния недоступен.','Manual accounting is unavailable for this state.','Manuelle Erfassung ist in diesem Zustand nicht verfügbar.','Ручний облік для цього стану недоступний.','La contabilización manual no está disponible en este estado.'),'uid-history-help'));
   }
+  if(d.remote_operations.length){const send=historyButton(text('Продолжить в Spoolman','Continue to Spoolman','Weiter zu Spoolman','Продовжити у Spoolman','Continuar a Spoolman'),()=>deliveryStep(key,data));send.id='uid-history-delivery';actions(send)}
   window.graphiteHistoryDialog?.(dialog);
   if(!dialog.open)dialog.showModal();
  }
@@ -85,18 +89,58 @@
  }
  function edit(d,data){view(d,data);
   if(d.uncertain){dialog.append(node('p',text('Сначала сверьте неопределённую отправку Spoolman. Этот расход уже учтён локально.','Reconcile the uncertain Spoolman delivery first. This usage is already accounted locally.','Zuerst die unklare Spoolman-Übertragung abgleichen. Dieser Verbrauch ist lokal bereits erfasst.','Спочатку звірте невизначену відправку Spoolman. Ці витрати вже враховано локально.','Primero concilie el envío incierto de Spoolman. Este consumo ya está contabilizado localmente.')));window.graphiteHistoryDialog?.(dialog);return}
-  dialog.append(node('h3',text('Дополнительно списать, г','Additional deduction, g','Zusätzliche Abbuchung, g','Додатково списати, г','Descuento adicional, g')));
+  dialog.append(node('h3',text('Шаг 1 · Дополнительно списать, г','Step 1 · Additional deduction, g','Zusätzliche Abbuchung, g','Додатково списати, г','Descuento adicional, g')));
   const inputs=d.candidates.map(s=>{const i=field(s.name,'number',s.suggested_additional_mg===null?'':s.suggested_additional_mg/1000);i.step='0.001';i.min='0';i.max=s.remaining_mg/1000;i.dataset.spool=s.spool_id;i.className='uid-extra-amount';if(s.reserved){i.value='0';i.disabled=true}return [s,i]});
-  const note=field(text('Основание и исправления','Reason and adjustments','Begründung und Korrekturen','Підстава та виправлення','Motivo y correcciones'),'text');note.id='uid-review-note';
+  dialog.append(node('p',text('Подставлен дополнительный расход из сохранённого плана за вычетом уже учтённого. Отредактируйте при необходимости. При неизвестной привязке или замене катушек заполните расход вручную.','Additional usage is prefilled from the saved plan minus usage already accounted. Edit if needed. Unknown mappings or spool changes require manual amounts.')));
+  const note=field(text('Комментарий (необязательно)','Comment (optional)','Kommentar (optional)','Коментар (необов’язково)','Comentario (opcional)'),'text');note.id='uid-review-note';note.maxLength=2000;
   const ack=field(text('Печать завершилась. Катушки и дополнительный расход проверены.','The print has ended. Spools and additional usage have been verified.','Der Druck ist beendet. Spulen und zusätzlicher Verbrauch wurden geprüft.','Друк завершено. Котушки й додаткові витрати перевірено.','La impresión terminó. Se verificaron las bobinas y el consumo adicional.'),'checkbox');ack.id='uid-review-ack';
   const request=crypto.randomUUID();let submitted=null;
-  const apply=historyButton(labels.confirm(),async()=>{
-   if(!ack.checked||note.value.trim().length<3||inputs.some(([s,i])=>i.value===''||!i.validity.valid))throw Error(text('Проверьте значения, основание и подтверждение.','Check amounts, reason and confirmation.','Mengen, Begründung und Bestätigung prüfen.','Перевірте значення, підставу та підтвердження.','Revise cantidades, motivo y confirmación.'));
+  const linked=d.candidates.some(s=>data.spools[s.spool_id]?.spoolman);
+  const apply=historyButton(linked?text('Учесть в Tracker и продолжить','Account in Tracker and continue'):labels.confirm(),async()=>{
+   if(!ack.checked||inputs.some(([s,i])=>i.value===''||!i.validity.valid))throw Error(text('Проверьте значения и подтвердите расход.','Check amounts and confirm usage.','Mengen, Begründung und Bestätigung prüfen.','Перевірте значення, підставу та підтвердження.','Revise cantidades, motivo y confirmación.'));
    const payload={job_key:d.job.job_key,action:'account',expected_revision:d.revision,request_id:request,confirmed:true,completed:true,note:note.value,allocations_mg:Object.fromEntries(inputs.map(([s,i])=>[s.spool_id,Math.round(Number(i.value)*1000)]))};
    const encoded=JSON.stringify(payload);if(submitted&&submitted!==encoded)throw Error(text('Запрос уже отправлен. Повторите без изменений или откройте задание заново.','Request already sent. Retry unchanged or reopen the job.'));
-   submitted=encoded;await decide(payload);
-  });apply.id='uid-review-apply';actions(primary(apply));dialog.append(node('p',text('Для связанной катушки Spoolman расход попадёт в очередь. Неопределённая отправка автоматически не повторяется.','For a linked Spoolman spool, usage enters the queue. Uncertain delivery is never retried automatically.','Bei verknüpften Spoolman-Spulen kommt der Verbrauch in die Warteschlange. Unklare Übertragungen werden nicht automatisch wiederholt.','Для пов’язаної котушки Spoolman витрати потраплять до черги. Невизначена відправка автоматично не повторюється.','Para bobinas de Spoolman, el consumo entra en la cola. Los envíos inciertos nunca se repiten automáticamente.')));
+   submitted=encoded;await api('/api/history_decide',payload);await loadData();
+   const result=await detail(d.job.job_key);
+   if(result.remote_operations.length)await deliveryStep(d.job.job_key,desktopFormData||data);else dialog.close();
+  });apply.id='uid-review-apply';actions(primary(apply));dialog.append(node('p',text('Шаг 1: учёт в Tracker. Для связанных катушек следующий шаг в этом окне — отправка в Spoolman.','Step 1: account in Tracker. For linked spools, the next step in this window sends usage to Spoolman.','Bei verknüpften Spoolman-Spulen kommt der Verbrauch in die Warteschlange. Unklare Übertragungen werden nicht automatisch wiederholt.','Для пов’язаної котушки Spoolman витрати потраплять до черги. Невизначена відправка автоматично не повторюється.','Para bobinas de Spoolman, el consumo entra en la cola. Los envíos inciertos nunca se repiten automáticamente.')));
   window.graphiteHistoryDialog?.(dialog);
+ }
+ async function deliveryStep(key,data,notice=''){
+  const state=await desktopCore('state'),d=await detail(key),rows=state.delivery.filter(r=>r.job_key===key);
+  view(d,data);dialog.dataset.stage='spoolman';
+  const complete=rows.length&&rows.every(r=>r.state==='sent');
+  dialog.append(node('h3',complete?text('Шаг 3 · Готово: Tracker и Spoolman','Step 3 · Done: Tracker and Spoolman'):text('Шаг 2 · Отправка в Spoolman','Step 2 · Send to Spoolman')));
+  dialog.append(node('p',text('Локально учтено: ','Accounted locally: ')+weight(d.accounted_mg)+'. '+text('Этот расход повторно из Tracker не списывается.','This usage will not be deducted again from Tracker.')));
+  const panel=node('div');panel.id='uid-history-delivery-rows';dialog.append(panel);
+  const message=node('p',notice);message.id='uid-history-delivery-message';message.setAttribute('role','status');dialog.append(message);
+  const ready=rows.filter(r=>['held','pending'].includes(r.state));
+  for(const row of rows){
+   const card=node('section',undefined,'gd-notice');card.dataset.operation=row.operation_id;
+   card.append(node('strong',(data.spools[row.spool_id]?.name||row.spool_id)+' · Spoolman #'+row.remote_id),node('p',row.url),node('p',weight(row.delta_mg)+' · '+deliveryCaption(row.state)));
+   panel.append(card);
+   if(['held','pending'].includes(row.state)&&state.delivery_enabled&&state.settings.values.spoolman_mode!=='off'){
+    try{const checked=await desktopCore('delivery_review',{operation_id:row.operation_id,expected_revision:row.revision});const before=checked.remote.remaining_g;
+     card.append(node('p',text('Spoolman: сейчас ','Spoolman: now ')+(before===null?'—':displayGrams(before)+' g')+text(' → после списания ',' → after deduction ')+(before===null?'—':displayGrams(before-row.delta_mg/1000)+' g')));
+    }catch(e){card.append(node('p',text('Проверка Spoolman не завершена: ','Spoolman check incomplete: ')+e.message))}
+   }
+   if(row.state==='uncertain')card.append(node('p',text('Результат прошлой отправки неизвестен. Нужна сверка в разделе Spoolman; повторно не отправляем.','The previous delivery outcome is unknown. Reconcile in Spoolman settings; no automatic retry.')));
+  }
+  const buttons=[historyButton(text('Закрыть','Close','Schließen','Закрити','Cerrar'),()=>dialog.close())];
+  if(ready.length){
+   const requests=new Map(ready.map(r=>[r.operation_id,crypto.randomUUID()]));
+   const send=primary(historyButton(text('Отправить в Spoolman','Send to Spoolman','An Spoolman senden','Надіслати у Spoolman','Enviar a Spoolman'),async()=>{
+    let outcome='';
+    for(const row of ready){
+     const result=await desktopCore('delivery_confirm_send',{operation_id:row.operation_id,expected_revision:row.revision,request_id:requests.get(row.operation_id),confirmed:true});
+     if(result.status!=='sent'){outcome=deliveryCaption(result.status);break;}
+    }
+    await loadData();await deliveryStep(key,desktopFormData||data,outcome);
+   }));send.id='uid-history-send';send.disabled=!state.delivery_enabled||state.settings.values.spoolman_mode!=='send'||state.delivery.some(r=>['uncertain','sending'].includes(r.state));buttons.push(send);
+   if(send.disabled)message.textContent=text('Локальный учёт сохранён. Для отправки включите режим отправки Spoolman и завершите сверку неизвестных операций.','Local accounting is saved. Enable Spoolman sending and reconcile unknown operations before delivery.');
+  }
+  const refresh=historyButton(text('Проверить состояние','Check status'),()=>deliveryStep(key,data));refresh.id='uid-history-delivery-refresh';buttons.push(refresh);
+  actions(...buttons);window.graphiteHistoryDialog?.(dialog);if(!dialog.open)dialog.showModal();
  }
  let initial=true;
  renderReviews=function(data){
@@ -131,7 +175,7 @@
   }else latestBox.append(node('p',text('Учтённых печатей пока нет.','No accounted prints yet.','Noch keine erfassten Drucke.','Врахованих друків поки немає.','Todavía no hay impresiones contabilizadas.'),'subtitle'));
   const runs=Object.values(data.runs||{}).sort((a,b)=>b.start_time-a.start_time).slice(0,20);
   const rows=[...document.querySelectorAll('#history-content .history-row')];
-  rows.forEach((row,i)=>{if(!runs[i])return;if(runs[i].closed_without_deduction){const badge=row.querySelector('.head-status');if(badge)badge.textContent=text('Закрыто без списания','Closed without deduction','Ohne Abbuchung geschlossen','Закрито без списання','Cerrado sin descuento')}if(row.querySelector('.uid-expand'))return;const b=historyButton(labels.expand(),()=>open(runs[i].job_key,data));b.className='uid-expand uid-history-secondary';row.append(b)});
+  rows.forEach((row,i)=>{if(!runs[i])return;if(runs[i].closed_without_deduction){const badge=row.querySelector('.head-status');if(badge)badge.textContent=text('Закрыто без списания','Closed without deduction','Ohne Abbuchung geschlossen','Закрито без списання','Cerrado sin descuento')}const remote=data.saved_history[runs[i].job_key]?.remote_operations||[];if(remote.length&&runs[i].status==='committed'){const badge=row.querySelector('.head-status');if(badge){badge.textContent=text('Учтено в Tracker','Accounted in Tracker')+' · Spoolman: '+(remote.every(r=>r.state==='sent')?text('отправлено','sent'):remote.some(r=>['uncertain','sending'].includes(r.state))?text('нужна сверка','reconcile'):remote.every(r=>r.state==='resolved')?text('без отправки','not sent'):text('ожидает отправки','awaiting delivery'));badge.style.whiteSpace='normal'}}if(row.querySelector('.uid-expand'))return;const b=historyButton(labels.expand(),()=>open(runs[i].job_key,data));b.className='uid-expand uid-history-secondary';row.append(b)});
   if(initial){initial=false;const job=runs.find(r=>['active','review'].includes(data.saved_history[r.job_key]?.job.state)&&!data.saved_history[r.job_key]?.job.mapping_valid);
    if(job)setTimeout(()=>{if(!document.querySelector('dialog[open]'))act(()=>open(job.job_key,data,true))},300);
   }

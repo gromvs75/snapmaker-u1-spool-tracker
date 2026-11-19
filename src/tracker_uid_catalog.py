@@ -77,6 +77,10 @@ class UidCatalog:
                 printer_id TEXT NOT NULL, channel TEXT NOT NULL, spool_id TEXT NOT NULL, reason TEXT NOT NULL,
                 PRIMARY KEY(printer_id,channel));
             CREATE TABLE IF NOT EXISTS spool_details (spool_id TEXT PRIMARY KEY REFERENCES uid_spools(spool_id), payload TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS uid_rfid_rolls (identity TEXT PRIMARY KEY,
+                spool_id TEXT NOT NULL UNIQUE REFERENCES uid_spools(spool_id), product TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS uid_rfid_aliases (uid TEXT PRIMARY KEY,
+                spool_id TEXT NOT NULL REFERENCES uid_spools(spool_id));
         """)
         # Promote local untagged spools from earlier archive-only migrations.
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='legacy_spools'").fetchone():
@@ -112,7 +116,9 @@ class UidCatalog:
         return self.spool(uid)
 
     def spool(self, uid):
-        row = self.db.execute('SELECT * FROM uid_spools WHERE uid=?', (canonical_uid(uid),)).fetchone()
+        uid = canonical_uid(uid)
+        row = self.db.execute('SELECT s.* FROM uid_spools s WHERE s.uid=? OR s.spool_id IN '
+                              '(SELECT spool_id FROM uid_rfid_aliases WHERE uid=?)', (uid, uid)).fetchone()
         return dict(row) if row else None
 
     def reconcile(self, fleet):
@@ -138,10 +144,25 @@ class UidCatalog:
                     uid = canonical_uid(observation['uid'])
                     self.db.execute('INSERT INTO uid_locations VALUES(?,?,?,1) ON CONFLICT(printer_id,channel) DO UPDATE SET uid=excluded.uid,confirmed=1',(pid,ch,uid))
         rows = [dict(r) for r in self.db.execute('SELECT * FROM uid_locations ORDER BY printer_id,channel')]
-        counts = Counter(r['uid'] for r in rows)
+        def identity(row):
+            spool = self.spool(row['uid'])
+            if spool: return 'spool:' + spool['spool_id']
+            tag = fleet.get(row['printer_id'], {}).get('channels', {}).get(row['channel'], {}).get('tag')
+            if tag and row['confirmed']:
+                roll = self.db.execute('SELECT spool_id FROM uid_rfid_rolls WHERE identity=?', (tag['identity'],)).fetchone()
+                return 'spool:' + roll[0] if roll else tag['identity']
+            return 'uid:' + row['uid']
+        counts = Counter(identity(r) for r in rows)
         for row in rows:
             spool = self.spool(row['uid'])
-            row['state'] = ('conflict' if counts[row['uid']] > 1 else
+            mismatch = False
+            if spool:
+                roll = self.db.execute('SELECT identity,product FROM uid_rfid_rolls WHERE spool_id=?', (spool['spool_id'],)).fetchone()
+                tag = fleet.get(row['printer_id'], {}).get('channels', {}).get(row['channel'], {}).get('tag')
+                if roll and tag:
+                    from tracker_rfid_metadata import product
+                    mismatch = product(tag) != json.loads(roll['product'])
+            row['state'] = ('conflict' if counts[identity(row)] > 1 or mismatch else
                             'uncertain' if not row['confirmed'] else
                             'archived' if spool and self.archived(spool['spool_id']) else
                             'recognized' if spool else 'needs_registration')

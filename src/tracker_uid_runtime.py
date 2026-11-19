@@ -73,6 +73,8 @@ class AccountingOwner:
             history_review = HistoryReview(service.accounting)
             from tracker_uid_tags import Tags
             tags = Tags(service.accounting)
+            from tracker_rfid import RfidRegistry
+            rfid = RfidRegistry(library, delivery)
             from tracker_uid_guard import Guard
             guard=Guard(library)
             self.ready.set_result(threading.get_ident())
@@ -87,7 +89,9 @@ class AccountingOwner:
                 operation, (args, kwargs), snapshot, future = item
                 try:
                     fleet.value = snapshot
-                    if operation in ('tag_preview','tag_register'):
+                    if operation in ('rfid_prepare','rfid_claim','rfid_commit','rfid_approve_usage','rfid_pair','rfid_recheck','rfid_candidates','rfid_approve','rfid_pair_review'):
+                        result=getattr(rfid,operation.removeprefix('rfid_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
+                    elif operation in ('tag_preview','tag_register'):
                         # Registration commits against current observations, not a queued stale scan.
                         result=getattr(tags,operation.removeprefix('tag_'))(*args,fleet=self.fleet.snapshot(),**kwargs)
                     elif operation == 'observe_history':
@@ -165,6 +169,7 @@ class AccountingOwner:
                         library=Library(service.accounting)
                         delivery=Delivery(service.accounting)
                         tags=Tags(service.accounting)
+                        rfid=RfidRegistry(library, delivery)
                         reconciliation=Reconciliation(lifecycle.recovery, service.accounting)
                         history_review=HistoryReview(service.accounting)
                         guard=Guard(library)

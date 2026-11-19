@@ -11,7 +11,8 @@ MAX_BACKUP = 32 * 1024 * 1024
 # Additive 2.0 development schemas, never a generic "accept any missing table".
 RECOVERY_ADDITIONS = {'manual_placement_times', 'uid_printer_history', 'uid_recovery_profiles', 'uid_recovery_receipts',
                      'uid_replacement_state', 'uid_replacement_events',
-                     'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits', 'uid_start_checks'}
+                     'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits', 'uid_start_checks',
+                     'uid_rfid_rolls', 'uid_rfid_aliases', 'uid_rfid_creations'}
 
 
 def migrate_copy(db, live):
@@ -123,6 +124,7 @@ def restore(package, live, expected_revision):
                 source.execute('DELETE FROM uid_unlock_attempts')
                 source.execute("UPDATE uid_remote_outbox SET state='uncertain' WHERE state IN ('held','pending','sending')")
                 source.execute('UPDATE uid_delivery_meta SET revision=lower(hex(randomblob(16))),attempt=NULL')
+                source.execute("DELETE FROM uid_preferences WHERE key='rfid'")
             source.backup(live)
         finally:source.close()
     return preview

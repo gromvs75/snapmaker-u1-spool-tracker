@@ -52,7 +52,7 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
             page.locator('#uid-history-dialog[open]').wait_for()
             assert 'Закрыто без дополнительного списания' in page.locator('.uid-history-state').inner_text()
             page.locator('#uid-history-edit').click()
-            field=page.locator('.uid-extra-amount');assert field.input_value()==''
+            field=page.locator('.uid-extra-amount');assert field.input_value()=='12'
             field.fill('3.5');page.locator('#uid-review-note').fill('Проверены катушка и расход после закрытия');page.locator('#uid-review-ack').check()
             page.screenshot(path=str(screens/'manual-edit.png'),full_page=True)
             lost=[]

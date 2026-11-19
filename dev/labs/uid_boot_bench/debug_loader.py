@@ -41,8 +41,12 @@ class DebugActivation(SelectiveBootTrial):
 def export_kit(destination):
     """Independent stdlib activation/recovery code. Hashes detect corruption, not tampering."""
     repo = Path(__file__).resolve().parents[3]
+    recovery = repo / 'dev/klipper/disable_rfid.py'
+    if not recovery.exists():
+        recovery = repo / 'disable-rfid.py'  # Re-export from the distributed kit.
     sources = {'scripts/rfid_module_tool.py': repo / 'scripts/rfid_module_tool.py',
-               'scripts/tracker_uid.py': tool.MODULE}
+               'scripts/tracker_uid.py': tool.MODULE,
+               'disable-rfid.py': recovery}
     for name in ('model', 'optional', 'selective', 'debug_loader'):
         sources[f'dev/labs/uid_boot_bench/{name}.py'] = Path(__file__).with_name(name + '.py')
     destination.mkdir(parents=True, exist_ok=False)

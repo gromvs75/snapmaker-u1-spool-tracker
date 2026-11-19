@@ -79,10 +79,11 @@ def test_import_preserves_balances_details_history_and_restart(tmp_path,old_back
         assert sum(r['accounted_g'] for r in desktop['runs'].values())==15
         review = next(d for d in desktop['saved_history'].values() if d['filename']=='saved-2.gcode')
         assert review['plan'][0]['planned_mg']==12000 and review['plan'][0]['spool_id']=='local'
-        assert review['quarantined'] and review['candidates'][0]['suggested_additional_mg'] is None
+        assert review['quarantined'] and review['candidates'][0]['suggested_additional_mg']==12000
         assert 'Connection lost during pause' in review['reasons']
         unverified = next(d for d in desktop['saved_history'].values() if d['filename']=='saved-4.gcode')
         assert not unverified['plan'][0]['mapping_verified']
+        assert all(s['suggested_additional_mg'] is None for s in unverified['candidates'])
         before = app.call('inspect')['debits']
         for _ in range(3):
             for i in (0,1,2,4):

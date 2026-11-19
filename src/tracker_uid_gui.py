@@ -9,6 +9,8 @@ from tracker_uid_catalog import UidCatalog
 
 def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=None, forecast=None, window_action=None, backup_file=None):
     token=secrets.token_urlsafe(32)
+    from tracker_rfid_enrollment import Enrollment
+    enrollment=Enrollment(owner,fleet,status_reader,sender)
     class Handler(BaseHTTPRequestHandler):
         def log_message(self,*args): pass
         def reply(self,status,value,kind='application/json'):
@@ -143,6 +145,10 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     return self.reply(200,{'status':'ok'})
                 if self.path in ('/api/connections_start','/api/connections_stop','/api/validate_backup','/api/restore_backup') and not hasattr(owner,'connected'):
                     raise ValueError('Managed session required')
+                if self.path in ('/api/rfid_preview','/api/rfid_confirm'):
+                    from tracker_rfid_enrollment import explain_error
+                    try:return self.reply(200,getattr(enrollment,self.path.removeprefix('/api/rfid_'))(**data))
+                    except (ValueError,OSError,TimeoutError) as exc:raise ValueError(explain_error(exc)) from exc
                 if self.path in ('/api/tag_preview','/api/tag_register'):
                     if status_reader is None:raise ValueError('Проверка принтера недоступна.')
                     if 'observation' in data or 'fleet' in data:raise ValueError('Неверные параметры регистрации.')
@@ -187,6 +193,9 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 if self.path=='/api/delivery_review':
                     if sender is None:raise ValueError('Отправка и сверка недоступны в этом сеансе.')
                     return self.reply(200,sender.review(**data))
+                if self.path=='/api/delivery_confirm_send':
+                    if sender is None:raise ValueError('Отправка Spoolman недоступна в этом сеансе.')
+                    return self.reply(200,sender.confirm_send(**data))
                 if self.path=='/api/delivery_send':
                     if sender is None:raise ValueError('Spoolman sender is not enabled for this session.')
                     if data.get('confirmed') is not True or set(data)-{'confirmed','operation_id','expected_revision'}:raise ValueError('Explicit send confirmation required')

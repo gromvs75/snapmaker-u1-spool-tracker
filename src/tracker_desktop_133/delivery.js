@@ -2,7 +2,8 @@
 (()=>{
  const t=desktopText,dialog=node('dialog');dialog.id='desktop-delivery-dialog';dialog.className='inventory-dialog';document.body.append(dialog);
  let busy=false,decisionRequest=null;
- const caption=state=>({held:t('Нужна проверка перед отправкой','Review before sending','Vor Versand prüfen','Перевірити перед надсиланням','Revisar antes de enviar'),pending:t('Отправка разрешена','Sending approved','Versand freigegeben','Надсилання дозволено','Envío autorizado'),sending:t('Отправляется','Sending','Wird gesendet','Надсилається','Enviando'),uncertain:t('Результат неизвестен — нужна сверка','Outcome unknown — reconcile','Ergebnis unbekannt — abgleichen','Результат невідомий — потрібна звірка','Resultado desconocido — conciliar'),sent:t('Подтверждено','Confirmed','Bestätigt','Підтверджено','Confirmado'),resolved:t('Закрыто без отправки','Closed without sending','Ohne Versand geschlossen','Закрито без надсилання','Cerrado sin enviar')})[state]||state;
+ const caption=state=>({unavailable:t('Spoolman недоступен — отправка не выполнена','Spoolman unavailable — not sent'),disabled:t('Отправка выключена','Sending disabled'),blocked:t('Отправка остановлена: сначала сверьте неизвестную операцию','Sending blocked: reconcile an unknown operation first'),idle:t('Ожидает отправки','Awaiting delivery'),stopped:t('Отправка остановлена','Sending stopped'),held:t('Ожидает отправки','Awaiting delivery','Wartet auf Versand','Очікує надсилання','Pendiente de envío'),pending:t('Отправка разрешена','Sending approved','Versand freigegeben','Надсилання дозволено','Envío autorizado'),sending:t('Отправляется','Sending','Wird gesendet','Надсилається','Enviando'),uncertain:t('Результат неизвестен — нужна сверка','Outcome unknown — reconcile','Ergebnis unbekannt — abgleichen','Результат невідомий — потрібна звірка','Resultado desconocido — conciliar'),sent:t('Отправлено в Spoolman','Sent to Spoolman','An Spoolman gesendet','Надіслано у Spoolman','Enviado a Spoolman'),resolved:t('Закрыто без отправки','Closed without sending','Ohne Versand geschlossen','Закрито без надсилання','Cerrado sin enviar')})[state]||state;
+ window.desktopDeliveryCaption=caption;
  const button=(text,id,fn)=>{const b=node('button',text);b.type='button';b.id=id;b.onclick=fn;return b};
  window.desktopDeliveryRows=data=>{
   const root=el('sm-queue');root.replaceChildren();
@@ -14,7 +15,7 @@
   }
  };
  function open(row,data){
-  if(busy)return;decisionRequest=null;dialog.replaceChildren();dialog.showModal();
+  if(busy)return;decisionRequest=null;dialog.replaceChildren();if(!dialog.open)dialog.showModal();
   const close=button(t('Закрыть','Close','Schließen','Закрити','Cerrar'),'desktop-delivery-close',()=>dialog.close());
   const note=node('textarea'),ack=node('input'),ackLabel=node('label'),message=node('p'),evidence=node('div'),actions=node('div');note.id='desktop-delivery-note';note.maxLength=1000;note.rows=3;ack.type='checkbox';ack.id='desktop-delivery-ack';message.id='desktop-delivery-message';message.setAttribute('role','status');
   note.style.cssText='display:block;width:100%;box-sizing:border-box;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;font:inherit;resize:vertical';
@@ -24,21 +25,24 @@
   const review=button(t('Прочитать Spoolman и журнал','Read Spoolman and audit','Spoolman und Protokoll lesen','Прочитати Spoolman і журнал','Leer Spoolman y registro'),'desktop-delivery-review',()=>work(async()=>{const r=await desktopCore('delivery_review',{operation_id:row.operation_id,expected_revision:row.revision});evidence.replaceChildren(node('p',(r.remote.name||'')+' · '+(r.remote.remaining_g===null?'—':displayGrams(r.remote.remaining_g)+' g')));for(const entry of r.audit)evidence.append(node('p',caption(entry.previous)+' → '+caption(entry.state)+' · '+entry.note));}));
   dialog.append(review,evidence,node('p',t('Основание решения','Reason for the decision','Begründung','Підстава рішення','Motivo de la decisión')),note,ackLabel,actions,message);
   async function work(fn){if(busy)return;busy=true;for(const b of dialog.querySelectorAll('button'))b.disabled=true;try{await fn()}catch(e){message.textContent=e.message}finally{busy=false;for(const b of dialog.querySelectorAll('button'))b.disabled=false;window.graphiteDeliveryValidate?.()}}
-  const choices=row.state==='held'?[['approve',t('Разрешить отправку','Approve sending','Versand freigeben','Дозволити надсилання','Autorizar envío')],['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:row.state==='uncertain'?[['applied',t('Уже учтено в Spoolman','Already applied in Spoolman','In Spoolman bereits gebucht','Уже враховано у Spoolman','Ya aplicado en Spoolman')],['not_applied',t('Не учтено — разрешить новую попытку','Not applied — approve a new attempt','Nicht gebucht — neuen Versuch freigeben','Не враховано — дозволити нову спробу','No aplicado — autorizar otro intento')],['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:[];
+  const choices=row.state==='held'?[['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:row.state==='uncertain'?[['applied',t('Уже учтено в Spoolman','Already applied in Spoolman','In Spoolman bereits gebucht','Уже враховано у Spoolman','Ya aplicado en Spoolman')],['not_applied',t('Не учтено — разрешить новую попытку','Not applied — approve a new attempt','Nicht gebucht — neuen Versuch freigeben','Не враховано — дозволити нову спробу','No aplicado — autorizar otro intento')],['cancel',t('Закрыть без отправки','Close without sending','Ohne Versand schließen','Закрити без надсилання','Cerrar sin enviar')]]:[];
   for(const [decision,label] of choices)actions.append(button(label,'desktop-delivery-'+decision,()=>work(async()=>{
-   if(!ack.checked||!note.value.trim())throw Error(t('Укажите основание и подтвердите решение.','Enter a reason and confirm the decision.','Begründung eingeben und bestätigen.','Укажіть підставу та підтвердьте рішення.','Indique un motivo y confirme la decisión.'));
-   const intent={operation_id:row.operation_id,expected_revision:row.revision,decision,note:note.value,confirmed:true};
+   if(!ack.checked||(row.state==='uncertain'&&!note.value.trim()))throw Error(t('Укажите основание и подтвердите решение.','Enter a reason and confirm the decision.','Begründung eingeben und bestätigen.','Укажіть підставу та підтвердьте рішення.','Indique un motivo y confirme la decisión.'));
+   const intent={operation_id:row.operation_id,expected_revision:row.revision,decision,note:note.value.trim()||'User closed without sending',confirmed:true};
    if(decisionRequest&&decisionRequest.intent!==JSON.stringify(intent))throw Error(t('Решение изменилось после отправки. Откройте операцию снова.','Decision changed after submission. Reopen the operation.'));
    if(!decisionRequest)decisionRequest={intent:JSON.stringify(intent),id:crypto.randomUUID()};
    await desktopCore('delivery_decide',{...intent,request_id:decisionRequest.id});dialog.close();await window.refreshSpoolmanAfterRestore();
   })));
-  if(row.state==='pending')actions.append(button(t('Отправить сейчас','Send now','Jetzt senden','Надіслати зараз','Enviar ahora'),'desktop-delivery-send',()=>work(async()=>{
+  if(['held','pending'].includes(row.state))actions.append(button(t('Отправить сейчас','Send now','Jetzt senden','Надіслати зараз','Enviar ahora'),'desktop-delivery-send',()=>work(async()=>{
    if(data.state.mode!=='send')throw Error(t('Включите разрешение отправки в настройках Spoolman.','Enable sending in Spoolman settings.'));
    if(!ack.checked)throw Error(t('Подтвердите отправку.','Confirm sending.','Versand bestätigen.','Підтвердьте надсилання.','Confirme el envío.'));
-   const result=await desktopCore('delivery_send',{operation_id:row.operation_id,expected_revision:row.revision,confirmed:true});message.textContent=caption(result.status);await window.refreshSpoolmanAfterRestore();
+   if(!decisionRequest)decisionRequest={id:crypto.randomUUID()};
+   const result=await desktopCore('delivery_confirm_send',{operation_id:row.operation_id,expected_revision:row.revision,request_id:decisionRequest.id,confirmed:true});message.textContent=caption(result.status);await window.refreshSpoolmanAfterRestore();
    // Reopen to bind subsequent actions to the new state/revision.
-   const next=desktopSpoolmanData.delivery.find(r=>r.operation_id===row.operation_id);busy=false;if(next)open(next,desktopSpoolmanData);
+   const next=desktopSpoolmanData.delivery.find(r=>r.operation_id===row.operation_id);busy=false;if(next){open(next,desktopSpoolmanData);el('desktop-delivery-message').textContent=caption(result.status);}
   })));
+  if(row.state!=='uncertain'){note.hidden=true;note.previousElementSibling.hidden=true;}
+  if(['sent','resolved','sending'].includes(row.state))ackLabel.hidden=true;
   window.graphiteDeliveryDialog?.(dialog,row);
  }
  dialog.addEventListener('cancel',e=>{if(busy)e.preventDefault()});

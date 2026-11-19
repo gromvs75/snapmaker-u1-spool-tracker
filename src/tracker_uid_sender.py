@@ -13,7 +13,7 @@ class Sender:
         self._allowed_urls=allowed_urls if callable(allowed_urls) else tuple(allowed_urls)
         if (not callable(allowed_urls) and not self.allowed_urls) or interval<=0:raise ValueError('Explicit server allowlist and positive interval required')
         self.client_factory=client_factory;self.interval=interval
-        self._stop=threading.Event();self._mutex=threading.Lock();self._thread=None
+        self._stop=threading.Event();self._mutex=threading.RLock();self._thread=None
         self.last_error=None
 
     @property
@@ -55,6 +55,38 @@ class Sender:
             # A failed DB acknowledgement leaves durable 'sending', never pending.
             result=self.owner.call('delivery_finish',claim['operation_id'],claim['attempt'],sent)
             return result['state']
+
+    def confirm_send(self, operation_id, expected_revision, request_id, confirmed=False, note=''):
+        """One explicit UI action: approve a proved debit, send, return real state.
+
+        Keeps the same durable claim/uncertain fence as send_one. Retrying a
+        lost HTTP response never replays a sent or uncertain remote write.
+        """
+        if confirmed is not True or not isinstance(note,str) or len(note)>1000:
+            raise ValueError('Подтвердите отправку расхода в Spoolman.')
+        if not isinstance(request_id,str) or not 1<=len(request_id)<=128:
+            raise ValueError('Неверный ID отправки.')
+        with self._mutex:
+            rows=self.owner.call('delivery_list')
+            row=next((r for r in rows if r['operation_id']==operation_id),None)
+            if not row:raise ValueError('Операция не найдена.')
+            if row['url'] not in self.allowed_urls:raise ValueError('Сервер не разрешён для этого сеанса.')
+            if row['state'] in ('sent','resolved','uncertain','sending'):
+                return dict(status=row['state'])
+            values=self.owner.call('settings')['values']
+            if values.get('spoolman_mode','off')!='send':return dict(status='disabled')
+            if any(r['state'] in ('sending','uncertain') for r in rows):return dict(status='blocked')
+            if row['state']=='held' or row['revision']!=expected_revision:
+                # Repeated approval uses its durable receipt, including after a
+                # preflight read failure. A different request cannot steal it.
+                row=self.owner.call('delivery_decide',operation_id=operation_id,
+                    expected_revision=expected_revision,decision='approve',
+                    note=note.strip() or 'User confirmed usage and immediate Spoolman delivery',
+                    request_id=request_id,confirmed=True)
+            status=self.send_one(operation_id,row['revision'])
+            if status=='idle':
+                status=next(r['state'] for r in self.owner.call('delivery_list') if r['operation_id']==operation_id)
+            return dict(status=status)
 
     def review(self, operation_id, expected_revision):
         row=next((r for r in self.owner.call('delivery_list') if r['operation_id']==operation_id),None)

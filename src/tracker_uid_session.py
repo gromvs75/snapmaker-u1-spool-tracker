@@ -56,6 +56,14 @@ class Session:
         with self.fleet.lock:self.fleet.fleet=fleet
         try:
             fleet.start();self.connected=True
+            values=self.owner.call('settings')['values']
+            if values.get('spoolman_url') and values.get('spoolman_mode','off')!='off':
+                from tracker_rfid import RfidWorker
+                urls=[values['spoolman_url']] if values.get('spoolman_url') else []
+                if self.allowed_urls is not None:
+                    urls=[u for u in urls if u in self.allowed_urls]
+                worker=RfidWorker(self.owner,urls,interactive=True)
+                self.workers.append(worker);worker.start()
             if self.worker_factory:
                 for p in printers:
                     worker=self.worker_factory(self.owner,p,self.directory)
@@ -111,7 +119,7 @@ class Session:
                     raise ValueError('Настройки изменились. Проверьте список принтеров заново.')
                 if operation=='connect_printers':return self._connect()
                 self._stop();return {'connected':False}
-            if operation=='save_settings' and 'guard_modes' in kwargs.get('values',{}) and self.connected:
+            if operation=='save_settings' and {'guard_modes','rfid','spoolman_url','spoolman_mode'} & set(kwargs.get('values',{})) and self.connected:
                 raise ValueError('Сначала остановите подключения для изменения режима проверки старта.')
             if operation=='save_settings' and 'printers' in kwargs.get('values',{}):
                 if self.connected:raise ValueError('Сначала остановите подключения.')

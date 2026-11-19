@@ -33,6 +33,7 @@ def snapshot(library, history_review, fleet):
         value['assignments']=[dict(printer_id=r['printer_id'],printer_name=settings.get('printer_names',{}).get(r['printer_id'],next((p['name'] for p in printers if p['id']==r['printer_id']),r['printer_id'])),channel=r['channel'],state=r['state'])
                               for r in locations if (r.get('spool') or {}).get('spool_id')==s['spool_id']]
         if s['remote']:value['spoolman']=dict(url=s['remote']['url'],id=s['remote']['remote_id'])
+        value['pending_deliveries']=db.execute("SELECT COUNT(*) FROM uid_remote_outbox WHERE spool_id=? AND state NOT IN ('sent','resolved')",(s['spool_id'],)).fetchone()[0]
         spools[s['spool_id']]=value
     plans={};runs={};details={}
     for row in db.execute('SELECT * FROM uid_jobs WHERE printer_id=? ORDER BY started_at',(pid,)).fetchall():

@@ -2,6 +2,8 @@
 
 ## Tracker 2.1.0rc2 — next native candidate
 
+- [Новый дашборд после rc2: возможности и стендовая проверка](development/dashboard-bench-2026-11-19-ru.md)
+
 - [RFID-модуль: отдельный архив, установка на стенде, OFF и откат](guides/rfid-module-0.8-rc2-ru.md)
 - [Сравнение u1control и Tracker по исходникам](development/u1control-comparison-2026-11-19-ru.md)
 

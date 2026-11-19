@@ -23,6 +23,8 @@ class Guard:
         extruder=status.get('toolhead',{}).get('extruder')
         heads={'extruder':0,'extruder1':1,'extruder2':2,'extruder3':3}
         self.live[pid]=dict(connected=True,error='',state=stats.get('state','unknown'),filename=stats.get('filename',''),checked_at=time.time(),active_head=heads.get(extruder))
+        from tracker_dashboard import telemetry
+        self.live[pid].update(telemetry(status))
         return self.live[pid]
 
     def snapshot(self,pid):

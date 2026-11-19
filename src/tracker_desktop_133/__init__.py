@@ -68,6 +68,7 @@ def integration_html(token,version):
     bootstrap=bootstrap.replace('__TOKEN__',json.dumps(token)).replace('__VERSION__',json.dumps(version))
     html=html.replace('<script>','<script>'+bootstrap+'</script><script>',1)
     extension='\n'.join(Path(__file__).with_name(name+'.js').read_text(encoding='utf-8') for name in ('inventory','printers','connections','tags','delivery','forecast','history','maintenance','operations','monitor','overview','graphite','graphite_spools','graphite_layout','graphite_dialogs','assignments','uid_status'))
-    style=Path(__file__).with_name('graphite.css').read_text(encoding='utf-8')
+    extension+='\n'+Path(__file__).with_name('dashboard.js').read_text(encoding='utf-8')
+    style=Path(__file__).with_name('graphite.css').read_text(encoding='utf-8')+'\n'+Path(__file__).with_name('dashboard.css').read_text(encoding='utf-8')
     html=html.replace('</body>','<script>'+extension+'</script><style>'+style+'</style></body>')
     return html.replace('· 1.3.3','· '+version)

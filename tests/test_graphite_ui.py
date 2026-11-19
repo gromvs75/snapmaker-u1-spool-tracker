@@ -42,11 +42,11 @@ def test_graphite_full_shell_colors_order_languages_and_responsive_forms(tmp_pat
             page.wait_for_function('desktopFormData?.spools && Object.keys(desktopFormData.spools).length===4')
             assert page.locator('body.graphite').count()==1
             assert page.evaluate('document.querySelector(".sidebar").getBoundingClientRect().bottom<=document.querySelector("#slice-forecast").getBoundingClientRect().top')
-            assert page.locator('.graphite-head-art').count()==4
+            assert page.locator('.dash-spool-art svg').count()==4
             for language in ['ru','en','de','uk','es']:
                 page.locator('#lang-picker').select_option(language)
                 page.wait_for_function('(l)=>currentLang===l',arg=language)
-                assert page.locator('.graphite-head-art').count()==4
+                assert page.locator('.dash-spool-art svg').count()==4
                 assert page.locator('[data-settings-section=backup]').inner_text().strip()==dict(ru='Резервная копия',en='Backup',de='Sicherung',uk='Резервна копія',es='Copia de seguridad')[language]
             page.locator('#lang-picker').select_option('ru')
             page.screenshot(path=str(out/'overview.png'),full_page=True)

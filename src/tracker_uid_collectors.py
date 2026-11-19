@@ -46,7 +46,7 @@ class ReadOnlyMoonraker:
     def status(self):
         return self.read('/printer/objects/query?print_stats&print_task_config&filament_feed%20left&filament_feed%20right&toolhead')['status']
     def monitor_status(self):
-        return self.read('/printer/objects/query?print_stats&toolhead')['status']
+        return self.read('/printer/objects/query?print_stats&toolhead&display_status&virtual_sdcard')['status']
     def inspect(self,filename):
         if not isinstance(filename,str) or not filename or filename.startswith('/') or '..' in filename.split('/'):
             raise ValueError('Invalid G-code filename')

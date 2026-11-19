@@ -22,7 +22,7 @@ def printer(state, filename):
             if value['offline']:
                 self.send_error(503); return
             if self.path.startswith('/printer/objects/query?'):
-                result = dict(status=dict(print_stats=dict(state=value['state'], filename=value['filename']), toolhead=dict(extruder='extruder3')))
+                result = dict(status=dict(print_stats=dict(state=value['state'], filename=value['filename'], **value.get('stats',{})), toolhead=dict(extruder=value.get('extruder','extruder3')), **value.get('extra',{})))
             elif self.path == '/printer/objects/list':
                 result = dict(objects=['print_stats', 'toolhead'])
             else:
@@ -73,7 +73,7 @@ def test_two_printers_status_survives_missing_uid_motion_and_history(tmp_path):
             s.call('connect_printers', confirmed=True); wait(lambda: monitor()['state'] == 'printing')
             # Repeat current status/history errors cannot create local/remote debits.
             assert not s.call('inspect')['debits'] and not s.call('delivery_list')
-            assert a['requests'].count('/printer/objects/query?print_stats&toolhead') >= 3
+            assert a['requests'].count('/printer/objects/query?print_stats&toolhead&display_status&virtual_sdcard') >= 3
         finally: s.close()
         s = Session(tmp_path, allowed_urls=[])
         try: assert s.call('desktop_snapshot')['monitor']['state'] == 'disabled'

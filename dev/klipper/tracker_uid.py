@@ -549,9 +549,18 @@ def decode_openprinttag(uid,b):
     if not isinstance(main,dict):raise ValueError('Invalid OpenPrintTag main')
     colors=[main[k] for k in (19,20,21,22,23,24) if k in main]
     if any(not isinstance(c,bytes) or len(c) not in (3,4) for c in colors):raise ValueError('Invalid OpenPrintTag color')
-    return chip_metadata('openprinttag',uid,main.get(11) or 'Unknown',main.get(52) or main.get(10),
+    result = chip_metadata('openprinttag',uid,main.get(11) or 'Unknown',main.get(52) or main.get(10),
         [c[:3].hex().upper() for c in colors[:5]],alpha=colors[0][3] if colors and len(colors[0])==4 else 255,
         name=main.get(10),diameter=main.get(30),weight=main.get(16),low=main.get(34),high=main.get(35),bed=main.get(38))
+    # Main key 0 is the package INSTANCE, unlike key 1 (product/package UUID).
+    # Absent UUIDs derived from chip UIDs cannot identify two different chips.
+    if 0 in main:
+        instance = main[0]
+        if (not isinstance(instance, bytes) or len(instance) != 16
+                or instance in (bytes(16), b'\xff'*16)):
+            raise ValueError('Invalid OpenPrintTag instance UUID')
+        result['instance_uuid'] = instance.hex().upper()
+    return result
 
 
 def decode_pages(uid,data,enabled):
@@ -880,7 +889,7 @@ class TrackerUid:
             if observed is not None and now-observed>self.stale_after:
                 channel['state']='stale';channel['uid']=None;channel.pop('tag',None)
             channel['uid_length'] = len(channel['uid'])//2 if channel['uid'] else 0
-        status.update(schema_version=1, module_version='0.6.0-auto-lookup-bench',state=self.state,
+        status.update(schema_version=1, module_version='0.8.0-roll-identity-bench',state=self.state,
                       reason=self.reason,driver_version=self.driver_version)
         return status
 

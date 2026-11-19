@@ -81,6 +81,8 @@ class UidCatalog:
                 spool_id TEXT NOT NULL UNIQUE REFERENCES uid_spools(spool_id), product TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS uid_rfid_aliases (uid TEXT PRIMARY KEY,
                 spool_id TEXT NOT NULL REFERENCES uid_spools(spool_id));
+            CREATE TABLE IF NOT EXISTS uid_rfid_roll_keys (identity TEXT PRIMARY KEY,
+                spool_id TEXT NOT NULL UNIQUE REFERENCES uid_spools(spool_id));
         """)
         # Promote local untagged spools from earlier archive-only migrations.
         if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='legacy_spools'").fetchone():
@@ -125,6 +127,19 @@ class UidCatalog:
         with self.db:
             return self._reconcile(fleet)
 
+    def rfid_roll(self, tag):
+        from tracker_rfid_metadata import roll_key
+        shared = self.db.execute('SELECT r.* FROM uid_rfid_rolls r JOIN uid_rfid_roll_keys k '
+                                 'ON k.spool_id=r.spool_id WHERE k.identity=?', (roll_key(tag),)).fetchone()
+        return shared or self.db.execute('SELECT * FROM uid_rfid_rolls WHERE identity=?', (tag['identity'],)).fetchone()
+
+    def rfid_key_conflict(self, tag, sid):
+        from tracker_rfid_metadata import roll_key
+        key = roll_key(tag)
+        if not key: return False
+        return any(r['identity'] != key or r['spool_id'] != sid for r in self.db.execute(
+            'SELECT * FROM uid_rfid_roll_keys WHERE identity=? OR spool_id=?', (key, sid)))
+
     def _reconcile(self, fleet):
         """Only fresh present/absent evidence replaces an old location claim.
 
@@ -149,8 +164,9 @@ class UidCatalog:
             if spool: return 'spool:' + spool['spool_id']
             tag = fleet.get(row['printer_id'], {}).get('channels', {}).get(row['channel'], {}).get('tag')
             if tag and row['confirmed']:
-                roll = self.db.execute('SELECT spool_id FROM uid_rfid_rolls WHERE identity=?', (tag['identity'],)).fetchone()
-                return 'spool:' + roll[0] if roll else tag['identity']
+                from tracker_rfid_metadata import roll_key
+                roll = self.rfid_roll(tag)
+                return 'spool:' + roll['spool_id'] if roll else (roll_key(tag) or tag['identity'])
             return 'uid:' + row['uid']
         counts = Counter(identity(r) for r in rows)
         for row in rows:
@@ -161,7 +177,8 @@ class UidCatalog:
                 tag = fleet.get(row['printer_id'], {}).get('channels', {}).get(row['channel'], {}).get('tag')
                 if roll and tag:
                     from tracker_rfid_metadata import product
-                    mismatch = product(tag) != json.loads(roll['product'])
+                    mismatch = (product(tag) != json.loads(roll['product'])
+                                or self.rfid_key_conflict(tag, spool['spool_id']))
             row['state'] = ('conflict' if counts[identity(row)] > 1 or mismatch else
                             'uncertain' if not row['confirmed'] else
                             'archived' if spool and self.archived(spool['spool_id']) else

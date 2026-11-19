@@ -15,6 +15,7 @@ ROOT=Path(__file__).resolve().parents[3]
 sys.path[:0]=[str(ROOT),str(ROOT/'src'),str(ROOT/'tests')]
 from test_rfid_enrollment import decoded
 from test_rfid_bambu import Server
+from test_rfid_roll_identity import tag as shared_instance_tag
 from dev.labs.uid_candidate_bench.run import wait,native_windows
 from dev.labs.uid_live_bench.enrollment_ui import BrowserEnrollment
 from playwright.sync_api import sync_playwright,expect
@@ -85,6 +86,24 @@ def main():
             assert len(sm.rows['spool'])==2
             assert sm.rows['filament'][1]['material']=='PLA' and 'Bambu Lab' in sm.rows['filament'][1]['name']
             checks.append('TigerTag offline manufacturer/material dictionary works inside EXE')
+            select(shared_instance_tag());ui.apply('openprinttag',shared_instance_tag()['uid'],remaining=840.123)
+            wait(lambda:len(sm.rows['spool'])==3)
+            common_sid=next(s['spool_id'] for s in state()['spools'] if s['uid']==shared_instance_tag()['uid'])
+            sm.rows['spool'][2]['remaining_weight']=820.123
+            select(shared_instance_tag('04052233445502'))
+            wait(lambda:any((r.get('spool') or {}).get('spool_id')==common_sid for r in state()['occupied']))
+            wait(lambda:next(s for s in state()['spools'] if s['spool_id']==common_sid)['remaining_mg']==820123)
+            assert len(sm.rows['spool'])==3
+            checks.append('OpenPrintTag explicit instance UUID automatically links second UID without another dialog or spool')
+            from tracker_uid import decode_json_tag
+            catalog_tag=decode_json_tag(bytes.fromhex('04032233445501'),json.dumps(dict(
+                brand='Bambu Lab',material='PLA',color='3F5443',diameter=1.75,weight=1000)).encode())
+            select(catalog_tag)
+            page.locator('#desktop-tags-refresh').click()
+            expect(page.locator('#desktop-rfid-help')).to_contain_text('Alpine Green Sparkle')
+            expect(page.locator('#desktop-rfid-density')).to_have_value('1.26')
+            expect(page.locator('#desktop-tag-mass')).to_have_value('')
+            checks.append('bundled offline SpoolmanDB suggests exact product/density in native EXE; remaining stays blank')
             api('connections_stop',dict(confirmed=True))
         stop();checks.append('native window and actual tray Open/Exit verified')
         launch();api('connections_start',dict(confirmed=True))
@@ -92,7 +111,10 @@ def main():
             select(decoded('creality',side))
             wait(lambda:any((r.get('spool') or {}).get('spool_id')==sid for r in state()['occupied']))
             assert next(s for s in state()['spools'] if s['spool_id']==sid)['remaining_mg']==623500
-        assert len(sm.rows['spool'])==2 and not sm.puts
+        assert len(sm.rows['spool'])==3 and not sm.puts
+        select(shared_instance_tag('04052233445501'))
+        wait(lambda:any((r.get('spool') or {}).get('spool_id')==common_sid for r in state()['occupied']))
+        assert next(s for s in state()['spools'] if s['spool_id']==common_sid)['remaining_mg']==820123
         checks.append('restart and both tag returns retain spool ID and balance; no tag writes')
         api('connections_stop',dict(confirmed=True));stop()
         # Tester regression in the same ordinary EXE and actual embedded WebView2.

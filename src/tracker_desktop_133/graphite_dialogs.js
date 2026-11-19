@@ -32,7 +32,7 @@
   const close=d.firstElementChild,title=d.querySelector('h2'),sub=title.nextElementSibling,apply=el('desktop-unlock-apply'),mode=el('desktop-unlock-mode');
   const nodes=[...d.children].filter(n=>![close,title,sub,apply].includes(n));
   const f=frame(d,title,nodes,[cancel(d),apply],sub,close);apply.classList.add('gd-primary');
-  const modeField=field(mode,'Срок разрешения','Permission duration','Dauer der Freigabe','Строк дозволу','Duración del permiso');f.body.insertBefore(modeField,f.body.querySelector('label'));
+  const modeField=field(mode,'Время для подтверждения катушек','Time to confirm spool assignments','Dauer der Freigabe','Строк дозволу','Duración del permiso');f.body.insertBefore(modeField,f.body.querySelector('label'));
   f.body.querySelector('p')?.classList.add('gd-notice');
  };
  window.graphiteDeliveryDialog=(d,row)=>{

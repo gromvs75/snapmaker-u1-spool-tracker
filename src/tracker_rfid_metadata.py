@@ -49,6 +49,15 @@ def product(tag):
     return {k: tag[k] for k in keys}
 
 
+def roll_key(tag):
+    """Only documented physical-instance IDs qualify, never product/batch IDs."""
+    if tag.get('format') == 'bambu':
+        return tag['identity']
+    if tag.get('format') == 'openprinttag' and tag.get('instance_uuid'):
+        return 'openprinttag:instance:' + tag['instance_uuid']
+    return None
+
+
 def validate_chip_tag(v, uid):
     kind = v['format']
     size = 8 if kind == 'qidi' else 14
@@ -105,8 +114,16 @@ def validate_config(value):
     approvals=value.get('approvals',{})
     if not isinstance(approvals,dict) or len(approvals)>10000:raise ValueError('Invalid RFID approvals')
     for identity,approval in approvals.items():
-        if not isinstance(identity,str) or len(identity)>64 or not isinstance(approval,dict) or set(approval)!={'product','remaining_g','density','diameter','nominal'}:
+        if not isinstance(identity,str) or len(identity)>64 or not isinstance(approval,dict) or set(approval)-{'product','remaining_g','density','diameter','nominal','catalog'} or not {'product','remaining_g','density','diameter','nominal'}<=set(approval):
             raise ValueError('Invalid RFID approval')
+        if 'catalog' in approval:
+            c=approval['catalog']
+            if (not isinstance(c,dict) or set(c)!={'source','revision','product_id','confirmed_fields','match'}
+                    or c['source']!='SpoolmanDB' or c['match']!='suggested-by-properties'
+                    or not isinstance(c['revision'],str) or not re.fullmatch('[a-f0-9]{64}',c['revision'])
+                    or not isinstance(c['product_id'],str) or not 0<len(c['product_id'])<=300
+                    or not isinstance(c['confirmed_fields'],list) or any(v not in ('density','diameter','nominal') for v in c['confirmed_fields'])):
+                raise ValueError('Invalid RFID catalog provenance')
         if not isinstance(approval['product'],dict):raise ValueError('Invalid approved RFID product')
         for key,low,high in (('remaining_g',0,100000),('density',.1,5),('diameter',.5,4),('nominal',1,10000)):
             n=approval[key]
@@ -151,6 +168,12 @@ def validate_extra_tag(v, uid):
         raise ValueError('Invalid RFID chip identity')
     keys={'schema','format','uid','identity','manufacturer','material','name','material_id','variant_id',
           'color','colors','alpha','diameter_mm','nominal_weight_g','nozzle_min_c','nozzle_max_c','bed_c'}
+    if kind == 'openprinttag' and 'instance_uuid' in v:
+        instance = v['instance_uuid']
+        if (not isinstance(instance, str) or not re.fullmatch('[0-9A-F]{32}', instance)
+                or int(instance, 16) in (0, 2**128-1)):
+            raise ValueError('Invalid OpenPrintTag instance UUID')
+        keys.add('instance_uuid')
     if kind=='tigertag':
         keys|={'twin_id','tag_index','tag_count'}
         for key,maximum in (('twin_id',2**32-1),('tag_index',15),('tag_count',15)):

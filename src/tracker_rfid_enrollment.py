@@ -45,12 +45,21 @@ class Enrollment:
             tag=ticket['tag'];config=ticket['config'];names=resolve_names(tag,config)
             known=bool(names['material'] and tag['color'] and names['manufacturer'] not in ('Unknown','TigerTag','QIDI-compatible'))
             density=next((config.get('densities',{}).get(k) for k in (tag['material_id'],tag['name']) if k in config.get('densities',{})),None)
+            from tracker_spoolmandb import suggest
+            lookup=suggest(tag,names)
+            suggestion=lookup['candidates'][0] if lookup['status']=='suggested' else {}
+            reason='' if known else 'Материал, производитель или цвет ещё не определён.'
+            if known and suggestion:
+                reason='SpoolmanDB: '+suggestion['manufacturer']+' / '+suggestion['name']+'. Проверьте предложенные параметры. Укажите фактический остаток; каталог не определяет его.'
+            elif known and lookup['status']=='ambiguous':
+                reason='SpoolmanDB: найдено несколько изделий ('+str(lookup['count'])+'). Автоматический выбор не выполнен; укажите проверенные параметры катушки и её фактический остаток.'
             return dict(available=True,review_id=key,uid=uid,format=tag['format'],manufacturer=names['manufacturer'],
                         material=names['material'],colors=tag['colors'],name=tag['name'],url=ticket['url'],
                         can_create=ticket['can_create'] and known,candidates=candidates,
-                        reason='' if known else 'Материал, производитель или цвет ещё не определён.',
-                        defaults=dict(remaining_g=None,density=density,diameter=tag['diameter_mm'] or config.get('diameters',{}).get(tag['material_id']),
-                                      nominal=tag['nominal_weight_g'] or config.get('nominal_weights',{}).get(tag['material_id'])),
+                        reason=reason,product_lookup=lookup,
+                        defaults=dict(remaining_g=None,density=density or suggestion.get('density'),
+                                      diameter=tag['diameter_mm'] or config.get('diameters',{}).get(tag['material_id']) or suggestion.get('diameter'),
+                                      nominal=tag['nominal_weight_g'] or config.get('nominal_weights',{}).get(tag['material_id']) or suggestion.get('weight')),
                         fixed=dict(diameter=tag['diameter_mm'] is not None,nominal=tag['nominal_weight_g'] is not None))
 
     def confirm(self, review_id, action, *, confirmed=False, values=None, spool_id=None):

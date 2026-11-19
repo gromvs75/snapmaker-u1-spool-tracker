@@ -1,7 +1,7 @@
 name: Tracker 2.1 RFID native Windows candidate
 on:
   push:
-    branches: ['test/2.1.0rc1-delivery']
+    branches: ['test/2.1.0rc2-delivery']
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,21 +26,26 @@ jobs:
       - name: Actual EXE RFID and history delivery in native WebView2
         run: python dev/labs/uid_candidate_bench/rfid.py --exe output/native-dist/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe --output output/rfid-2.1-windows/rfid-native
       - name: Accounting and restored manual-profile regression
-        run: python -m pytest tests/test_uid_port_shell.py tests/test_desktop_connections_ui.py tests/test_desktop_services.py tests/test_windows_tester_accounting.py tests/test_manual_without_uid.py tests/test_uid_accounting.py tests/test_uid_manual.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py tests/test_uid_collectors.py tests/test_uid_recovery.py tests/test_uid_calculated_history.py tests/test_legacy_backup_restore.py tests/test_uid_history_review.py tests/test_user_launch.py tests/test_rfid_bambu.py tests/test_rfid_multibrand.py tests/test_rfid_all_formats.py tests/test_rfid_automatic_lookup.py tests/test_rfid_enrollment.py tests/test_rfid_enrollment_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_delivery_confirm_send.py tests/test_uid_delivery.py -x --timeout=60 --junitxml=output/rfid-2.1-windows/tests.xml -v --durations=10
+        run: python -m pytest tests/test_uid_port_shell.py tests/test_desktop_connections_ui.py tests/test_desktop_services.py tests/test_windows_tester_accounting.py tests/test_manual_without_uid.py tests/test_uid_accounting.py tests/test_uid_manual.py tests/test_uid_motion_adapter.py tests/test_uid_motion_lifecycle.py tests/test_uid_runtime.py tests/test_uid_collectors.py tests/test_uid_recovery.py tests/test_uid_calculated_history.py tests/test_legacy_backup_restore.py tests/test_uid_history_review.py tests/test_user_launch.py tests/test_rfid_roll_identity.py tests/test_spoolmandb_rfid.py tests/test_desktop_operations.py tests/test_uid_unlock_window.py tests/test_rfid_bambu.py tests/test_rfid_multibrand.py tests/test_rfid_all_formats.py tests/test_rfid_automatic_lookup.py tests/test_rfid_enrollment.py tests/test_rfid_enrollment_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_delivery_confirm_send.py tests/test_uid_delivery.py -x --timeout=60 --junitxml=output/rfid-2.1-windows/tests.xml -v --durations=10
       - name: Package tested EXE and matching source metadata
         shell: pwsh
         run: |
           $folder = 'output/native-dist/Snapmaker-Tracker-2.1-Candidate'
-          Copy-Item docs/guides/rfid-ui-2.1-candidate-ru.md "$folder/START-HERE-RU.md"
+          Copy-Item docs/guides/start-2.1.0rc2-ru.md "$folder/START-HERE-RU.md"
+          New-Item -ItemType Directory -Force "$folder/docs/guides", "$folder/docs/development", "$folder/docs/releases" | Out-Null
+          Copy-Item docs/guides/rfid-common-roll-id-ru.md "$folder/docs/guides/"
+          Copy-Item docs/development/rfid-roll-identity-2026-11-19.md "$folder/docs/development/"
+          Copy-Item docs/releases/2.1.0rc2-ru.md "$folder/docs/releases/"
+          Copy-Item docs/releases/tester-reply-2.1.0rc2-ru.md "$folder/docs/releases/"
           New-Item -ItemType Directory -Force output/delivery | Out-Null
           Copy-Item output/rfid-2.1-windows/rfid-native/results.json "$folder/WINDOWS-GUI-VERIFIED.json"
-          Compress-Archive -Path $folder -DestinationPath output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip
+          Compress-Archive -Path $folder -DestinationPath output/delivery/Snapmaker-Tracker-2.1.0rc2-Windows-x64.zip
           Copy-Item output/rfid-2.1-windows/rfid-native/results.json output/delivery/WINDOWS-RFID-VERIFIED.json
           Copy-Item output/rfid-2.1-windows/packaged/results.json output/delivery/WINDOWS-ACCOUNTING-VERIFIED.json
           $exeHash = (Get-FileHash "$folder/Snapmaker-Tracker-2.1-Candidate.exe" -Algorithm SHA256).Hash.ToLower()
           "$exeHash  Snapmaker-Tracker-2.1-Candidate.exe" | Set-Content output/delivery/EXE.sha256
-          $hash = (Get-FileHash output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip" | Set-Content output/delivery/Snapmaker-Tracker-2.1.0rc1-Windows-x64.zip.sha256
+          $hash = (Get-FileHash output/delivery/Snapmaker-Tracker-2.1.0rc2-Windows-x64.zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  Snapmaker-Tracker-2.1.0rc2-Windows-x64.zip" | Set-Content output/delivery/Snapmaker-Tracker-2.1.0rc2-Windows-x64.zip.sha256
           Copy-Item "$folder/_internal/tracker_build.json" output/delivery/BUILD-INFO-Windows.json
       - uses: actions/upload-artifact@v4
         if: always()

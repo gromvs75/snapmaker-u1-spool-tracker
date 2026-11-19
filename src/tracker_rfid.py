@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 
-from tracker_rfid_metadata import product, validate_tag
+from tracker_rfid_metadata import product, validate_tag, roll_key
 from tracker_rfid_lookup import resolve_names
 from tracker_uid_accounting import AccountingConflict, mg
 from tracker_uid_library import revision
@@ -87,7 +87,7 @@ class RfidRegistry:
             row = next((r for r in locations if (r['printer_id'], r['channel']) == (printer_id, channel)), None)
             if not row or row['state'] not in ('recognized', 'needs_registration'):
                 raise AccountingConflict('Conflicting spool location')
-            roll = self.db.execute('SELECT * FROM uid_rfid_rolls WHERE identity=?', (tag['identity'],)).fetchone()
+            roll = self.catalog.rfid_roll(tag)
             if not roll and tag['format'] != 'bambu' and row.get('spool'):
                 roll = self.db.execute('SELECT * FROM uid_rfid_rolls WHERE spool_id=?', (row['spool']['spool_id'],)).fetchone()
             sid = roll['spool_id'] if roll else None
@@ -95,6 +95,12 @@ class RfidRegistry:
                 raise AccountingConflict('Roll metadata changed')
             if row.get('spool') and row['spool']['spool_id'] != sid:
                 raise AccountingConflict('UID already belongs to another registration')
+            if sid and self.catalog.rfid_key_conflict(tag, sid):
+                raise AccountingConflict('Physical roll ID changed')
+            if sid and tag['identity'] != roll['identity'] and not self.catalog.spool(tag['uid']) and self.db.execute(
+                    'SELECT 1 FROM uid_rfid_creations WHERE url=? AND marker=?',
+                    (url, 'Tracker RFID '+tag['identity'])).fetchone():
+                raise AccountingConflict('Creation was attempted for this tag; reconcile it before pairing')
             self.tags._guard(printer_id, sid)
             if self.db.execute('SELECT 1 FROM manual_assignments WHERE printer_id=? AND channel=?', (printer_id, channel)).fetchone():
                 raise AccountingConflict('Remove the manual head assignment first')
@@ -103,7 +109,7 @@ class RfidRegistry:
                 raise AccountingConflict('Spool link changed or spool archived')
             pending = bool(sid and self.db.execute("SELECT 1 FROM uid_remote_outbox WHERE spool_id=? AND state NOT IN ('sent','resolved')", (sid,)).fetchone())
             return dict(printer_id=printer_id, channel=channel, tag=tag, url=url,
-                        identity=roll['identity'] if roll else tag['identity'],
+                        identity=roll['identity'] if roll else (roll_key(tag) or tag['identity']),
                         config=config, approved=bool(approval), review=review, settings_revision=settings['revision'],
                         token=self.catalog.connection_token(snapshot), sequence=observed.get('sequence'),
                         sid=sid, link=dict(link) if link else None, pending=pending,
@@ -134,6 +140,7 @@ class RfidRegistry:
         for roll in self.db.execute('SELECT * FROM uid_rfid_rolls ORDER BY spool_id').fetchall():
             sid=roll['spool_id']
             if json.loads(roll['product'])!=product(ticket['tag']) or sid in occupied or self.catalog.archived(sid):continue
+            if self.catalog.rfid_key_conflict(ticket['tag'], sid):continue
             link=self.db.execute('SELECT * FROM uid_remote_links WHERE spool_id=?',(sid,)).fetchone()
             if not link or link['url']!=ticket['url']:continue
             if self.db.execute('SELECT 1 FROM manual_assignments WHERE spool_id=?',(sid,)).fetchone():continue
@@ -158,7 +165,19 @@ class RfidRegistry:
         config['enabled']=True
         approval=dict(values,product=product(tag))
         old=config.get('approvals',{}).get(tag['identity'])
-        if old and old!=approval:raise AccountingConflict('Решение уже отправлено. Сначала проверьте результат в Spoolman.')
+        if old and {k:v for k,v in old.items() if k!='catalog'}!=approval:raise AccountingConflict('Решение уже отправлено. Сначала проверьте результат в Spoolman.')
+        if old:
+            approval=old
+        else:
+            from tracker_spoolmandb import suggest
+            lookup=suggest(tag,names)
+            if lookup['status']=='suggested':
+                candidate=lookup['candidates'][0]
+                fields=[field for field,key in (('density','density'),('diameter','diameter'),('nominal','weight'))
+                        if values[field]==candidate[key]]
+                approval['catalog']=dict(source='SpoolmanDB',revision=lookup['revision'],
+                                         product_id=candidate['id'],confirmed_fields=fields,
+                                         match='suggested-by-properties')
         config.setdefault('approvals',{})[tag['identity']]=approval
         self.library.save_settings({'rfid':config},ticket['settings_revision'])
         return self.prepare(ticket['printer_id'],ticket['channel'],fleet=fleet)
@@ -192,11 +211,13 @@ class RfidRegistry:
             raise AccountingConflict('Confirm an unregistered second-side tag')
         with self.accounting.transaction():
             if self.db.execute('SELECT 1 FROM uid_rfid_creations WHERE url=? AND marker=?',
-                               (ticket['url'], 'Tracker RFID '+tag['identity'])).fetchone():
+                               (ticket['url'], 'Tracker RFID '+ticket['identity'])).fetchone():
                 raise AccountingConflict('Creation was attempted for this tag; reconcile it before pairing')
             roll = self.db.execute('SELECT * FROM uid_rfid_rolls WHERE spool_id=?', (spool_id,)).fetchone()
             if not roll or json.loads(roll['product']) != product(tag):
                 raise AccountingConflict('Second tag properties differ from the selected roll')
+            if self.catalog.rfid_key_conflict(tag, spool_id):
+                raise AccountingConflict('Physical roll ID changed')
             link = self.db.execute('SELECT * FROM uid_remote_links WHERE spool_id=?', (spool_id,)).fetchone()
             if not link or link['url'] != ticket['url'] or self.catalog.archived(spool_id):
                 raise AccountingConflict('Selected spool is unavailable')
@@ -243,6 +264,9 @@ class RfidRegistry:
                                manufacturer=names['manufacturer'], lookup_sources=names['lookup_sources'],
                                diameter=tag['diameter_mm'] or raw['filament'].get('diameter'),
                                rfid=tag, initial_weight_source='Spoolman; nominal is not measured remaining')
+                approved=ticket['config'].get('approvals',{}).get(tag['identity'],{})
+                if approved.get('catalog'):
+                    details['catalog_match']=copy.deepcopy(approved['catalog'])
                 from spool_identity import calibration
                 # Density comes from the configured/catalogued Spoolman material,
                 # never from the RFID tag or a guessed generic material family.
@@ -253,6 +277,11 @@ class RfidRegistry:
             if other and other['spool_id'] != sid:
                 raise AccountingConflict('Chip already belongs to another spool')
             self.db.execute('INSERT OR IGNORE INTO uid_rfid_aliases VALUES(?,?)', (tag['uid'], sid))
+            key = roll_key(tag)
+            if key:
+                if self.catalog.rfid_key_conflict(tag, sid):
+                    raise AccountingConflict('Physical roll ID changed')
+                self.db.execute('INSERT OR IGNORE INTO uid_rfid_roll_keys VALUES(?,?)', (key, sid))
             if item and not ticket['pending']:
                 self.db.execute('UPDATE uid_spools SET remaining_mg=? WHERE spool_id=?', (mg(item['remaining_g']), sid))
             spool = dict(self.db.execute('SELECT * FROM uid_spools WHERE spool_id=?', (sid,)).fetchone())

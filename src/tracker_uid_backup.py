@@ -12,7 +12,7 @@ MAX_BACKUP = 32 * 1024 * 1024
 RECOVERY_ADDITIONS = {'manual_placement_times', 'uid_printer_history', 'uid_recovery_profiles', 'uid_recovery_receipts',
                      'uid_replacement_state', 'uid_replacement_events',
                      'uid_recovery_decisions', 'uid_history_decisions', 'uid_export_plans', 'uid_inventory_edits', 'uid_start_checks',
-                     'uid_rfid_rolls', 'uid_rfid_aliases', 'uid_rfid_creations'}
+                     'uid_rfid_rolls', 'uid_rfid_aliases', 'uid_rfid_creations', 'uid_rfid_roll_keys'}
 
 
 def migrate_copy(db, live):

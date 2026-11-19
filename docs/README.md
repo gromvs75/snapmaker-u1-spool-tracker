@@ -1,5 +1,12 @@
 # Documentation
 
+## Tracker 2.1.0rc2 — next native candidate
+
+- [Запуск Mac/Windows](guides/start-2.1.0rc2-ru.md)
+- [Изменения](releases/2.1.0rc2-ru.md)
+- [Ответ тестировщику](releases/tester-reply-2.1.0rc2-ru.md)
+- [Общий ID катушки и две метки](guides/rfid-common-roll-id-ru.md)
+
 ## Current: 1.3.2
 
 - [Spoolman integration (RU)](guides/spoolman-ru.md) · [English](guides/spoolman-en.md)

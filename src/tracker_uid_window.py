@@ -1,4 +1,5 @@
 """Native shell for the isolated UID application; never exposes native objects to JS."""
+import os
 import sys
 import threading
 import time
@@ -12,6 +13,13 @@ class UidWindow:
         # WKWebView otherwise navigates to blob: instead of showing Save As.
         if hasattr(webview_module, 'settings'):
             webview_module.settings['ALLOW_DOWNLOADS'] = True
+            # Explicit opt-in for the disposable native GUI bench. Never enable
+            # a debugging port for the normal installed profile.
+            port = os.environ.get('TRACKER_BENCH_WEBVIEW_PORT')
+            if port and os.environ.get('TRACKER20_DATA_DIR'):
+                if not port.isascii() or not port.isdecimal() or not 1024 <= int(port) <= 65535:
+                    raise ValueError('Invalid isolated WebView debugging port')
+                webview_module.settings['REMOTE_DEBUGGING_PORT'] = int(port)
         self._storage_path = str(storage_path)
         self._tray_title = tray_title
         self._forecast = forecast

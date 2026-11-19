@@ -1,6 +1,5 @@
 """Packaged app + actual WebView2 UI + loopback synthetic reader/Spoolman."""
 import argparse
-from contextlib import contextmanager,ExitStack
 import json
 import os
 from pathlib import Path
@@ -26,27 +25,6 @@ def port():
     with socket.socket() as sock:sock.bind(('127.0.0.1',0));return sock.getsockname()[1]
 
 
-@contextmanager
-def webview_debugger(cdp,executable):
-    if sys.platform!='win32':
-        yield
-        return
-    # Microsoft's per-application WebView2 debugging override, only on the
-    # disposable Actions machine. The shipped app has no debugging switch.
-    # https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/debug-visual-studio-code
-    if os.environ.get('GITHUB_ACTIONS')!='true':raise RuntimeError('Native debug bench requires an isolated Actions runner')
-    import winreg
-    path=r'Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER,path) as key:
-        try:previous=winreg.QueryValueEx(key,executable)
-        except FileNotFoundError:previous=None
-        winreg.SetValueEx(key,executable,0,winreg.REG_SZ,f'--remote-debugging-port={cdp}')
-        try:yield
-        finally:
-            if previous is None:winreg.DeleteValue(key,executable)
-            else:winreg.SetValueEx(key,executable,0,previous[1],previous[0])
-
-
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,required=True);parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
     out=args.output.absolute();out.mkdir(parents=True,exist_ok=True)
@@ -60,7 +38,7 @@ def main():
         do_GET=do_POST=do_PUT=call
     remote=ThreadingHTTPServer(('127.0.0.1',0),Handler);remote_thread=threading.Thread(target=remote.serve_forever);remote_thread.start()
     smurl=f'http://127.0.0.1:{remote.server_port}';printer=f'http://127.0.0.1:{port()}';cdp=port();app=None;sim=None;descriptor={}
-    log=(out/'process.log').open('w',encoding='utf-8');debug=ExitStack()
+    log=(out/'process.log').open('w',encoding='utf-8')
     def request(url,body=None,headers=None):
         with urlopen(Request(url,data=None if body is None else json.dumps(body).encode(),headers=headers or {'Content-Type':'application/json'}),timeout=15) as r:return json.load(r)
     def api(path,body=None):return request(f'http://127.0.0.1:{descriptor["port"]}/api/'+path,body,{'Content-Type':'application/json','X-Tracker-Token':descriptor['token']})
@@ -71,7 +49,7 @@ def main():
     def launch():
         nonlocal app,descriptor
         old=descriptor.get('token')
-        app=subprocess.Popen([str(args.exe.absolute())],env=dict(os.environ,TRACKER20_DATA_DIR=str(profile),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=f'--remote-debugging-port={cdp}'),stdout=log,stderr=log)
+        app=subprocess.Popen([str(args.exe.absolute())],env=dict(os.environ,TRACKER20_DATA_DIR=str(profile),TRACKER_BENCH_WEBVIEW_PORT=str(cdp)),stdout=log,stderr=log)
         def ready():
             nonlocal descriptor
             if app.poll() is not None:raise RuntimeError('EXE exited')
@@ -82,7 +60,6 @@ def main():
         if sys.platform=='win32':native_windows(app,out)
         else:app.terminate();app.wait(30)
     try:
-        debug.enter_context(webview_debugger(cdp,args.exe.name))
         sim=subprocess.Popen([sys.executable,str(Path(__file__).with_name('simulator.py')),printer.rsplit(':',1)[1],'--reader'],stdout=log,stderr=log)
         wait(lambda:request(printer+'/ready'));launch()
         api('settings',dict(values=dict(language='ru',printers=[dict(id='a',name='RFID bench',url=printer)],selected_printer='a',spoolman_url=smurl,spoolman_mode='send'),expected_revision=state()['settings']['revision']))
@@ -164,7 +141,7 @@ def main():
             ImageGrab.grab().save(out/'failure-desktop.png')
         if app and app.poll() is None:app.terminate();app.wait(20)
         if sim:sim.terminate();sim.wait(15)
-        remote.shutdown();remote.server_close();remote_thread.join();log.close();debug.close()
+        remote.shutdown();remote.server_close();remote_thread.join();log.close()
         if (profile/'logs/tracker.log').exists():
             import shutil;shutil.copyfile(profile/'logs/tracker.log',out/'tracker.log')
 

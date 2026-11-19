@@ -37,6 +37,17 @@ class Event:
     def __iadd__(self, handler): self.handler=handler; return self
 
 
+@pytest.mark.parametrize('profile,port,expected',[(False,'9222',None),(True,'',None),(True,'9222',9222)])
+def test_native_debugging_requires_explicit_isolated_profile(tmp_path,monkeypatch,profile,port,expected):
+    from types import SimpleNamespace
+    monkeypatch.delenv('TRACKER20_DATA_DIR',raising=False)
+    if profile:monkeypatch.setenv('TRACKER20_DATA_DIR',str(tmp_path))
+    monkeypatch.setenv('TRACKER_BENCH_WEBVIEW_PORT',port)
+    view=SimpleNamespace(settings={'REMOTE_DEBUGGING_PORT':None},create_window=lambda *a,**k:SimpleNamespace(events=SimpleNamespace(shown=Event(),closing=Event())))
+    UidWindow('http://127.0.0.1:12345',tmp_path,webview_module=view)
+    assert view.settings['REMOTE_DEBUGGING_PORT']==expected
+
+
 def test_close_hides_and_quit_destroys_without_js_native_references(tmp_path):
     from types import SimpleNamespace
     from threading import Event as Signal

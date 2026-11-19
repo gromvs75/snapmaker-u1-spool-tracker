@@ -98,6 +98,8 @@ class AccountingOwner:
                         result = history_review.observe_history(*args)
                     elif operation == 'history_detail':
                         result = history_review.detail(*args, **kwargs)
+                    elif operation == 'history_prepare':
+                        result = history_review.prepare_history(*args, **kwargs)
                     elif operation == 'forecast_inventory':
                         result = library.forecast_inventory(fleet=fleet.snapshot())
                     elif operation == 'monitor_status':result=guard.status(*args,**kwargs)

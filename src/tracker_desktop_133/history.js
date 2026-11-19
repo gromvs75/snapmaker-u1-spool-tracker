@@ -64,6 +64,11 @@
    const heading=node('div',undefined,'uid-history-heading');heading.append(node('h2',run.filename),close);
    dialog.replaceChildren(heading,node('p',new Date(run.start_time*1000).toLocaleString(currentLang)),
     node('p',text('Задание сохранено из истории принтера. Tracker не смог привязать расход к катушке. Учтено 0 г.','Saved from printer history. Tracker could not link usage to a spool. Accounted: 0 g.','Aus dem Druckerverlauf gespeichert. Der Verbrauch konnte keiner Spule zugeordnet werden. Erfasst: 0 g.','Збережено з історії принтера. Tracker не зміг прив’язати витрати до котушки. Враховано 0 г.','Guardado del historial de la impresora. Tracker no pudo asociar el consumo a una bobina. Contabilizado: 0 g.')));
+   const prepare=primary(historyButton(text('Указать катушки и расход','Choose spools and usage','Spulen und Verbrauch wählen','Вказати котушки та витрати','Elegir bobinas y consumo'),async()=>{
+    const draft=await api('/api/history_prepare',{history_key:key.replace(/^printer-history:/,'')});
+    await loadData();const d=await detail(draft.job_key);
+    if(d.can_review)edit(d,desktopFormData||data);else await open(draft.job_key,desktopFormData||data);
+   }));prepare.id='uid-history-prepare';actions(prepare);
    window.graphiteHistoryDialog?.(dialog);if(!dialog.open)dialog.showModal();return;
   }
   const d=await detail(key);view(d,data);
@@ -90,14 +95,27 @@
  function edit(d,data){view(d,data);
   if(d.uncertain){dialog.append(node('p',text('Сначала сверьте неопределённую отправку Spoolman. Этот расход уже учтён локально.','Reconcile the uncertain Spoolman delivery first. This usage is already accounted locally.','Zuerst die unklare Spoolman-Übertragung abgleichen. Dieser Verbrauch ist lokal bereits erfasst.','Спочатку звірте невизначену відправку Spoolman. Ці витрати вже враховано локально.','Primero concilie el envío incierto de Spoolman. Este consumo ya está contabilizado localmente.')));window.graphiteHistoryDialog?.(dialog);return}
   dialog.append(node('h3',text('Шаг 1 · Дополнительно списать, г','Step 1 · Additional deduction, g','Zusätzliche Abbuchung, g','Додатково списати, г','Descuento adicional, g')));
-  const inputs=d.candidates.map(s=>{const i=field(s.name,'number',s.suggested_additional_mg===null?'':s.suggested_additional_mg/1000);i.step='0.001';i.min='0';i.max=s.remaining_mg/1000;i.dataset.spool=s.spool_id;i.className='uid-extra-amount';if(s.reserved){i.value='0';i.disabled=true}return [s,i]});
-  dialog.append(node('p',text('Подставлен дополнительный расход из сохранённого плана за вычетом уже учтённого. Отредактируйте при необходимости. При неизвестной привязке или замене катушек заполните расход вручную.','Additional usage is prefilled from the saved plan minus usage already accounted. Edit if needed. Unknown mappings or spool changes require manual amounts.')));
+  const inputs=[];
+  function amount(s){const i=field(s.name,'number',s.suggested_additional_mg===null?'':s.suggested_additional_mg/1000);i.step='0.001';i.min='0';i.max=s.remaining_mg/1000;i.dataset.spool=s.spool_id;i.className='uid-extra-amount';if(s.reserved){i.value='0';i.disabled=true}inputs.push([s,i]);return i}
+  if(d.manual_spool_selection){
+   dialog.append(node('p',text('Исходные катушки неизвестны. Выберите их вручную и укажите только ещё не учтённый расход. Проверьте другие записи этой печати после ошибки и продолжения. Текущие назначения не подставляются.','Original spools are unknown. Choose them and enter only usage not already accounted. Check other records of this print after error/resume. Current assignments are not used.','Ursprüngliche Spulen unbekannt. Spulen wählen und nur noch nicht erfassten Verbrauch eingeben. Andere Einträge nach Fehler/Fortsetzung prüfen.','Початкові котушки невідомі. Виберіть їх і вкажіть лише невраховані витрати. Перевірте інші записи після помилки та продовження.','Bobinas originales desconocidas. Elíjalas e indique solo consumo no contabilizado. Revise otros registros tras error y reanudación.')));
+   const label=node('label',text('Катушка','Spool','Spule','Котушка','Bobina')),select=node('select');select.id='uid-history-spool';select.append(new Option('—',''));
+   for(const s of d.candidates){const remote=data.spools[s.spool_id]?.spoolman;const option=new Option(s.name+' · '+weight(s.remaining_mg)+(remote?' · Spoolman #'+remote.id:''),s.spool_id);option.disabled=s.reserved;select.append(option)}
+   label.append(select);dialog.append(label);
+   const add=historyButton(text('Добавить катушку','Add spool','Spule hinzufügen','Додати котушку','Añadir bobina'),()=>{
+    const s=d.candidates.find(s=>s.spool_id===select.value);if(!s||s.reserved||inputs.some(([v])=>v.spool_id===s.spool_id))return;
+    const i=amount(s);i.parentElement.classList.add('gd-field');note.parentElement.before(i.parentElement);select.selectedOptions[0].disabled=true;select.value='';
+   });add.id='uid-history-add-spool';dialog.append(add);
+  }else{
+   d.candidates.forEach(amount);
+   dialog.append(node('p',text('Подставлен дополнительный расход из сохранённого плана за вычетом уже учтённого. Отредактируйте при необходимости. При неизвестной привязке или замене катушек заполните расход вручную.','Additional usage is prefilled from the saved plan minus usage already accounted. Edit if needed. Unknown mappings or spool changes require manual amounts.')));
+  }
   const note=field(text('Комментарий (необязательно)','Comment (optional)','Kommentar (optional)','Коментар (необов’язково)','Comentario (opcional)'),'text');note.id='uid-review-note';note.maxLength=2000;
   const ack=field(text('Печать завершилась. Катушки и дополнительный расход проверены.','The print has ended. Spools and additional usage have been verified.','Der Druck ist beendet. Spulen und zusätzlicher Verbrauch wurden geprüft.','Друк завершено. Котушки й додаткові витрати перевірено.','La impresión terminó. Se verificaron las bobinas y el consumo adicional.'),'checkbox');ack.id='uid-review-ack';
   const request=crypto.randomUUID();let submitted=null;
   const linked=d.candidates.some(s=>data.spools[s.spool_id]?.spoolman);
   const apply=historyButton(linked?text('Учесть в Tracker и продолжить','Account in Tracker and continue'):labels.confirm(),async()=>{
-   if(!ack.checked||inputs.some(([s,i])=>i.value===''||!i.validity.valid))throw Error(text('Проверьте значения и подтвердите расход.','Check amounts and confirm usage.','Mengen, Begründung und Bestätigung prüfen.','Перевірте значення, підставу та підтвердження.','Revise cantidades, motivo y confirmación.'));
+   if(!ack.checked||!inputs.length||inputs.some(([s,i])=>i.value===''||!i.validity.valid))throw Error(text('Проверьте значения и подтвердите расход.','Check amounts and confirm usage.','Mengen, Begründung und Bestätigung prüfen.','Перевірте значення, підставу та підтвердження.','Revise cantidades, motivo y confirmación.'));
    const payload={job_key:d.job.job_key,action:'account',expected_revision:d.revision,request_id:request,confirmed:true,completed:true,note:note.value,allocations_mg:Object.fromEntries(inputs.map(([s,i])=>[s.spool_id,Math.round(Number(i.value)*1000)]))};
    const encoded=JSON.stringify(payload);if(submitted&&submitted!==encoded)throw Error(text('Запрос уже отправлен. Повторите без изменений или откройте задание заново.','Request already sent. Retry unchanged or reopen the job.'));
    submitted=encoded;await api('/api/history_decide',payload);await loadData();

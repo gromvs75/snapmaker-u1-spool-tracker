@@ -94,8 +94,9 @@ class MotionLifecycle:
             raise ValueError('Profile/history mismatch')
         self.history(printer_id,[history])
         hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
-        capture=self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
+        capture=self.db.execute('SELECT key,session FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
         if capture is None:return 'pending_observed_start'
+        if capture['session']=='manual_history':return 'held_manual_history'
         return self.recovery.remember(hk,profile)
 
     def replacement_observe(self,printer_id,history,status):
@@ -155,7 +156,7 @@ class MotionLifecycle:
             unique[key] = job
         # Imported receipts already have a fenced 1.x identity. They cannot
         # be a start observation for a subsequent print with the same name.
-        captures = self.db.execute("SELECT * FROM uid_motion_captures WHERE printer_id=? AND session!='legacy'",
+        captures = self.db.execute("SELECT * FROM uid_motion_captures WHERE printer_id=? AND session NOT IN ('legacy','manual_history')",
                                    (printer_id,)).fetchall()
         candidates = {r['key']: [k for k, j in unique.items() if j['filename'] == r['filename'] and (k == r['key'] if r['key'] == r['history_key'] else abs(j['start_time']-r['observed']) <= 30)] for r in captures}
         results = imported
@@ -168,6 +169,11 @@ class MotionLifecycle:
                 results.append(self.adapter._review(row['key'], 'Ambiguous history/start match'))
                 continue
             hk = keys[0]
+            manual = self.db.execute("SELECT key FROM uid_motion_captures WHERE history_key=? AND session='manual_history'",(hk,)).fetchone()
+            if manual:
+                with self.db:self.db.execute('UPDATE uid_jobs SET mapping_valid=0 WHERE job_key=?',(row['key'],))
+                results.append(self.adapter._review(row['key'],'History already reserved for explicit manual accounting'))
+                continue
             if row['history_key'] and row['history_key'] != hk:
                 results.append(self.adapter._review(row['key'], 'History identity changed'))
                 continue
@@ -176,8 +182,13 @@ class MotionLifecycle:
             if old and old['status'] in TERMINAL and old['status'] != job['status']:
                 # Polling a stale active row must not regress a terminal receipt.
                 if job['status'] == 'in_progress': continue
-                results.append(self.adapter._review(row['key'], 'Terminal history changed'))
-                continue
+                # U1 can report an error (e.g. tangled filament), then resume
+                # this exact history identity and eventually finish or cancel.
+                # Keep the original capture/placement; all continuity checks
+                # still apply. Other terminal changes remain conflicts.
+                if not (old['status']=='error' and job['status'] in ('completed','cancelled')):
+                    results.append(self.adapter._review(row['key'], 'Terminal history changed'))
+                    continue
             with self.db:
                 context = json.loads(self.db.execute('SELECT context FROM uid_motion_starts WHERE job_key=?', (row['key'],)).fetchone()[0])
                 context['start_time'] = job['start_time']

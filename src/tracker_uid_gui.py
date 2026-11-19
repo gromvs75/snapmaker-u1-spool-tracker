@@ -168,6 +168,9 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                     observation={'state':status_reader(job['printer_id']), 'checked_at':checked,
                                  'connection_token':UidCatalog.connection_token(snapshot)}
                     return self.reply(200,owner.call('reconcile_apply',**data,observation=observation))
+                if self.path=='/api/history_prepare':
+                    if set(data)!={'history_key'}:raise ValueError('Неверные параметры записи истории.')
+                    return self.reply(200,owner.call('history_prepare',**data))
                 if self.path=='/api/history_decide':
                     if 'observation' in data or 'fleet' in data:raise ValueError('Неверные параметры подтверждения.')
                     detail=owner.call('history_detail',data['job_key'])

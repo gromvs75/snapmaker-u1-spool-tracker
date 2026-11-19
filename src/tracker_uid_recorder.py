@@ -6,6 +6,7 @@ consistency check, not proof of measured physical consumption or spool identity.
 """
 import json
 import logging
+import math
 from logging.handlers import RotatingFileHandler
 import socket
 import threading
@@ -82,6 +83,7 @@ class MotionStreamRecorder:
         spool_snapshot = None
         observed_start = None
         printer_total_mm = None
+        counter_reset = False
         feed = FeedEvidence()
         tags = TagEvidence()
         capture_epoch = uuid.uuid4().hex
@@ -166,6 +168,7 @@ class MotionStreamRecorder:
                     comparison = {'matches': False, 'printer_total_mm': None}
                 evidence = {'complete': attachment_profile is None, 'observed_from_attachment': attachment_profile is not None,
                             'continuous': True,
+                            'counter_reset': counter_reset,
                             'comparison': comparison,
                             'mapping_consistent': ((initial_mapping is None or initial_mapping == profile['mapping'])
                                                    and all(m == profile['mapping'] for m in observed_mappings)),
@@ -260,6 +263,18 @@ class MotionStreamRecorder:
                     tags.apply(status)
                     if isinstance(stats, dict):
                         state = stats.get('state', print_state)
+                        # Resume notifications may be the only place where
+                        # the printer exposes a counter rewind. Preserve it
+                        # before the same-job fast path below returns.
+                        if 'filament_used' in stats:
+                            value=stats['filament_used']
+                            if (print_state in ('printing','paused','error')
+                                    and type(value) in (int,float) and math.isfinite(value) and value>=0
+                                    and type(printer_total_mm) in (int,float) and math.isfinite(printer_total_mm)
+                                    and value < printer_total_mm-.1):
+                                counter_reset=True
+                                self._write('printer_counter_reset',filename=filename,before_mm=printer_total_mm,after_mm=value)
+                            printer_total_mm=value
                         if state != print_state and 'state' in stats:
                             self._write('print_state', previous=print_state, state=state,
                                         filename=stats.get('filename') or filename)
@@ -284,6 +299,7 @@ class MotionStreamRecorder:
                             observed_start = time.time()
                             spool_snapshot = self.store.read()
                             printer_total_mm = None
+                            counter_reset = False
                             feed = feed.for_new_job()
                             tags = tags.for_new_job()
                             observed_mappings.clear()

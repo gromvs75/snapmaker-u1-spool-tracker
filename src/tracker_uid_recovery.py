@@ -153,6 +153,14 @@ class Recovery:
                 totals[str(h)]+=mg(weights[i])
             source_label='completed_slicer_estimate'
             counter=history.get('filament_used')
+            # A post-resume counter is only the last segment after a rewind.
+            # An unannounced rewind can instead appear as a stream mismatch.
+            # The full-file estimate still has to pass the existing completed
+            # job, unchanged file, mapping and manual continuity checks below.
+            captured=json.loads(capture['evidence']) if capture['evidence'] else {}
+            if (captured.get('counter_reset') is True or
+                    manual_channels and captured.get('comparison',{}).get('matches') is False):
+                counter=None
             if len(used)==1 and type(counter) in (float,int) and math.isfinite(counter) and counter>0:
                 i=used[0];totals[str(initial[i])]=mass(counter,plan['parameters'][i]);source_label='printer_history_estimate'
         manual_used = {ch for ch in manual_channels if totals.get(ch)}

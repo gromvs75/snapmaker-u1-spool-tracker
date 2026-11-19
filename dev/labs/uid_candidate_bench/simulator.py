@@ -56,9 +56,20 @@ async def handler(r):
             jobs.insert(0,dict(job_id=str(len(jobs)+1),status='in_progress',start_time=time.time(),filename=a['filename'],filament_used=0))
         if action=='motion':
             stats['filament_used']+=a['length'];method='notify_tracker_head_0'
+        if action=='error':
+            stats.update(state='error',message='Synthetic filament tangled')
+            jobs[0].update(status='error',filament_used=stats['filament_used'])
+        if action=='resume':
+            stats.update(state='printing',message='')
+            if a.get('reset_counter'):stats['filament_used']=0
+            if a.get('new_identity'):
+                jobs.insert(0,dict(job_id=str(len(jobs)+1),status='in_progress',start_time=time.time(),filename=stats['filename'],filament_used=0))
+            else:jobs[0]['status']='in_progress'
         if action=='complete':
             stats['state']='complete';jobs[0].update(status='completed',end_time=time.time(),filament_used=stats['filament_used'])
         msg=dict(status={'print_stats':stats},eventtime=time.monotonic()) if action!='motion' else dict(data=[[a['stamp'],1,a['length'],0,[0,0,0],[1,0,0]]])
+        if action=='resume' and a.get('omit_counter'):
+            msg['status']['print_stats']={k:v for k,v in stats.items() if k!='filament_used'}
         for ws in list(clients):await ws.send_json(dict(method=method,params=msg))
         v=True
     elif path=='/server/files/metadata':v={'size':len(gcode),'modified':1000,'filament_type':'PLA'}

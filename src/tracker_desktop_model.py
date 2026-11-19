@@ -42,7 +42,7 @@ def snapshot(library, history_review, fleet):
         amounts={}
         for d in detail['debits']:amounts[d['spool_id']]=amounts.get(d['spool_id'],0)+d['delta_mg']/1000
         status=('committed' if job['state']=='completed' else 'cancelled' if job['state']=='cancelled'
-                else 'active' if job['state']=='active' and job['mapping_valid'] else 'review')
+                else 'active' if detail['review_block']=='observing' else 'review')
         source=(detail['receipt'] or {}).get('estimate_source')
         if source is None and job['source']=='legacy_import':source='legacy_import'
         run=dict(job_key=key,filename=detail['filename'] or job['job_id'],start_time=float(job['started_at']),

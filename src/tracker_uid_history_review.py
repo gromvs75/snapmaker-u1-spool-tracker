@@ -37,7 +37,37 @@ class HistoryReview:
             rows.append((job_key(printer_id, jid, str(float(start))), history_identity(printer_id, jid, start), printer_id, jid,
                          start, name, job['status']))
         with self.db:
-            self.db.executemany('INSERT OR IGNORE INTO uid_printer_history VALUES(?,?,?,?,?,?,?)', rows)
+            self.db.executemany('''INSERT INTO uid_printer_history VALUES(?,?,?,?,?,?,?)
+                ON CONFLICT(history_key) DO UPDATE SET status=excluded.status
+                WHERE uid_printer_history.filename=excluded.filename
+                AND uid_printer_history.status='error'
+                AND excluded.status IN ('completed','cancelled')''', rows)
+
+    def prepare_history(self, history_key):
+        """Explicit manual-review draft, never infer a spool from current slots.
+
+        Reuse a capture if the collector won the race; otherwise fence this exact
+        printer history identity before the user chooses spools and amounts.
+        No balance, placement or remote operation changes here.
+        """
+        with self.accounting.transaction():
+            row = self.db.execute('SELECT * FROM uid_printer_history WHERE history_key=?',(history_key,)).fetchone()
+            if row is None: raise ValueError('Запись истории не найдена. Обновите историю.')
+            capture = self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(history_key,)).fetchone()
+            if capture: return {'job_key':capture['key']}
+            if self.accounting.legacy_history(row['printer_id'],row['job_id'],row['started_at']):
+                raise ValueError('Задание уже перенесено из резервной копии. Откройте его запись учёта.')
+            if self.accounting.job(history_key):
+                raise ValueError('Задание уже имеет запись учёта. Обновите историю.')
+            history = dict(job_id=row['job_id'],start_time=row['started_at'],filename=row['filename'],status=row['status'])
+            self.db.execute('''INSERT INTO uid_jobs(job_key,printer_id,job_id,started_at,state,source,mapping_valid)
+                VALUES(?,?,?,?,'review','printer_history',0)''',
+                (history_key,row['printer_id'],row['job_id'],str(float(row['started_at']))))
+            self.db.execute('''INSERT INTO uid_motion_captures
+                (key,printer_id,source,observed,filename,history_key,history,session)
+                VALUES(?,?,?,?,?,?,?,'manual_history')''',
+                (history_key,row['printer_id'],'manual-history:'+history_key,row['started_at'],row['filename'],history_key,json.dumps(history)))
+            return {'job_key':history_key}
 
     def unaccounted_history(self, printer_id):
         rows = self.db.execute("""SELECT h.* FROM uid_printer_history h
@@ -55,6 +85,7 @@ class HistoryReview:
         capture = dict(capture) if capture else {}
         saved = self.db.execute('SELECT * FROM uid_recovery_profiles WHERE history_key=?',(capture.get('history_key'),)).fetchone()
         profile = json.loads(saved['profile']) if saved else None
+        if job['source']=='printer_history':profile=None
         tools = [dict(r) for r in self.db.execute('SELECT * FROM uid_job_tools WHERE job_key=? ORDER BY channel',(job_key,))]
         debits = [dict(r) for r in self.db.execute('SELECT * FROM uid_debits WHERE job_key=? ORDER BY sequence,spool_id',(job_key,))]
         events = [json.loads(r[0]) for r in self.db.execute('SELECT payload FROM uid_replacement_events WHERE job_key=? ORDER BY ordinal',(job_key,))]
@@ -73,7 +104,9 @@ class HistoryReview:
                     plan[-1]['mapping_verified'] = profile['legacy_mapping_verified']
         ids = {t['spool_id'] for t in tools}
         ids.update(e['new_spool_id'] for e in events if e.get('new_spool_id'))
-        candidates = [dict(r) for r in self.db.execute('SELECT spool_id,name,uid,remaining_mg FROM uid_spools ORDER BY spool_id') if r['spool_id'] in ids]
+        manual_selection = job['source']=='printer_history'
+        ids.update(amounts)
+        candidates = [dict(r) for r in self.db.execute('SELECT spool_id,name,uid,remaining_mg FROM uid_spools ORDER BY spool_id') if manual_selection or r['spool_id'] in ids]
         reservations = {r[0] for r in self.db.execute("SELECT t.spool_id FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND j.job_key<>?",(job_key,))}
         for r in self.db.execute("SELECT e.payload FROM uid_replacement_events e JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND j.job_key<>?",(job_key,)):
             reservations.add(json.loads(r[0]).get('new_spool_id'))
@@ -93,14 +126,19 @@ class HistoryReview:
             accounted_mg=sum(amounts.values()),debits=debits,replacements=events,reasons=reasons,remote_operations=remote,
             decisions=decisions,receipt=json.loads(receipt[0]) if receipt else None,
             uncertain=any(r['state'] in ('sending','uncertain') for r in remote))
+        value['manual_spool_selection'] = manual_selection
+        if manual_selection:
+            latest = self.db.execute('SELECT status FROM uid_printer_history WHERE history_key=?',(capture.get('history_key'),)).fetchone()
+            if latest and value['history']:value['history']['status']=latest['status']
         # Closing without a debit fences automatic replay, but does not prevent
         # a later explicit correction. A final accounting receipt is immutable.
         value['can_review'] = bool(not value['receipt'] and (
             job['state'] in ('resolved','cancelled') or
-            job['state']=='active' and not job['mapping_valid'] or
-            job['state']=='review' and job['source']=='legacy_import'))
+            job['state']=='active' and (not job['mapping_valid'] or
+                (value['history'] or {}).get('status') in ('completed','cancelled','error','klippy_shutdown','klippy_disconnect','interrupted')) or
+            job['state']=='review' and job['source'] in ('legacy_import','printer_history')))
         value['review_block'] = ('already_accounted' if value['receipt'] or job['state']=='completed'
-                                else 'observing' if job['state']=='active' and job['mapping_valid']
+                                else 'observing' if job['state']=='active' and job['mapping_valid'] and not value['can_review']
                                 else '' if value['can_review'] else 'unavailable')
         value['revision'] = hashlib.sha256(encoded(value).encode()).hexdigest()
         return value
@@ -122,7 +160,6 @@ class HistoryReview:
                 raise ValueError('Задание уже закрыто или учтено.')
             if action!='defer':
                 if confirmed is not True: raise ValueError('Подтвердите завершение задания и выбранное действие.')
-                if detail['job']['state']=='active' and detail['job']['mapping_valid']: raise ValueError('Наблюдение продолжается. Сначала дождитесь завершения задания.')
                 # Live collector evidence wins over a stale UI confirmation.
                 snapshot=fleet.get(detail['job']['printer_id'],{})
                 from tracker_printer_capabilities import printer_available
@@ -139,6 +176,8 @@ class HistoryReview:
                 if detail['uncertain']: raise ValueError('Сначала сверьте неопределённые отправки этого задания в Spoolman. Они уже включены в локальный расход.')
                 if not isinstance(allocations_mg,dict) or not allocations_mg or any(type(v) is not int or not 0<=v<=100_000_000 for v in allocations_mg.values()):
                     raise ValueError('Укажите дополнительный расход в целых миллиграммах.')
+                if detail['manual_spool_selection'] and not any(allocations_mg.values()):
+                    raise ValueError('Выберите катушку и укажите расход больше нуля либо закройте без списания.')
                 candidates = {s['spool_id']:s for s in detail['candidates']}
                 if set(allocations_mg)-set(candidates): raise ValueError('Катушка не связана с заданием.')
                 sequence = max([detail['job']['last_sequence']]+[d['sequence'] for d in detail['debits']])+1

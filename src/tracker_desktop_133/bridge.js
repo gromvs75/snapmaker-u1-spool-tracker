@@ -6,6 +6,7 @@ let desktopSpoolmanData=null,desktopSpoolmanFormRevision='';
 function displayGrams(value){return Number(value).toLocaleString(typeof currentLang==='undefined'?'ru':currentLang,{maximumFractionDigits:1})}
 (()=>{
  const original=window.fetch.bind(window);
+ let readSequence=0,appliedSequence=0;
  window.fetch=async(resource,options={})=>{
   if(typeof resource!=='string'||!resource.startsWith('/api/'))return original(resource,options);
   const options2={...options,headers:{...(options.headers||{}),'X-Tracker-Token':DESKTOP_TOKEN}};
@@ -32,10 +33,11 @@ function displayGrams(value){return Number(value).toLocaleString(typeof currentL
    if(options2.body){const body=JSON.parse(options2.body);body._settings_revision=resource==='/api/spoolman/configure'?desktopSpoolmanFormRevision:resource==='/api/select_printer'?desktopFormData?.settings_revision:desktopRevision;options2.body=JSON.stringify(body)}
    resource=resource.replace('/api/','/api/desktop/');
   }
+  const sequence=resource==='/api/desktop/data'?++readSequence:0;
   const response=await original(resource,options2);
   // Retain the same intent after a lost response; never fabricate a new retry ID.
   if(pendingKey&&response.status<500)sessionStorage.removeItem(pendingKey);
-  if(resource==='/api/desktop/data'&&response.ok){desktopLatestData=await response.clone().json();desktopRevision=desktopLatestData.settings_revision}
+  if(resource==='/api/desktop/data'&&response.ok){const data=await response.clone().json();if(sequence>appliedSequence){appliedSequence=sequence;desktopLatestData=data;desktopRevision=data.settings_revision}}
   if(resource==='/api/desktop/spoolman/status'&&response.ok)desktopSpoolmanData=await response.clone().json();
   return response;
  };

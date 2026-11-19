@@ -595,6 +595,7 @@ let preflightSignature = null;
 let guardSignature = null;
 let liveRequest = null;
 let fullLoadInFlight = false;
+let fullLoadSequence = 0;
 
 function renderPreflight(data, force = false) {
   const signature = JSON.stringify([data.last_preflight, data.spools, currentLang]);
@@ -878,10 +879,13 @@ async function changeLang(lang) {
   await act(async () => { await api('/api/lang', {language:lang}); await loadData(); });
 }
 async function loadData() {
+  const sequence = ++fullLoadSequence;
   fullLoadInFlight = true;
   try {
     if (liveRequest) { try { await liveRequest; } catch (_) {} }
     const data = await api('/api/data');
+    // A delayed refresh must not replace the result of a newer user action.
+    if (sequence !== fullLoadSequence) return;
     currentLang = data.language || 'en';
     el('lang-picker').value = currentLang;
     applyTexts(currentLang);
@@ -995,7 +999,7 @@ async function loadData() {
     renderAccounting(data);
     renderReviews(data, true);
     renderHistory(data, true);
-  } finally { fullLoadInFlight = false; }
+  } finally { if (sequence === fullLoadSequence) fullLoadInFlight = false; }
 }
 function setView(name) {
   if (!['overview', 'spools', 'history', 'settings'].includes(name)) return;

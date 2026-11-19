@@ -39,6 +39,7 @@ def main():
         do_GET=do_POST=do_PUT=call
     remote=ThreadingHTTPServer(('127.0.0.1',0),Handler);remote_thread=threading.Thread(target=remote.serve_forever);remote_thread.start()
     smurl=f'http://127.0.0.1:{remote.server_port}';printer=f'http://127.0.0.1:{port()}';cdp=port();app=None;sim=None;descriptor={}
+    ui_errors=[]
     log=(out/'process.log').open('w',encoding='utf-8')
     def request(url,body=None,headers=None):
         with urlopen(Request(url,data=None if body is None else json.dumps(body).encode(),headers=headers or {'Content-Type':'application/json'}),timeout=15) as r:return json.load(r)
@@ -72,6 +73,8 @@ def main():
                 page=wait(lambda:next((p for c in browser.contexts for p in c.pages if f':{descriptor["port"]}' in p.url),None))
             else:
                 browser=pw.chromium.launch();page=browser.new_page();page.goto(f'http://127.0.0.1:{descriptor["port"]}/desktop')
+            page.on('pageerror',lambda error:ui_errors.append(str(error)))
+            page.on('console',lambda msg:ui_errors.append(msg.text) if msg.type=='error' else None)
             ui=BrowserEnrollment(page,out)
             ui.apply('creality',decoded('creality')['uid'],remaining=840.123)
             wait(lambda:len(state()['spools'])==1);sid=state()['spools'][0]['spool_id'];assert len(sm.rows['spool'])==1
@@ -158,6 +161,10 @@ def main():
         stop();checks.append('native WebView2: saved plan prefill, edited 3.5 g, empty comment, one-window delivery, explicit history status, duplicate confirmations protected')
         (out/'results.json').write_text(json.dumps(dict(success=True,version=VERSION,checks=checks,real_printer_used=False,native_webview2=sys.platform=='win32',remaining_mg=623500),ensure_ascii=False,indent=2),encoding='utf-8')
     finally:
+        if not (out/'results.json').exists():
+            (out/'ui-errors.json').write_text(json.dumps(ui_errors,ensure_ascii=False),encoding='utf-8')
+            try:(out/'failure-state.json').write_text(json.dumps(state(),ensure_ascii=False,default=str),encoding='utf-8')
+            except Exception:pass
         if sys.platform=='win32' and not (out/'results.json').exists():
             from PIL import ImageGrab
             ImageGrab.grab().save(out/'failure-desktop.png')

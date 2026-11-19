@@ -23,7 +23,7 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
             page.screenshot(path=str(screens/'review-list.png'),full_page=True)
             for lang in ('ru','en','de','uk','es'):
                 page.locator('#lang-picker').select_option(lang)
-                page.wait_for_function('(v)=>currentLang===v',arg=lang)
+                page.wait_for_function('(v)=>currentLang===v&&!fullLoadInFlight',arg=lang)
                 page.locator('.uid-review-row').filter(has_text='saved-2.gcode').locator('button').click()
                 page.locator('#uid-history-dialog[open]').wait_for()
                 for width in (1202,700):
@@ -39,6 +39,8 @@ def test_history_review_layout_reopen_and_edited_amount_once(tmp_path,old_backup
                 if lang=='ru':page.screenshot(path=str(screens/'review-dialog.png'),full_page=True)
                 page.locator('#uid-history-dialog .gd-header .gd-close').click()
             page.locator('#lang-picker').select_option('ru')
+            # select_option dispatches change; it does not await changeLang/loadData.
+            page.wait_for_function("currentLang==='ru'&&!fullLoadInFlight")
             page.locator('.uid-review-row').filter(has_text='saved-2.gcode').locator('button').click()
             page.get_by_role('button',name='Закрыть без списания',exact=True).click()
             page.locator('#uid-history-dialog input[type=checkbox]').check()

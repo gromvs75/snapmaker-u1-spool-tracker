@@ -41,10 +41,14 @@ def convert(package, live):
         try:
             # Start empty. Only DDL from the running owner's schema is executable.
             definitions = schema(live)
-            for kind, name, table, sql in sorted(definitions, key=lambda r: r[0] != 'table'):
-                db.execute(sql)
             db.execute('PRAGMA foreign_keys=ON')
             with db:
+                # SQLite does not implicitly BEGIN for DDL. One transaction
+                # avoids a durable filesystem flush for every schema object,
+                # which can stall legacy import on Windows.
+                db.execute('BEGIN')
+                for kind, name, table, sql in sorted(definitions, key=lambda r: r[0] != 'table'):
+                    db.execute(sql)
                 summary = populate(db, data, package)
             return export(db), dict(summary, source_format='legacy', source_version=package['app_version'],
                                     source_sha256=hashlib.sha256(raw).hexdigest())

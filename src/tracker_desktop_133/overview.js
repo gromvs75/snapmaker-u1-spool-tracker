@@ -94,12 +94,13 @@
  const footer=node('div');footer.id='desktop-forecast-footer';const oldFoot=el('forecast-reserve').parentElement;footer.append(el('forecast-reserve'),el('forecast-no-debit'));oldFoot.replaceWith(footer);
  const details=node('details');details.id='desktop-forecast-details';const summary=node('summary');details.append(summary);footer.after(details);
  const exact=node('p');exact.id='desktop-forecast-exact-time';details.append(exact,el('desktop-forecast-source'),el('desktop-forecast-provisional'),forecast.querySelector('.forecast-mapping'),el('forecast-hide'));
- window.desktopForecastGrouped=entry=>{
+ window.desktopForecastGrouped=(entry,state)=>{
+  window.desktopForecastHeads?.(state.printer_id, entry?.rows||[]);
   el('forecast-heading').textContent=t('Прогноз нарезки','Slice forecast','Slicing-Prognose','Прогноз нарізки','Previsión del laminado');
   separate.textContent=t('Отдельно от текущей печати','Separate from the current print','Getrennt vom aktuellen Druck','Окремо від поточного друку','Independiente de la impresión actual');
   separate.hidden=!entry;sourceLabel.hidden=!entry;footer.hidden=!entry;details.hidden=false;exact.hidden=!entry;
   forecast.querySelector('.forecast-mapping').hidden=true;
-  el('forecast-reserve').hidden=true;
+  el('forecast-reserve').hidden=!entry?.rows?.length;
   materialList.replaceChildren();
   el('forecast-no-debit').textContent=t('Прогноз не списывает расход','Forecast does not deduct usage','Prognose bucht keinen Verbrauch','Прогноз не списує витрати','La previsión no descuenta consumo');
   summary.textContent=entry?t('Источник и подробности расчёта','Source and calculation details','Quelle und Berechnungsdetails','Джерело та подробиці розрахунку','Origen y detalles del cálculo'):t('Дополнительно','More','Weitere Optionen','Додатково','Más opciones');
@@ -112,7 +113,17 @@
   exact.textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang);
   el('forecast-time').textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   const materials=entry.materials||[];
-  status.textContent=materials.length?t('Привязка к головкам проверяется при запуске','Head mapping is checked at print start','Kopfzuordnung wird beim Druckstart geprüft','Прив’язка до головок перевіряється при запуску','La asignación de cabezales se comprueba al iniciar'):t('Нет данных о расходе материала','No material usage available','Keine Materialverbrauchsdaten','Немає даних про витрати матеріалу','No hay datos de consumo');
+  const enough=t('По прогнозу хватает с резервом','Estimated to be sufficient with reserve','Voraussichtlich ausreichend mit Reserve','За прогнозом вистачить із запасом','Suficiente según la previsión con reserva');
+  const shortage=t('По прогнозу материала не хватает','Estimated material shortage','Voraussichtlich zu wenig Material','За прогнозом матеріалу не вистачить','Falta material según la previsión');
+  const verify=t('Сверьте головки в окне подготовки Orca','Check heads in the Orca print setup','Köpfe in der Orca-Druckvorbereitung prüfen','Звірте головки у вікні підготовки Orca','Revise los cabezales en la preparación de Orca');
+  const balance=t('Сверьте остатки катушек','Check spool balances','Spulenreste prüfen','Звірте залишки котушок','Compruebe el saldo de las bobinas');
+  status.textContent=!materials.length?t('Нет данных о расходе материала','No material usage available','Keine Materialverbrauchsdaten','Немає даних про витрати матеріалу','No hay datos de consumo'):
+   entry.shortage?shortage:entry.requires_mapping?verify:entry.unknown?balance:enough;
+  if(entry.rows.length){
+   status.style.color=entry.shortage?'#ff8f8f':entry.unknown?'':'#82dfb0';
+   forecast.querySelector('.forecast-mapping').hidden=false;
+   forecast.querySelector('.forecast-mapping').textContent=t('Расчёт по цвету и типу. Перед стартом сверьте головки в Orca.','Estimated by color and type. Before starting, check the heads in Orca.','Schätzung nach Farbe und Typ. Vor dem Start die Köpfe in Orca prüfen.','Розрахунок за кольором і типом. Перед стартом звірте головки в Orca.','Estimación por color y tipo. Antes de iniciar, compruebe los cabezales en Orca.');
+  }
   const label=t('Материал','Material','Material','Матеріал','Material');
   for(const material of materials){
    const item=node('span');
@@ -124,6 +135,16 @@
     item.append(swatch);
    }
    item.append(`${label} ${material.number} · ${material.grams.toLocaleString(currentLang,{maximumFractionDigits:3})} ${gramUnit()}`);
+   if(material.channel!=null)item.append(' → T'+material.channel);
+   if(material.choices?.length){
+    const choices=material.choices.map(choice=>{
+     const value=choice.after==null?balance:choice.deficit>0
+      ? t('не хватает','short by','es fehlen','не вистачає','faltan')+' '+displayGrams(choice.deficit)+' '+gramUnit()
+      :t('после ≈','after ≈','danach ≈','після ≈','después ≈')+' '+displayGrams(choice.after)+' '+gramUnit();
+     return 'T'+choice.channel+' · '+value;
+    });
+    item.append(' ('+choices.join(' / ')+')');
+   }
    materialList.append(item);
   }
  };

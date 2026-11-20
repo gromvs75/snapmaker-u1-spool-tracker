@@ -93,6 +93,10 @@ def main():
             if linked:
                 data['spoolman'] = dict(blank(), url=smurl, mode='send', epoch='synthetic')
                 data['spools'][sid]['spoolman'] = dict(url=smurl, id=1)
+                for channel, color, remaining in [('1', '#151a1c', 430.7), ('3', '#ff7f26', 833.6)]:
+                    key = 'fixture-head-' + channel
+                    data['spools'][key] = dict(name=key, material='PLA', remaining_g=remaining, color=color)
+                    data['slots'][channel] = key
             else: data['slots']['1'] = sid
         old.update(seed); package = create_backup(old, '1.3.3')
         preview = api('validate_backup', dict(package=package))
@@ -131,7 +135,7 @@ def main():
         metadata.mkdir(parents=True)
         plate = metadata/'.42.0.gcode'
         plate.write_bytes(payload('15.08, 2.36').replace(
-            b'; printer_model', b'; filament_colour = #FD8008;#000000\n; printer_model'))
+            b'; printer_model', b'; filament_colour = #FD8008;#000000\n; filament_type = PLA;PLA\n; printer_model'))
         launch(); sid = restore('manual-history', linked=True)
         api('settings', dict(values=dict(spoolman_mode='send'), expected_revision=state()['settings']['revision']))
         connect()
@@ -145,15 +149,18 @@ def main():
                 page.goto(f'http://127.0.0.1:{descriptor["port"]}/desktop')
             page.on('pageerror', lambda e: ui_errors.append(str(e)))
             page.locator('#nav-overview').click()
-            expect(page.locator('#forecast-status')).to_contain_text('Привязка к головкам проверяется')
+            expect(page.locator('#forecast-status')).to_contain_text('По прогнозу хватает с резервом')
             expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
-                ['Материал 1 · 15,08 гр.', 'Материал 2 · 2,36 гр.'])
+                ['Материал 1 · 15,08 гр. → T2', 'Материал 2 · 2,36 гр. → T0'])
             expect(page.locator('.forecast-material-color').nth(0)).to_have_attribute('title', '#FD8008')
             expect(page.locator('.forecast-material-color').nth(1)).to_have_attribute('title', '#000000')
-            expect(page.locator('.forecast-head-note')).to_have_count(0)
+            cards = page.locator('#sidebar-slots .sidebar-slot')
+            expect(cards.nth(0).locator('.dash-head-forecast')).to_contain_text('2,36')
+            expect(cards.nth(2).locator('.dash-head-forecast')).to_contain_text('15,08')
+            expect(cards.nth(1).locator('.dash-head-forecast')).to_have_count(0)
             assert not state()['debits'] and not sm.puts
             page.screenshot(path=str(out/'forecast-before-print.png'))
-            checks.append('slice: exact grams and colors, no guessed head balances or debit')
+            checks.append('slice: color estimates shown on T2 and T0 with no debit before print')
             page.locator('#nav-history').click()
             row = page.locator('.history-row').filter(has_text='unobserved-tangle.gcode')
             row.locator('.uid-expand').click()

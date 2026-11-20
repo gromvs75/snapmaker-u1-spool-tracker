@@ -13,7 +13,7 @@ import time
 from gcode import GCodeError, METADATA, parse_slice_usage
 from slice_bed_marker import embedded_bed_identity
 
-FILAMENT_COLOUR = re.compile(r'^;\s*filament_colour\s*=\s*(.*?)\s*$', re.IGNORECASE)
+FILAMENT_CONFIG = re.compile(r'^;\s*filament_(colour|type)\s*=\s*(.*?)\s*$', re.IGNORECASE)
 HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}')
 NAME = re.compile(r'^\.[0-9]+\.[0-9]+\.gcode$')
 MAX_BYTES = 128 * 1024 * 1024
@@ -61,13 +61,15 @@ def completed_materials(content, *, allow_extra_profiles=False):
     if len(weights) != 1 or not positions[1] < weights[0] < positions[2]:
         raise GCodeError('Missing or ambiguous usage')
     usage = parse_slice_usage(lines[weights[0]], allow_extra_profiles=allow_extra_profiles)
-    colors = []
-    color_lines = [match.group(1) for line in lines[positions[2] + 1:positions[3]]
-                   if (match := FILAMENT_COLOUR.match(line))]
-    if len(color_lines) == 1:
-        colors = [color if HEX_COLOUR.fullmatch(color) else None
-                  for color in map(str.strip, color_lines[0].split(';'))]
-    return usage, colors
+    fields = {'colour': [], 'type': []}
+    for line in lines[positions[2] + 1:positions[3]]:
+        match = FILAMENT_CONFIG.match(line)
+        if match:
+            fields[match[1].lower()].append(match[2])
+    raw_colors = fields['colour'][0].split(';') if len(fields['colour']) == 1 else []
+    colors = [color if HEX_COLOUR.fullmatch(color) else None for color in map(str.strip, raw_colors)]
+    types = fields['type'][0].split(';') if len(fields['type']) == 1 else []
+    return usage, colors, types
 
 
 class SliceObserver:
@@ -125,10 +127,10 @@ class SliceObserver:
                     continue
                 if now - candidate[1] < self.settle:
                     continue
-                weights, colors = completed_materials(content, allow_extra_profiles=self.allow_extra_profiles)
+                weights, colors, types = completed_materials(content, allow_extra_profiles=self.allow_extra_profiles)
                 plate, plate_identity = embedded_bed_identity(content)
                 preview = {'source': key, 'state': 'ready', 'sha256': digest,
-                           'weights': weights, 'colors': colors, 'completed_at_ns': signature[3],
+                           'weights': weights, 'colors': colors, 'filament_types': types, 'completed_at_ns': signature[3],
                            'plate': plate, 'plate_identity': plate_identity,
                            'observed_at': previous.get('observed_at', time.time()) if previous.get('sha256') == digest else time.time(),
                            'mapping': 'unknown'}

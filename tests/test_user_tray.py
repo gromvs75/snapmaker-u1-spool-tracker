@@ -11,9 +11,24 @@ def test_tray_uses_latest_plate_and_selected_printer_balances():
     ))
     model = tray_model(snapshot)
     assert '17,44 г' in model['forecast'] and 'Стол 2' in model['forecast']
-    assert model['materials'][0] == dict(number=1, grams=15.08, color='#FD8008')
+    assert model['materials'][0]['color'] == '#FD8008' and model['materials'][0]['grams'] == 15.08
     assert model['status'] == 'unknown' and all('после' not in head['title'] for head in model['heads'])
     assert '30,0 г' in model['heads'][0]['title'] and model['title'] == 'Мастерская B (4 головки)'
+
+
+def test_tray_shows_deficit_on_color_matched_head():
+    e = entry([15.08, 2.36], plate=1, colors=['#FD8008','#000000'], filament_types=['PLA','PLA'])
+    h = heads(430700)
+    h[0]['spool']['details'] = dict(color='#151a1c', material='PLA')
+    h[2]['spool'].update(remaining_mg=15000, details=dict(color='#ff7f26', material='PLA +'))
+    snapshot = enrich(dict(entries=[e], latest=e['source']), dict(
+        printers={'u1': dict(heads=h)}, selected_printer='u1', safety_margin_g=5, accounted={},
+    ))
+    model = tray_model(snapshot)
+    assert model['status'] == 'shortage'
+    assert 'После ≈ 428,34 г' in model['heads'][0]['title']
+    assert 'Не хватает с резервом 5,08 г' in model['heads'][2]['title']
+    assert 'Нужно' not in model['heads'][1]['title']
 
 
 def test_artwork_has_four_dots_and_separate_badges():
@@ -33,5 +48,5 @@ def test_tray_shows_slice_usage_without_guessed_head_balances():
     ))
     model = tray_model(snapshot)
     assert model['status'] == 'unknown' and '94,19 г' in model['forecast']
-    assert 'Стол 3' in model['forecast'] and 'проверяется при запуске' in model['mapping']
+    assert 'Стол 3' in model['forecast'] and 'окне подготовки Orca' in model['mapping']
     assert all('после' not in head['title'] for head in model['heads'])

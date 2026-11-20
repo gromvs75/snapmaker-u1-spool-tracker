@@ -50,6 +50,36 @@ def test_two_materials_cannot_claim_physical_heads():
     assert forecast_entry(dict(source='x', state='pending'))['rows'] == []
 
 
+def test_color_and_type_forecast_uses_physical_heads_and_checks_reserve():
+    h = heads()
+    for head, color, remaining, kind in zip(h, ('#151a1c','#ffffff','#ff7f26','#2b9c70'),
+                                           (430700,193800,833600,831900), ('PLA','PLA','PLA. +','PLA+')):
+        head['spool'].update(remaining_mg=remaining, details=dict(color=color, material=kind))
+    e = entry([15.08, 2.36, 0, 0], colors=['#FD8008','#000000'], filament_types=['PLA','PLA'])
+    preview = forecast_entry(e,h,5)
+    assert preview['status'] == 'ok' and not preview['requires_mapping']
+    assert [(r['channel'],r['used'],round(r['after'],2)) for r in preview['rows']] == [
+        ('2',15.08,818.52), ('0',2.36,428.34),
+    ]
+
+    h[2]['spool']['remaining_mg'] = 15000
+    preview = forecast_entry(e,h,5)
+    assert preview['status'] == 'shortage' and round(preview['rows'][0]['deficit'],2) == 5.08
+
+    # Two equally matching heads require a choice, even with a full spool.
+    h[1]['spool']['details']['color'] = '#ff7f26'
+    preview = forecast_entry(e,h,5)
+    assert preview['status'] == 'unknown' and preview['requires_mapping']
+    assert [choice['channel'] for choice in preview['materials'][0]['choices']] == ['1','2']
+    assert [r['channel'] for r in preview['rows']] == ['0']
+
+    h[1]['spool']['details']['material'] = 'ABS'
+    h[2]['forecast_usable'] = False
+    preview = forecast_entry(e,h,5)
+    assert preview['status'] == 'unknown' and not preview['requires_mapping']
+    assert preview['rows'][0]['remaining'] is None
+
+
 def test_forecast_printer_isolation_and_accounted_file_exclusion():
     e=entry([25,0,0,0]);snap=dict(entries=[e],latest=e['source'])
     inv=dict(printers={'a':dict(heads=heads(30000)),'b':dict(heads=heads(29000))},

@@ -58,7 +58,7 @@ function renderOverview(body){
 function renderOverviewHeads(container,entry,plan=null){
  container.replaceChildren();const printer=state.forecast?.printers?.[selectedPrinter];
  for(let ch=0;ch<4;ch++){
-  const row=entry?.rows?.[ch],planned=plan?.filter(p=>String(p.channel)===String(ch))||[];
+  const row=entry?.rows?.find(row=>row.channel===String(ch)),planned=plan?.filter(p=>String(p.channel)===String(ch))||[];
   const original=planned.length?state.spools.find(s=>s.spool_id===planned[0].spool_id):null;
   const s=original||printer?.heads?.[ch]?.spool||state.spools.find(s=>{const a=assignmentFor(s);return a?.printer_id===selectedPrinter&&String(a.channel)===String(ch)});
   const box=document.createElement('section');box.className='overview-head';
@@ -90,7 +90,7 @@ function renderSliceForecast(box,heads,active){
  select.value=viewedPlate;select.hidden=entries.length<2;box.append(select);
  function draw(){content.replaceChildren();const e=entries.find(e=>e.source===viewedPlate);
   const title=document.createElement('strong');title.className='forecast-result '+(e?.status||'unknown');
-  title.textContent=e?.state==='ready'?(e.materials?.length?'Привязка к головкам проверяется при запуске':'Нет данных о расходе материала'):e?'Нарезка ещё не готова':'Ожидаем завершённую нарезку';content.append(title);
+  title.textContent=e?.state==='ready'?(e.status==='ok'?'По прогнозу хватает с резервом':e.status==='shortage'?'По прогнозу материала не хватает':e.materials?.length?'Сверьте головки и остатки перед стартом':'Нет данных о расходе материала'):e?'Нарезка ещё не готова':'Ожидаем завершённую нарезку';content.append(title);
   if(e?.state==='ready'){
    const plate=e.plate?'Стол '+e.plate:'Стол не определён';
    content.append(paragraph(plate+' · '+new Date(e.completed_at_ns/1e6).toLocaleString('ru-RU')),

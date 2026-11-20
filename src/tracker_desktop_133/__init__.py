@@ -42,6 +42,8 @@ def integration_html(token,version):
     html=html.replace('const changed = next.revision !== revision','const changed = next.slice_revision !== revision')
     html=html.replace('revision = next.revision;','revision = next.slice_revision;')
     html=html.replace('  const entry = entries.find(e => e.source === selected);','  const entry = entries.find(e => e.source === selected);\n  window.desktopForecastSource?.(entry,headData);')
+    # The 2.1 dashboard renders forecasts by physical head and spool identity.
+    html=html.replace('   const row = entry && entry.rows[i];','   const row = null;')
     html=html.replace('  paintHeads();', '  paintHeads();\n  window.desktopForecastGrouped?.(entry,state);')
     html=html.replace("entry && entry.shortage ? '#ffab91' : '#82dfb0'","!entry || entry.unknown ? '#94a3b8' : entry.shortage ? '#ffab91' : '#82dfb0'")
     html=html.replace("} catch (e) { $('error').textContent = tr().error; }","} catch (e) { if(request<appliedSequence)return; appliedSequence=request; state={entries:[],latest:null,safety_margin_g:state?.safety_margin_g??5}; signature=''; render(); $('error').textContent = tr().error; }")

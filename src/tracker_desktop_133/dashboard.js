@@ -39,12 +39,16 @@
   if(channel.state==='present')return spool&&data.slot_status?.[String(ch+1)]==='recognized'?t('RFID · распознана','RFID · recognized','RFID · erkannt','RFID · розпізнана','RFID · reconocida'):t('RFID · подтвердите метку','RFID · confirm tag','RFID · Tag bestätigen','RFID · підтвердьте мітку','RFID · confirme etiqueta');
   return ({absent:t('RFID · нет метки','RFID · no tag','RFID · kein Tag','RFID · немає мітки','RFID · sin etiqueta'),unreadable:t('RFID · ошибка чтения','RFID · read error','RFID · Lesefehler','RFID · помилка читання','RFID · error de lectura'),stale:t('RFID · данные устарели','RFID · stale data','RFID · Daten veraltet','RFID · дані застаріли','RFID · datos obsoletos'),conflict:t('RFID · конфликт меток','RFID · tag conflict','RFID · Tag-Konflikt','RFID · конфлікт міток','RFID · conflicto de etiquetas')})[channel.state]||t('RFID · проверяем','RFID · checking','RFID · wird geprüft','RFID · перевіряємо','RFID · comprobando');
  }
+ let forecastPrinter=null, forecastRows=new Map();
  function heads(data){
   const m=data.monitor||{},age=Date.now()/1000-m.checked_at;
   [...el('sidebar-slots').querySelectorAll('.sidebar-slot')].forEach((head,i)=>{
    const spool=data.spools?.[data.slots?.[String(i+1)]],channel=data.uid_channels?.[data.selected_printer]?.channels?.[String(i)],tag=channel?.tag;
    const active=m.connected&&age>=-5&&age<5&&m.state==='printing'&&m.active_head===i;
-   const signature=JSON.stringify([spool,channel?.state,channel?.uid,channel?.tag,data.slot_status?.[String(i+1)],rfid(data,i,spool),active,currentLang]);
+   const sliceRow=forecastRows.get('T'+i);
+   const estimate=data.selected_printer===forecastPrinter&&spool&&sliceRow?.spool_id===data.slots?.[String(i+1)]
+      &&!(m.connected&&['printing','paused'].includes(m.state))?sliceRow:null;
+   const signature=JSON.stringify([estimate,spool,channel?.state,channel?.uid,channel?.tag,data.slot_status?.[String(i+1)],rfid(data,i,spool),active,currentLang]);
    if(head.dataset.dashboard===signature)return;head.dataset.dashboard=signature;
    head.classList.toggle('selected-head',active);
    const color=spool?.color||(tag?.color?'#'+tag.color:null),safe=validColor(color)?color:null;
@@ -65,11 +69,26 @@
    const sm=spool?.spoolman,smButton=node('button',sm?'Spoolman #'+sm.id+(spool.pending_deliveries?' · '+t('очередь','pending','ausstehend','черга','pendiente')+' '+spool.pending_deliveries:' · '+t('привязана','linked','verknüpft','прив’язана','vinculada')):spool?t('Локальный учёт','Local tracking','Lokale Erfassung','Локальний облік','Registro local'):t('Spoolman · не привязана','Spoolman · not linked','Spoolman · nicht verknüpft','Spoolman · не прив’язана','Spoolman · sin vincular'),'dash-status-button');
    smButton.type='button';smButton.onclick=()=>{el('nav-settings').click();document.querySelector('[data-settings-section=spoolman]').click()};statuses.append(smButton);
    if(spool&& !['recognized','manual_confirmed'].includes(data.slot_status?.[String(i+1)]))statuses.append(node('small',t('Назначение требует проверки','Assignment needs review','Zuordnung prüfen','Призначення потребує перевірки','Revise la asignación'),'dash-warning'));
-   head.replaceChildren(stripe,info,balance,meter,note,statuses);
+   const children=[stripe,info,balance,meter,note];
+   if(estimate){
+    const used=t('По нарезке','Slice usage','Slicing-Verbrauch','За нарізкою','Consumo previsto')+' '+estimate.used.toLocaleString(currentLang,{maximumFractionDigits:3})+' '+gramUnit();
+    const result=estimate.unknown?words.balance():estimate.enough
+     ? t('После ≈','After ≈','Danach ≈','Після ≈','Después ≈')+' '+displayGrams(estimate.after)+' '+gramUnit()
+     : t('Не хватает с резервом','Short with reserve','Fehlt mit Reserve','Не вистачає із запасом','Falta con reserva')+' '+displayGrams(estimate.deficit)+' '+gramUnit();
+    const preview=node('div',undefined,'dash-head-forecast '+(estimate.unknown?'unknown':estimate.enough?'ok':'shortage'));
+    preview.append(node('small',used),node('strong',result));
+    children.push(preview);
+   }
+   head.replaceChildren(...children,statuses);
   });
  }
  const overview=renderOverview;renderOverview=data=>{overview(data);print(data)};
  let latest=null;
+ window.desktopForecastHeads=(printer,rows)=>{
+  forecastPrinter=printer;
+  forecastRows=new Map(rows.map(row=>[row.tool,row]));
+  if(latest)heads(latest);
+ };
  const sidebar=renderSidebar;renderSidebar=data=>{latest=data;sidebar(data);heads(data)};
  const loaded=window.desktopInventoryLoaded;window.desktopInventoryLoaded=data=>{latest=data;loaded(data);print(data);heads(data)};
  // Forecast may rebuild the original four cards without changing inventory.

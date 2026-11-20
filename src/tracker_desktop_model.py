@@ -109,6 +109,7 @@ def forecast_view(forecast,printer_id):
         if e['state']!='ready':continue
         rows=[dict(tool='T'+r['channel'],spool_id=(r['spool'] or {}).get('spool_id'),
                    name=(r['spool'] or {}).get('name',''),used=r['used'],remaining=r['remaining'],
+                   deficit=r['deficit'],
                    after=r['after'],enough=r['enough'],unknown=r['unknown'],provisional=r.get('provisional',False)) for r in e['rows']]
         source=Path(e['source'])
         entries.append(dict(e,rows=rows,label='Plate '+str(e['plate'] or '?'),source_label=source.parent.parent.name+' · '+source.name,

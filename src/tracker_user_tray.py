@@ -17,18 +17,33 @@ def tray_model(snapshot):
     materials = entry['materials'] if entry and not snapshot.get('error') else []
     label = 'Ожидаем нарезку Snorca'
     mapping = ''
+    status = entry['status'] if materials else 'unknown'
     if materials:
-        label = 'Расход по нарезке ' + grams(sum(m['grams'] for m in materials), 2)
-        mapping = 'Привязка к головкам проверяется при запуске'
+        estimate = {'ok': '✓ По прогнозу хватает', 'shortage': '✕ По прогнозу не хватает',
+                    'unknown': 'Нужно сверить головки или остатки'}[status]
+        label = estimate + ' · Расход ' + grams(sum(m['grams'] for m in materials), 2)
+        mapping = ('Уточните головки в окне подготовки Orca' if entry['requires_mapping']
+                   else 'Прогноз по цвету и типу · Сверьте с Orca')
     if entry:
         if not materials:label='Нет данных о расходе материала'
         label+=' · '+('Стол '+str(entry['plate']) if entry.get('plate') else 'Стол не определён')+' · '+datetime.fromtimestamp(entry['completed_at_ns']/1e9).strftime('%d.%m %H:%M')
+    rows = {row['channel']: row for row in entry['rows']} if materials else {}
     heads=[]
     for i in range(4):
         head=printer.get('heads',[{}]*4)[i];spool=head.get('spool')
         title=f'T{i} · '+(spool['name']+' — '+grams(spool['remaining_mg']/1000) if spool else 'Не назначена')
-        heads.append(dict(title=title, color=(spool.get('details', {}).get('color') or None) if spool else None))
-    return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status='unknown',
+        row = rows.get(str(i))
+        if row:
+            title += ' · Нужно ' + grams(row['used'], 2)
+            if row['unknown']:
+                title += ' · Сверьте остаток'
+            elif row['enough']:
+                title += ' · После ≈ ' + grams(row['after'], 2)
+            else:
+                title += ' · Не хватает с резервом ' + grams(row['deficit'], 2)
+        heads.append(dict(title=title, color=(spool.get('details', {}).get('color') or None) if spool else None,
+                          status=row['status'] if row else None))
+    return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status=status,
                 forecast=label,mapping=mapping,materials=materials,heads=heads,
                 event=(entry['source'],entry['completed_at_ns'],entry.get('sha256')) if entry else None)
 
@@ -46,7 +61,7 @@ def build_menu(model, show, forecast, quit):
     items.append(pystray.Menu.SEPARATOR)
     for head in model['heads']:
         item=pystray.MenuItem(head['title'],forecast)
-        item._tracker_toolhead=True;item._tracker_color=head['color']
+        item._tracker_toolhead=True;item._tracker_color=head['color'];item._tracker_status=head['status']
         items.append(item)
     items.extend([pystray.Menu.SEPARATOR,pystray.MenuItem('Открыть Tracker',show,default=True),
                   pystray.MenuItem('Настроить катушки и слоты…',show),pystray.MenuItem('Выход',quit)])
@@ -111,7 +126,7 @@ def install_macos_toolhead_icons(icon):
         if toolhead or material_color:
             try:
                 if toolhead:
-                    payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None))
+                    payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None), getattr(descriptor, '_tracker_status', None))
                     size = (18, 22)
                 else:
                     payload = create_material_menu_icon(material_color)

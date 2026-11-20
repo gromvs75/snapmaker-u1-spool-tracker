@@ -181,14 +181,26 @@ class Trial:
     def _disable(self,record):
         # No module import, driver/config parsing, network or Klipper API.
         cfg=self.path(CFG)
+        warnings=[]
+        raw=None
         if cfg.exists():
-            archive=self.path(RECOVERY+'/disabled')
-            archive.mkdir(mode=0o700,exist_ok=True)
-            raw=cfg.read_bytes()
-            atomic(archive/(digest(raw)+'.cfg'),raw)
+            try:raw=cfg.read_bytes()
+            except OSError as exc:warnings.append('Activation backup unavailable: '+str(exc))
+            # Removing the optional include target is the safety-critical operation.
+            # Diagnostic writes must never prevent OFF on a full/read-only recovery volume.
             cfg.unlink();sync(cfg.parent)
-        atomic(self.path(RECOVERY+'/disabled.json'),canonical(dict(effective='next-klipper-start')))
-        return dict(state='disabled',effective='next-klipper-start',physical_installation=False)
+        if raw is not None:
+            try:
+                archive=self.path(RECOVERY+'/disabled')
+                archive.mkdir(mode=0o700,exist_ok=True)
+                atomic(archive/(digest(raw)+'.cfg'),raw)
+            except OSError as exc:warnings.append('Activation backup not saved: '+str(exc))
+        try:
+            atomic(self.path(RECOVERY+'/disabled.json'),canonical(dict(effective='next-klipper-start')))
+        except OSError as exc:warnings.append('OFF receipt not saved: '+str(exc))
+        result=dict(state='disabled',effective='next-klipper-start',physical_installation=False)
+        if warnings:result['warnings']=warnings
+        return result
 
     def disable(self):
         with self.locked():return self._disable(self.read())

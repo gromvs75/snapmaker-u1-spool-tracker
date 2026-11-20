@@ -15,8 +15,10 @@ def test_postprocessor_closed_app_cancel_save_and_restart(tmp_path):
     session=Session(directory,allowed_urls=[])
     try:
         state=session.call('library_snapshot');plan=state['export_plans'][0]
-        assert plan['filename']=='Part.gcode' and plan['weights'][0]==2.3456 and plan['mapping_assumed']
-        assert session.call('inspect')['debits']==[] and not session.connected and dialogs
+        assert plan['filename']=='Part.gcode' and plan['weights'][0]==2.3456 and not plan['mapping_assumed']
+        message = dialogs[0][0]
+        assert 'Материал 1 · 2,3456 г' in message and 'T0' not in message
+        assert session.call('inspect')['debits']==[] and not session.connected
     finally:session.close()
 
 

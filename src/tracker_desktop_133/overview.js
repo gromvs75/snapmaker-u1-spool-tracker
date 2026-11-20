@@ -31,7 +31,9 @@
  #slice-forecast #forecast-status{font-size:21px;line-height:1.3;margin:16px 0 12px;font-weight:650;letter-spacing:-.3px}
  #slice-forecast .forecast-meta{font-size:13px;gap:7px 18px;color:#c3cddd}
  #slice-forecast #forecast-time{font-size:13px}
- #desktop-forecast-assumption{font-size:12px;color:#a4b0c4;margin:8px 0 0}
+ #desktop-forecast-materials{display:flex;flex-wrap:wrap;gap:8px 16px}
+ .forecast-material-color{display:inline-block;width:.8em;height:.8em;margin-inline-end:6px;border:1px solid #a4abb7;border-radius:50%}
+ #desktop-forecast-materials{font-size:12px;color:#a4b0c4;margin:8px 0 0}
  #desktop-forecast-footer{display:flex;gap:8px 18px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:18px;padding-top:14px;font-size:12px;color:#a4b0c4}
  #desktop-forecast-details{margin-top:14px;color:#b8c9e1}
  #desktop-forecast-details p{font-size:12px;margin:10px 0;overflow-wrap:anywhere}
@@ -53,7 +55,7 @@
  const historyArchive=node('section');historyArchive.id='history-start-checks';el('view-history').append(historyArchive);
  const originalGuard=renderGuard;let signature='';
  renderGuard=(data,force=false)=>{
-  const g=data.last_guard||data.last_preflight,m=data.monitor;
+  const g=data.last_guard,m=data.monitor;
   const next=JSON.stringify([g,m.state,m.connected,m.filename,currentLang]);if(!force&&next===signature)return;signature=next;
   historyArchive.replaceChildren();
   const content=el('guard-content'),open=content.querySelector('details')?.open;
@@ -88,20 +90,41 @@
  const forecast=el('slice-forecast'),header=forecast.querySelector('.overview-heading'),meta=forecast.querySelector('.forecast-meta');
  const separate=node('span');separate.id='desktop-forecast-separate';header.append(separate);
  const sourceLabel=node('span','Snorca');sourceLabel.id='desktop-forecast-source-label';el('forecast-time').before(sourceLabel);
- const assumption=node('p');assumption.id='desktop-forecast-assumption';meta.after(assumption);
+ const materialList=node('p');materialList.id='desktop-forecast-materials';meta.after(materialList);
  const footer=node('div');footer.id='desktop-forecast-footer';const oldFoot=el('forecast-reserve').parentElement;footer.append(el('forecast-reserve'),el('forecast-no-debit'));oldFoot.replaceWith(footer);
  const details=node('details');details.id='desktop-forecast-details';const summary=node('summary');details.append(summary);footer.after(details);
  const exact=node('p');exact.id='desktop-forecast-exact-time';details.append(exact,el('desktop-forecast-source'),el('desktop-forecast-provisional'),forecast.querySelector('.forecast-mapping'),el('forecast-hide'));
- window.desktopForecastGrouped=(entry,state)=>{
+ window.desktopForecastGrouped=entry=>{
   el('forecast-heading').textContent=t('Прогноз нарезки','Slice forecast','Slicing-Prognose','Прогноз нарізки','Previsión del laminado');
   separate.textContent=t('Отдельно от текущей печати','Separate from the current print','Getrennt vom aktuellen Druck','Окремо від поточного друку','Independiente de la impresión actual');
-  separate.hidden=!entry;sourceLabel.hidden=!entry;footer.hidden=!entry;details.hidden=false;forecast.querySelector('.forecast-mapping').hidden=!entry;exact.hidden=!entry;
-  assumption.hidden=!entry;assumption.textContent=t('По сохранённым остаткам. Привязка материалов к головкам предполагается.','Based on saved balances. Material-to-head mapping is assumed.','Auf Basis gespeicherter Restmengen. Material-Kopf-Zuordnung angenommen.','За збереженими залишками. Прив’язка матеріалів до головок припускається.','Según saldos guardados. Se presupone la asignación de materiales a cabezales.');
-  summary.textContent=t('Источник и подробности расчёта','Source and calculation details','Quelle und Berechnungsdetails','Джерело та подробиці розрахунку','Origen y detalles del cálculo');
+  separate.hidden=!entry;sourceLabel.hidden=!entry;footer.hidden=!entry;details.hidden=false;exact.hidden=!entry;
+  forecast.querySelector('.forecast-mapping').hidden=true;
+  el('forecast-reserve').hidden=true;
+  materialList.replaceChildren();
   el('forecast-no-debit').textContent=t('Прогноз не списывает расход','Forecast does not deduct usage','Prognose bucht keinen Verbrauch','Прогноз не списує витрати','La previsión no descuenta consumo');
-  if(!entry)summary.textContent=t('Дополнительно','More','Weitere Optionen','Додатково','Más opciones');
-  if(entry){exact.textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang);el('forecast-time').textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-   el('forecast-status').textContent=entry.unknown?t('Назначение или остаток не подтверждены','Assignment or balance unconfirmed','Zuordnung oder Restmenge unbestätigt','Призначення або залишок не підтверджені','Asignación o saldo sin confirmar'):entry.shortage?t('Материала не хватает','Not enough material','Material reicht nicht aus','Матеріалу не вистачає','Material insuficiente'):t('✓ По расчёту материала хватит','✓ Estimated material is sufficient','✓ Material reicht laut Berechnung','✓ За розрахунком матеріалу вистачить','✓ El material será suficiente según el cálculo');
-  }else el('forecast-status').textContent=t('Ожидаем нарезку Snorca','Waiting for a Snorca slice','Warte auf Snorca-Slicing','Очікуємо нарізку Snorca','Esperando el laminado de Snorca');
+  summary.textContent=entry?t('Источник и подробности расчёта','Source and calculation details','Quelle und Berechnungsdetails','Джерело та подробиці розрахунку','Origen y detalles del cálculo'):t('Дополнительно','More','Weitere Optionen','Додатково','Más opciones');
+  const status=el('forecast-status');
+  status.style.color='';
+  if(!entry){
+   status.textContent=t('Ожидаем нарезку Snorca','Waiting for a Snorca slice','Warte auf Snorca-Slicing','Очікуємо нарізку Snorca','Esperando el laminado de Snorca');
+   return;
+  }
+  exact.textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang);
+  el('forecast-time').textContent=new Date(entry.observed_at*1000).toLocaleString(currentLang,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const materials=entry.materials||[];
+  status.textContent=materials.length?t('Привязка к головкам проверяется при запуске','Head mapping is checked at print start','Kopfzuordnung wird beim Druckstart geprüft','Прив’язка до головок перевіряється при запуску','La asignación de cabezales se comprueba al iniciar'):t('Нет данных о расходе материала','No material usage available','Keine Materialverbrauchsdaten','Немає даних про витрати матеріалу','No hay datos de consumo');
+  const label=t('Материал','Material','Material','Матеріал','Material');
+  for(const material of materials){
+   const item=node('span');
+   if(material.color){
+    const swatch=node('span',undefined,'forecast-material-color');
+    swatch.style.backgroundColor=material.color;
+    swatch.title=material.color;
+    swatch.setAttribute('aria-label',material.color);
+    item.append(swatch);
+   }
+   item.append(`${label} ${material.number} · ${material.grams.toLocaleString(currentLang,{maximumFractionDigits:3})} ${gramUnit()}`);
+   materialList.append(item);
+  }
  };
 })();

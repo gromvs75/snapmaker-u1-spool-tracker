@@ -22,7 +22,7 @@
   el('overview-connection').textContent=label(m.state);
   if(m.connected&&['printing','paused'].includes(m.state)){
    el('overview-file').textContent=m.filename;
-   if(data.last_preflight?.filename!==m.filename)el('overview-result').textContent=t('Текущая печать — проверка запуска не подтверждена','Current print — start check not confirmed','Aktueller Druck — Startprüfung nicht bestätigt','Поточний друк — перевірку запуску не підтверджено','Impresión actual — comprobación de inicio sin confirmar');
+   if(data.last_guard?.filename!==m.filename)el('overview-result').textContent=t('Текущая печать — проверка запуска не подтверждена','Current print — start check not confirmed','Aktueller Druck — Startprüfung nicht bestätigt','Поточний друк — перевірку запуску не підтверджено','Impresión actual — comprobación de inicio sin confirmar');
   }
  };
 })();

@@ -21,7 +21,8 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
     package=create_backup(old,'1.3.3');preview=s.call('validate_backup',package=package)
     s.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     folder=tmp_path/'slices'/'Test project'/'Metadata';folder.mkdir(parents=True)
-    (folder/'.42.3.gcode').write_bytes(payload('4.01, 0, 0, 0'))
+    (folder/'.42.3.gcode').write_bytes(payload('15.08, 2.36').replace(
+        b'; printer_model', b'; filament_colour = #FD8008;#000000\n; printer_model'))
     (folder/'model_settings.config').write_text('<config><plate><metadata key="plater_id" value="2"/><metadata key="gcode_file" value="Metadata/.42.3.gcode"/></plate></config>')
     forecast=SliceForecast(s,tmp_path/'slices');forecast.poll();forecast.observer.settle=0;forecast.poll()
     server=serve(s,s.fleet,forecast=forecast);thread=threading.Thread(target=server.serve_forever);thread.start()
@@ -31,12 +32,13 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
             browser=pw.chromium.launch();page=browser.new_page(viewport=dict(width=1202,height=950))
             errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
-            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('По расчёту материала хватит')")
+            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('Привязка к головкам проверяется')")
             assert 'Стол 2' in page.locator('#forecast-single').inner_text()
-            assert '567,6' in page.locator('.forecast-head-note').inner_text()
-            page.locator('#desktop-forecast-details summary').click()
-            assert 'сохранённым катушкам' in page.locator('#desktop-forecast-provisional').inner_text()
-            page.locator('#desktop-forecast-details summary').click()
+            materials = page.locator('#desktop-forecast-materials > span')
+            assert materials.all_text_contents() == ['Материал 1 · 15,08 гр.', 'Материал 2 · 2,36 гр.']
+            colors = page.locator('.forecast-material-color')
+            assert [colors.nth(i).get_attribute('title') for i in range(2)] == ['#FD8008', '#000000']
+            assert page.locator('.forecast-head-note').count() == 0
             page.screenshot(path=str(screens/'forecast.png'),full_page=True)
             page.locator('#nav-spools').click()
             page.locator('#spools-table .graphite-balance').first.wait_for()

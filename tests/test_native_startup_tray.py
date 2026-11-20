@@ -6,14 +6,18 @@ import pytest
 from tracker_uid_window import UidWindow
 
 
-@pytest.mark.parametrize('visible,minimized,ready,quitting,expected', [
-    (True, False, True, False, False),
-    (False, False, True, False, True),
-    (True, True, True, False, True),
-    (False, False, False, False, False),
-    (False, False, True, True, False),
+@pytest.mark.parametrize('visible,minimized,active,ready,quitting,expected', [
+    (True, False, True, True, False, False),
+    (True, False, False, True, False, True),
+    (False, False, True, True, False, True),
+    (True, True, True, True, False, True),
+    (True, False, False, False, False, False),
+    (False, False, False, True, True, False),
 ])
-def test_automatic_menu_only_when_dashboard_cannot_show_forecast(visible, minimized, ready, quitting, expected):
+def test_automatic_menu_checks_macos_focus(monkeypatch, visible, minimized, active, ready, quitting, expected):
+    app = SimpleNamespace(isActive=lambda: active)
+    monkeypatch.setitem(sys.modules, 'AppKit', SimpleNamespace(
+        NSApplication=SimpleNamespace(sharedApplication=lambda: app)))
     shell = object.__new__(UidWindow)
     shell._ready, shell._quitting = ready, quitting
     shell._window = SimpleNamespace(native=SimpleNamespace(
@@ -23,8 +27,14 @@ def test_automatic_menu_only_when_dashboard_cannot_show_forecast(visible, minimi
     assert shell._can_popup_forecast() is False
 
 
-@pytest.mark.parametrize('visible,queued', [(False, False), (True, False), (True, True)])
-def test_existing_slice_is_not_replayed_but_new_hidden_slice_still_opens_menu(monkeypatch, visible, queued):
+@pytest.mark.parametrize('visible,active,queued,expected_popup', [
+    (False, True, False, True),
+    (True, True, False, False),
+    (True, False, False, True),
+    (True, False, True, True),
+    (True, True, True, False),
+])
+def test_only_new_slice_opens_menu_when_tracker_is_in_background(monkeypatch, visible, active, queued, expected_popup):
     import tracker_user_tray
     monkeypatch.setattr(sys, 'platform', 'darwin')
     callbacks, clicks, updates = [], [], []
@@ -35,6 +45,10 @@ def test_existing_slice_is_not_replayed_but_new_hidden_slice_still_opens_menu(mo
             callback(*args)
     monkeypatch.setitem(sys.modules, 'PyObjCTools', SimpleNamespace(
         AppHelper=SimpleNamespace(callAfter=schedule)))
+    app = SimpleNamespace(active=not active if queued else active)
+    app.isActive = lambda: app.active
+    monkeypatch.setitem(sys.modules, 'AppKit', SimpleNamespace(
+        NSApplication=SimpleNamespace(sharedApplication=lambda: app)))
     monkeypatch.setattr(tracker_user_tray, 'tray_model', lambda snapshot: snapshot)
     monkeypatch.setattr(tracker_user_tray, 'create_tray_icon', lambda status: status)
     def menu(model, *actions):
@@ -57,10 +71,11 @@ def test_existing_slice_is_not_replayed_but_new_hidden_slice_still_opens_menu(mo
     tray = SimpleNamespace(_status_item=SimpleNamespace(button=lambda: SimpleNamespace(
         performClick_=lambda sender: clicks.append(tray.menu['event']))))
     shell._watch_forecast(tray)
-    # Queued callbacks check visibility when actually run on Cocoa's thread.
+    # The user can switch between Tracker and Orca while callbacks are queued.
+    app.active = active
     for callback in callbacks:
         callback()
-    assert clicks == ([] if visible else [('new', 120, 'hash-2')])
+    assert clicks == ([('new', 120, 'hash-2')] if expected_popup else [])
     assert len(updates) == 5  # repeated telemetry is not another notification
     assert tray.icon == 'shortage'
     assert not shell._menu_presented

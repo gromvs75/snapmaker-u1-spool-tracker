@@ -4,10 +4,10 @@ SQLite methods never contact a printer. A persisted attempt fences retries even
 when the command response is lost. Transport checks the same job before acting.
 """
 import json
-import math
 import time
 import uuid
 from datetime import datetime,timezone
+from tool_mapping import physical_weights
 from tracker_uid_accounting import job_key
 
 
@@ -42,15 +42,15 @@ class Guard:
         if old:return json.loads(old[0])
         settings=self.library.settings()['values'];mode=settings.get('guard_modes',{}).get(pid,'warn')
         if mode=='off':return None
-        weights=profile['logical_weights'];mapping=profile['mapping']
-        if (job.get('status')!='in_progress' or len(weights)!=4 or sorted(mapping)!=[0,1,2,3]
-                or any(type(w) not in (int,float) or not math.isfinite(w) or w<0 for w in weights)):
+        if job.get('status') != 'in_progress':
             raise ValueError('Unverified start plan')
+        weights = profile['logical_weights']
+        mapping = profile['mapping']
+        required_by_head = physical_weights(weights, mapping)
         inventory=self.library.forecast_inventory(fleet=fleet);printer=inventory['printers'].get(pid)
         if printer is None:return None
         rows=[];reasons=[];reserve=inventory['safety_margin_g']
-        for ch in range(4):
-            required=sum(w for i,w in enumerate(weights) if mapping[i]==ch)
+        for ch, required in enumerate(required_by_head):
             head=printer['heads'][ch];spool=head['spool'];remaining=spool['remaining_mg']/1000 if spool else None
             state='unused' if required==0 else 'unassigned' if not head['usable'] else 'insufficient' if remaining<required+reserve else 'ok'
             rows.append(dict(tool='T'+str(ch),spool_id=spool['spool_id'] if spool else None,spool_name=spool['name'] if spool else None,required_g=required,remaining_g=remaining,status=state))

@@ -126,9 +126,7 @@ class Library:
         inventory=self.forecast_inventory(fleet=fleet)
         pid=inventory['selected_printer']
         if pid not in inventory['printers']:pid=next(iter(inventory['printers']),'')
-        heads=inventory['printers'].get(pid,{}).get('heads',[
-            dict(channel=str(i),spool=None,usable=False,reason='Принтер и катушка не выбраны') for i in range(4)])
-        forecast=forecast_entry(dict(plan,state='ready'),heads,inventory['safety_margin_g'])
+        forecast=forecast_entry(dict(plan,state='ready'))
         context=dict(printer_id=pid,forecast=forecast,reserve=inventory['safety_margin_g'])
         return dict(context,revision=revision([plan,context]))
 
@@ -138,7 +136,7 @@ class Library:
             preview=self.export_preview(plan,fleet=fleet)
             if preview['revision']!=expected_revision:
                 raise AccountingConflict('Назначение или остаток изменились. Повторите экспорт.')
-            payload=dict(plan,**preview,mapping_assumed=True)
+            payload=dict(plan,**preview,mapping_assumed=False)
             key=revision(payload)
             old=self.db.execute('SELECT 1 FROM uid_export_plans WHERE plan_id=?',(key,)).fetchone()
             self.db.execute('INSERT OR IGNORE INTO uid_export_plans VALUES(?,?,?)',(key,json.dumps(payload),time.time()))

@@ -56,14 +56,11 @@ def handle_slicer_hook(directory, path, *, output_name=None, dialog=None):
         except CatalogBusyError:
             call=lambda operation,data:instance_call(directory,operation,data)
         preview=call('export_preview',{'plan':plan})
-        if preview['forecast']['status']!='ok':
-            lines=['Проверьте материал перед экспортом. Нарезка не списывает расход.']
-            for r in preview['forecast']['rows']:
-                if r['used']:
-                    lines.append('T'+r['channel']+': '+(r['reason'] if r['unknown'] else
-                        f"нужно {r['used']:.1f} г; остаток {r['remaining']:.1f} г; резерв {preview['reserve']:.1f} г"))
-            lines.append('Карта 1→T0…4→T3 предполагается. Фактическая карта проверяется при старте печати.')
-            if not dialog('\n'.join(lines),allow_proceed=True):return 1
+        lines=['Расход по материалам проекта. Привязка к головкам проверяется при запуске печати.']
+        for material in preview['forecast']['materials']:
+            grams = f"{material['grams']:.4f}".rstrip('0').rstrip('.').replace('.', ',')
+            lines.append(f"Материал {material['number']} · {grams} г")
+        if not dialog('\n'.join(lines),allow_proceed=True):return 1
         call('export_save',dict(plan=plan,expected_revision=preview['revision'],confirmed=True))
         return 0
     except (ValueError,OSError,KeyError,TimeoutError) as exc:

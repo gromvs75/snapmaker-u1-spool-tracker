@@ -124,17 +124,15 @@ class UidWindow:
             self._tray_stop.wait(1)
 
     def _can_popup_forecast(self):
-        """Called on Cocoa's main thread immediately before opening NSMenu.
-
-        The visible dashboard already displays the forecast. Modal menu tracking
-        can interrupt its initial window animation/paint, so only auto-open the
-        menu when the dashboard is hidden or minimized. Manual tray clicks are
-        unaffected. Check here, not in the worker: visibility can change while
-        the refresh is queued.
-        """
+        """Check foreground state on Cocoa's main thread, after the queued refresh."""
         native = getattr(self._window, 'native', None)
-        return bool(self._ready and not self._quitting and native is not None
-                    and (not native.isVisible() or native.isMiniaturized()))
+        if not self._ready or self._quitting or native is None:
+            return False
+        if not native.isVisible() or native.isMiniaturized():
+            return True
+        # AppKit still reports a window as visible when Orca covers it.
+        from AppKit import NSApplication
+        return not NSApplication.sharedApplication().isActive()
 
     def _route_macos_quit(self):
         if hasattr(self, '_quit_target'):

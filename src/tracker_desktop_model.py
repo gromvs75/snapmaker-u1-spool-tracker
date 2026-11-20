@@ -67,7 +67,7 @@ def snapshot(library, history_review, fleet):
     for p in catalog['export_plans']:
         if p['printer_id']==pid or not p['printer_id']:
             plans[p['plan_id']]=dict(filename=p['filename'],weights=p['weights'],sha256=p['file_sha256'],
-                                    created_at=p['created_at'],status='exported',mapping_assumed=True)
+                                    created_at=p['created_at'],status='exported',mapping_assumed=False)
     connected=False
     active=next((r for r in reversed(list(runs.values())) if r['status']=='active'),None)
     # Only the independent, fresh Moonraker monitor can establish print status.
@@ -87,10 +87,9 @@ def snapshot(library, history_review, fleet):
     if catalog['export_plans']:
         p=next((p for p in catalog['export_plans'] if p['printer_id']==pid or not p['printer_id']),None)
         if p:
-            rows=[dict(tool='T'+r['channel'],spool_id=(r['spool'] or {}).get('spool_id'),spool_name=(r['spool'] or {}).get('name'),
-                       required_g=r['used'],remaining_g=r['remaining'],status={'ok':'ok','shortage':'insufficient','unknown':'unassigned','unused':'unused'}[r['status']]) for r in p['forecast']['rows']]
-            last_preflight=dict(filename=p['filename'],source='export',rows=rows,summary='Export check: mapping unverified',
-                time=datetime.fromtimestamp(p['created_at'],timezone.utc).isoformat(),reason='Mapping is provisional; export does not deduct filament.')
+            last_preflight=dict(filename=p['filename'],source='export',rows=[],summary='Export saved',
+                time=datetime.fromtimestamp(p['created_at'],timezone.utc).isoformat(),
+                reason='Material-to-head mapping is available at print start.')
     return dict(language=settings.get('language','ru'),safety_margin_g=settings.get('safety_margin_g',5),
                 slots=slots,slot_status=slot_status,spools=spools,plans=plans,runs=runs,last_preflight=last_preflight,last_guard=None,
                 printer=dict(host=address.hostname if address else '',port=address.port or (443 if address.scheme=='https' else 80) if address else 7125,
@@ -104,7 +103,7 @@ def snapshot(library, history_review, fleet):
 def forecast_view(forecast,printer_id):
     """Use the new freshness/identity rules through the established forecast view."""
     entries=[]
-    for e in forecast.get('printers',{}).get(printer_id,{}).get('entries',[]):
+    for e in forecast.get('printers',{}).get(printer_id,{}).get('entries',forecast.get('entries',[])):
         # The original renderer only accepts complete entries. Pending/removed
         # entries must disappear, rather than retain a green outdated result.
         if e['state']!='ready':continue
@@ -116,7 +115,7 @@ def forecast_view(forecast,printer_id):
                             observed_at=e.get('completed_at_ns',0)/1e9 or e.get('observed_at',0),
                             unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
     value=dict(entries=entries,printer_id=printer_id,latest=forecast.get('latest'),safety_margin_g=forecast.get('safety_margin_g',5),
-               project=forecast.get('project'),error=forecast.get('error',''),mapping=[0,1,2,3],mapping_assumed=True)
+               project=forecast.get('project'),error=forecast.get('error',''),mapping=None,mapping_assumed=False)
     from tracker_uid_library import revision
     value['revision']=revision(value)
     # Inventory changes update the forecast but are not a newly completed slice.

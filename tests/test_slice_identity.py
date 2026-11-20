@@ -58,7 +58,7 @@ def test_missing_old_foreign_ambiguous_and_malformed_metadata_are_unknown(tmp_pa
     assert bed_identity(p,stamp) is None
     c.write_bytes(b'<config>');assert bed_identity(p,stamp) is None
     c.write_bytes(b'<!DOCTYPE config [<!ENTITY x "3">]><config/>');assert bed_identity(p,stamp) is None
-    assert forecast_entry(dict(source='p/Metadata/.800.99.gcode',state='pending'),[],5)['plate'] is None
+    assert forecast_entry(dict(source='p/Metadata/.800.99.gcode',state='pending'))['plate'] is None
 
 
 @pytest.mark.parametrize('archive_name',['.800.51_config.3mf','.3mf'])

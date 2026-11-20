@@ -38,17 +38,16 @@ def entry(weights, **extra):
                 completed_at_ns=100000000000,observed_at=100,sha256='a'*64,**extra)
 
 
-def test_reserve_combined_heads_threshold_and_unknown():
-    h=heads();h[1]['spool']=dict(h[0]['spool'])
-    r=forecast_entry(entry([10,15,0,0]),h,5)
-    assert r['status']=='ok' and r['rows'][0]['after']==5
-    h[0]['spool']['remaining_mg']=29999;h[1]['spool']['remaining_mg']=29999
-    r=forecast_entry(entry([10,15,0,0]),h,5)
-    assert r['status']=='shortage' and abs(r['rows'][0]['deficit']-.001)<1e-9
-    h[0]['usable']=False
-    assert forecast_entry(entry([10,0,0,0]),h,5)['status']=='unknown'
-    assert forecast_entry(entry([0,0,0,0]),h,5)['status']=='unknown'
-    assert forecast_entry(dict(source='x',state='pending'),h,5)['rows']==[]
+def test_two_materials_cannot_claim_physical_heads():
+    preview = forecast_entry(entry([15.08, 2.36, 0, 0], colors=['#FD8008', '#000000']))
+    assert preview['materials'] == [
+        dict(number=1, grams=15.08, color='#FD8008'),
+        dict(number=2, grams=2.36, color='#000000'),
+    ]
+    assert preview['status'] == 'unknown' and preview['requires_mapping']
+    assert preview['rows'] == [] and not preview['mapping_assumed']
+    assert forecast_entry(entry([0, 0, 0, 0]))['materials'] == []
+    assert forecast_entry(dict(source='x', state='pending'))['rows'] == []
 
 
 def test_forecast_printer_isolation_and_accounted_file_exclusion():
@@ -56,13 +55,27 @@ def test_forecast_printer_isolation_and_accounted_file_exclusion():
     inv=dict(printers={'a':dict(heads=heads(30000)),'b':dict(heads=heads(29000))},
              selected_printer='b',safety_margin_g=5,accounted={})
     f=enrich(snap,inv)
-    assert f['printers']['a']['entries'][0]['status']=='ok'
-    assert f['printers']['b']['entries'][0]['status']=='shortage'
+    assert f['printers']['a']['entries'][0]['materials'] == f['printers']['b']['entries'][0]['materials']
+    assert f['printers']['a']['heads'][0]['spool']['remaining_mg'] == 30000
+    assert f['printers']['b']['heads'][0]['spool']['remaining_mg'] == 29000
     assert f['selected_printer']=='b'
     inv['accounted']={e['sha256']:101}
     assert enrich(snap,inv)['latest'] is None
     e['completed_at_ns']=102000000000
     assert enrich(snap,inv)['latest']==e['source']
+
+
+def test_used_fifth_profile_keeps_grams_but_never_assumes_a_head():
+    from tracker_desktop_model import forecast_view
+
+    e = entry([32.85, 0, 31.01, 8.42, 21.91], plate=3)
+    snapshot = enrich(dict(entries=[e], latest=e['source']), dict(
+        printers={'u1': dict(heads=heads(100000))}, selected_printer='u1',
+        safety_margin_g=5, accounted={},
+    ))
+    shown = forecast_view(snapshot, 'u1')['entries'][0]
+    assert shown['weights'] == e['weights'] and shown['requires_mapping']
+    assert shown['unknown'] and not shown['mapping_assumed'] and shown['rows'] == []
 
 
 def test_reserve_and_selected_printer_survive_restart(tmp_path):

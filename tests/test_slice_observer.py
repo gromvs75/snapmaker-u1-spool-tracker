@@ -98,6 +98,35 @@ def test_multiple_plates_and_models_distinct_same_content(lab):
     assert len(calls[0]) == 3
 
 
+def test_project_with_five_material_profiles_observes_each_plate(lab):
+    from gcode import GCodeError, parse_u1_gcode
+
+    folder, legacy, _ = lab
+    watcher = SliceObserver(legacy.root, settle_seconds=0, allow_extra_profiles=True)
+    poll = watcher.poll
+    first = folder / '.42.1.gcode'
+    first.write_bytes(payload('39.76, 2.66, 39.69, 4.53, 0.00'))
+    (folder / '.42.3.gcode').write_bytes(payload('32.85, 0.00, 31.01, 8.42, 21.91'))
+    (folder / '.42.5.gcode').write_bytes(payload('0.00, 0.24, 0.00, 0.00, 0.00'))
+    (folder / '.42.6.gcode').write_bytes(payload('0.00, 0.24, 0.00, 0.00, nan'))
+    assert poll() == []
+    assert [e['weights'] for e in poll()] == [
+        [39.76, 2.66, 39.69, 4.53], [32.85, 0.0, 31.01, 8.42, 21.91], [0.0, 0.24, 0.0, 0.0],
+    ]
+    assert next(e for e in watcher.entries.values() if e['source'].endswith('.42.6.gcode'))['state'] == 'pending'
+    with pytest.raises(GCodeError, match='one to four'):
+        parse_u1_gcode(first)
+
+
+def test_unchanged_completed_plate_is_not_loaded_again(lab, monkeypatch):
+    folder, _, poll = lab
+    path = folder / '.42.1.gcode'
+    path.write_bytes(payload())
+    assert poll() == [] and len(poll()) == 1
+    monkeypatch.setattr(module, 'read_snapshot', lambda path: pytest.fail('Unchanged G-code was read again'))
+    assert poll() == []
+
+
 @pytest.mark.parametrize('bad', [
     payload().replace(b'10, 20, 0, 0', b'nan, 0, 0, 0'),
     payload().replace(b'10, 20, 0, 0', b'-1, 0, 0, 0'),

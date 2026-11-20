@@ -90,14 +90,13 @@ function renderSliceForecast(box,heads,active){
  select.value=viewedPlate;select.hidden=entries.length<2;box.append(select);
  function draw(){content.replaceChildren();const e=entries.find(e=>e.source===viewedPlate);
   const title=document.createElement('strong');title.className='forecast-result '+(e?.status||'unknown');
-  title.textContent=e?.state==='ready'?({ok:'✓ Материала хватает',shortage:'✕ Материала не хватает',unknown:'Проверьте назначения катушек'}[e.status]||'Прогноз готов · выберите принтер'):e?'Нарезка ещё не готова':'Ожидаем завершённую нарезку';content.append(title);
+  title.textContent=e?.state==='ready'?(e.materials?.length?'Привязка к головкам проверяется при запуске':'Нет данных о расходе материала'):e?'Нарезка ещё не готова':'Ожидаем завершённую нарезку';content.append(title);
   if(e?.state==='ready'){
    const plate=e.plate?'Стол '+e.plate:'Стол не определён';
    content.append(paragraph(plate+' · '+new Date(e.completed_at_ns/1e6).toLocaleString('ru-RU')),
-     paragraph('Резерв '+grams((f.safety_margin_g??5)*1000)+' на используемую катушку · Без списания'));
-   const mapping=paragraph('Материалы: 1→T0 · 2→T1 · 3→T2 · 4→T3 (предположение)');mapping.className='mapping-note';content.append(mapping);
+     paragraph('Прогноз не списывает расход'));
+   for(const material of e.materials||[])content.append(paragraph('Материал '+material.number+' · '+grams(material.grams*1000)));
    if(active)content.append(paragraph('Новая нарезка показана отдельно. Головки ниже относятся к текущей печати.'));
-   if(!printer||active){for(const [i,w] of e.weights.entries())if(w>0)content.append(paragraph('Материал '+(i+1)+': '+grams(w*1000)))}
    if(e.source!==f.latest)content.append(paragraph('Выбрана для просмотра. В трее остаётся последняя завершённая нарезка.'));
   }else if(e)content.append(paragraph('Прежний расход не показан как актуальный: файл изменяется или удалён.'));
   const source=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Источник прогноза';

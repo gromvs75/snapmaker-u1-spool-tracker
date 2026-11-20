@@ -134,6 +134,39 @@ def test_tester_material_two_to_t3_timeout_then_completion_and_replay(bench):
     assert c.db.execute('SELECT count(*) FROM uid_debits WHERE delta_mg>0').fetchone()[0]==1
 
 
+def test_orange_and_black_remap_debits_only_the_confirmed_heads(bench):
+    _, catalog, fleet, adapter = bench
+    fleet.states = {'a': snapshot('a', {'0': '04AABBCC', '2': '04112233'})}
+    lifecycle = MotionLifecycle(adapter)
+    mapping = [2, 0, 2, 3]
+    feed = {
+        'filament_feed left': {'extruder0': dict(filament_detected=True)},
+        'filament_feed right': {'extruder2': dict(filament_detected=True)},
+    }
+    job = history('in_progress')
+    profile = dict(filename=job['filename'], started_at=job['start_time'], file_sha256='a' * 64,
+                   mapping=mapping, replenished=[0, 1, 2, 3], logical_weights=[15.08, 2.36, 0, 0],
+                   parameters=[None] * 4, auto_replenish=False, feed_start=feed)
+    start = catalog.inventory_snapshot('a', fleet.states)
+    lifecycle.start('a', filename=job['filename'], observed_at=1011, capture_id='remap',
+                    epoch='first', start=start, channels=['0', '2'])
+    lifecycle.recovery_profile('a', job, profile)
+    lifecycle.disconnected('a', 'Test interruption')
+    status = dict(print_stats=dict(state='complete', filename=job['filename']),
+                  print_task_config=dict(auto_replenish_filament=False, extruder_map_table=mapping,
+                                         extruders_replenished=[0, 1, 2, 3]), **feed)
+    missing = copy.deepcopy(status)
+    missing['print_task_config']['extruder_map_table'] = []
+    assert lifecycle.recovery_terminal('a', history('completed'), missing, 'a' * 64)['status'] == 'review'
+    assert not catalog.db.execute('SELECT * FROM uid_debits').fetchall()
+    result = lifecycle.recovery_terminal('a', history('completed'), status, 'a' * 64)
+    assert result['status'] == 'applied', result
+    assert result['totals_mg'] == {'0': 2360, '2': 15080}
+    assert catalog.spool('04AABBCC')['remaining_mg'] == 297640
+    assert catalog.spool('04112233')['remaining_mg'] == 484920
+    assert lifecycle.recovery_terminal('a', history('completed'), status, 'a' * 64)['status'] == 'duplicate'
+
+
 def test_shared_head_for_used_materials_still_requires_distribution_review(bench):
     life,key,status,c,fleet=scenario(bench,auto=False,profile_overrides=dict(
         mapping=[0,3,2,3],logical_weights=[0,1.55,0,2]))

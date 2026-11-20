@@ -7,40 +7,46 @@ from datetime import datetime
 LOGGER = logging.getLogger('tracker20')
 
 
-def grams(value):
-    return f'{value:.1f}'.replace('.',',')+' г'
+def grams(value, digits=1):
+    return f'{value:.{digits}f}'.replace('.',',')+' г'
 
 
 def tray_model(snapshot):
     printer=snapshot.get('printers',{}).get(snapshot.get('selected_printer'),{})
-    entry=next((e for e in printer.get('entries',[]) if e['source']==snapshot.get('latest')),None)
-    status=entry['status'] if entry and not snapshot.get('error') else 'unknown'
-    label={'ok':'✓ Хватает с резервом','shortage':'✕ Не хватает с резервом','unknown':'Нет подтверждённого прогноза'}[status]
+    entry=next((e for e in printer.get('entries',snapshot.get('entries',[])) if e['source']==snapshot.get('latest')),None)
+    materials = entry['materials'] if entry and not snapshot.get('error') else []
+    label = 'Ожидаем нарезку Snorca'
+    mapping = ''
+    if materials:
+        label = 'Расход по нарезке ' + grams(sum(m['grams'] for m in materials), 2)
+        mapping = 'Привязка к головкам проверяется при запуске'
     if entry:
+        if not materials:label='Нет данных о расходе материала'
         label+=' · '+('Стол '+str(entry['plate']) if entry.get('plate') else 'Стол не определён')+' · '+datetime.fromtimestamp(entry['completed_at_ns']/1e9).strftime('%d.%m %H:%M')
     heads=[]
     for i in range(4):
         head=printer.get('heads',[{}]*4)[i];spool=head.get('spool')
         title=f'T{i} · '+(spool['name']+' — '+grams(spool['remaining_mg']/1000) if spool else 'Не назначена')
-        row=entry['rows'][i] if entry and entry.get('rows') else None
-        if row and row['used']:
-            if row['status']=='ok':title+=' · ✓ после ≈ '+grams(row['after'])
-            elif row['status']=='shortage':title+=' · ✕ не хватает '+grams(row['deficit'])
-            else:title+=' · ? '+(row.get('reason') or 'Проверьте назначение')
-        heads.append(dict(title=title,color=(spool.get('details',{}).get('color') or None) if spool else None,
-                          status=row['status'] if row else None))
-    return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status=status,
-                forecast=label,mapping='Последняя нарезка · карта 1→T0…4→T3 предполагается',heads=heads,
+        heads.append(dict(title=title, color=(spool.get('details', {}).get('color') or None) if spool else None))
+    return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status='unknown',
+                forecast=label,mapping=mapping,materials=materials,heads=heads,
                 event=(entry['source'],entry['completed_at_ns'],entry.get('sha256')) if entry else None)
 
 
 def build_menu(model, show, forecast, quit):
     import pystray
     items=[pystray.MenuItem(model['title'],show),pystray.Menu.SEPARATOR,
-           pystray.MenuItem(model['forecast'],forecast),pystray.MenuItem(model['mapping'],forecast),pystray.Menu.SEPARATOR]
+           pystray.MenuItem(model['forecast'],forecast)]
+    for material in model['materials']:
+        item = pystray.MenuItem(f"Материал {material['number']} · {grams(material['grams'], 2)}", forecast)
+        item._tracker_material_color = material['color']
+        items.append(item)
+    if model['mapping']:
+        items.append(pystray.MenuItem(model['mapping'],forecast))
+    items.append(pystray.Menu.SEPARATOR)
     for head in model['heads']:
         item=pystray.MenuItem(head['title'],forecast)
-        item._tracker_toolhead=True;item._tracker_color=head['color'];item._tracker_status=head['status']
+        item._tracker_toolhead=True;item._tracker_color=head['color']
         items.append(item)
     items.extend([pystray.Menu.SEPARATOR,pystray.MenuItem('Открыть Tracker',show,default=True),
                   pystray.MenuItem('Настроить катушки и слоты…',show),pystray.MenuItem('Выход',quit)])
@@ -66,7 +72,6 @@ def create_tray_icon(status=None):
 def create_toolhead_menu_icon(color=None, status=None):
     """Small neutral toolhead with the user's selected filament color."""
     from PIL import Image, ImageDraw
-    from io import BytesIO
     image = Image.new('RGBA', (60, 72), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     draw.rectangle((24, 1, 36, 10), fill='#aab6c0')
@@ -77,6 +82,18 @@ def create_toolhead_menu_icon(color=None, status=None):
     if status in ('ok', 'shortage'):
         badge = create_tray_icon(status).crop((24, 24, 64, 64)).resize((28, 28))
         image.alpha_composite(badge, (32, 0))
+    return png_bytes(image)
+
+
+def create_material_menu_icon(color):
+    from PIL import Image, ImageDraw
+    image = Image.new('RGBA', (32, 32))
+    ImageDraw.Draw(image).ellipse((3, 3, 29, 29), fill=color, outline='#a4abb7', width=2)
+    return png_bytes(image)
+
+
+def png_bytes(image):
+    from io import BytesIO
     output = BytesIO()
     image.save(output, format='PNG')
     return output.getvalue()
@@ -89,15 +106,22 @@ def install_macos_toolhead_icons(icon):
     original = icon._create_menu_item
     def create_item(descriptor, callbacks):
         item = original(descriptor, callbacks)
-        if getattr(descriptor, '_tracker_toolhead', False):
+        toolhead = getattr(descriptor, '_tracker_toolhead', False)
+        material_color = getattr(descriptor, '_tracker_material_color', None)
+        if toolhead or material_color:
             try:
-                payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None), getattr(descriptor, '_tracker_status', None))
+                if toolhead:
+                    payload = create_toolhead_menu_icon(getattr(descriptor, '_tracker_color', None))
+                    size = (18, 22)
+                else:
+                    payload = create_material_menu_icon(material_color)
+                    size = (16, 16)
                 data = Foundation.NSData.dataWithBytes_length_(payload, len(payload))
                 picture = AppKit.NSImage.alloc().initWithData_(data)
-                picture.setSize_((18, 22))
+                picture.setSize_(size)
                 picture.setTemplate_(False)
                 item.setImage_(picture)
             except Exception:
-                LOGGER.exception('Could not render menu toolhead icon')
+                LOGGER.exception('Could not render forecast menu icon')
         return item
     icon._create_menu_item = create_item

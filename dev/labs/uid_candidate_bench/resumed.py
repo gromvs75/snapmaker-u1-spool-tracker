@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT), str(ROOT/'src'), str(ROOT/'tests')]
 from backup import create_backup
+from dev.observer_fixture import payload
 from storage import Store
 from spoolman_bridge import blank, remote_id
 from test_rfid_bambu import Server
@@ -125,7 +126,13 @@ def main():
             print('PASS '+checks[-1], flush=True)
         # This print finished while Tracker was disconnected: history has no bound capture.
         event('start', filename='unobserved-tangle.gcode'); event('error'); event('resume'); event('complete')
-        profile = root/'manual-history'; launch(); sid = restore('manual-history', linked=True)
+        profile = root/'manual-history'
+        metadata = profile/'slices'/'Synthetic project'/'Metadata'
+        metadata.mkdir(parents=True)
+        plate = metadata/'.42.0.gcode'
+        plate.write_bytes(payload('15.08, 2.36').replace(
+            b'; printer_model', b'; filament_colour = #FD8008;#000000\n; printer_model'))
+        launch(); sid = restore('manual-history', linked=True)
         api('settings', dict(values=dict(spoolman_mode='send'), expected_revision=state()['settings']['revision']))
         connect()
         with sync_playwright() as pw:
@@ -137,6 +144,16 @@ def main():
                 browser = pw.chromium.launch(); page = browser.new_page()
                 page.goto(f'http://127.0.0.1:{descriptor["port"]}/desktop')
             page.on('pageerror', lambda e: ui_errors.append(str(e)))
+            page.locator('#nav-overview').click()
+            expect(page.locator('#forecast-status')).to_contain_text('Привязка к головкам проверяется')
+            expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
+                ['Материал 1 · 15,08 гр.', 'Материал 2 · 2,36 гр.'])
+            expect(page.locator('.forecast-material-color').nth(0)).to_have_attribute('title', '#FD8008')
+            expect(page.locator('.forecast-material-color').nth(1)).to_have_attribute('title', '#000000')
+            expect(page.locator('.forecast-head-note')).to_have_count(0)
+            assert not state()['debits'] and not sm.puts
+            page.screenshot(path=str(out/'forecast-before-print.png'))
+            checks.append('slice: exact grams and colors, no guessed head balances or debit')
             page.locator('#nav-history').click()
             row = page.locator('.history-row').filter(has_text='unobserved-tangle.gcode')
             row.locator('.uid-expand').click()

@@ -4,7 +4,7 @@ import time
 from types import SimpleNamespace
 import pytest
 from tracker_uid_session import Session
-from tracker_uid_collectors import ReadOnlyMoonraker
+from tracker_uid_collectors import ProfileHistory
 from tracker_uid_guard import execute
 from test_desktop_services import Fleet
 
@@ -61,6 +61,20 @@ def test_unknown_or_changed_printer_never_retries(guard,fault):
     execute(s,'a',c,ticket)
     assert c.writes==(['pause'] if fault=='lost' else [])
     assert s.call('guard_check','a',job,p)['state']=='pause_failed'
+
+
+def test_actual_remap_with_repeated_unused_entries_keeps_start_profile(guard):
+    s, job, _, _ = guard
+    client = Client(job)
+    client.status = lambda: dict(print_stats=dict(state='printing', filename=job['filename']),
+        print_task_config=dict(extruder_map_table=[2, 0, 2, 3], extruders_replenished=[0, 1, 2, 3]))
+    client.inspect = lambda filename: dict(file_sha256='a' * 64, logical_weights=[15.08, 2.36, 0, 0])
+    store = SimpleNamespace()
+    collect = ProfileHistory(client, store, guard_sink=lambda job, profile: s.call('guard_check', 'a', job, profile))
+    collect()
+    assert store._motion_slicer_profile['mapping'] == [2, 0, 2, 3]
+    assert [row['required_g'] for row in s.call('guard_snapshot', 'a')['guard']['rows']] == [2.36, 0, 15.08, 0]
+    assert not s.call('inspect')['debits']
 
 
 def test_late_start_restore_and_off_do_not_arm_pause(guard):

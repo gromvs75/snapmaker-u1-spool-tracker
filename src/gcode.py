@@ -10,12 +10,12 @@ class GCodeError(ValueError):
     pass
 
 
-def _parse_line(line):
+def _parse_line(line, *, allow_extra_profiles=False):
     match = METADATA.match(line)
     if not match:
         return None
     parts = match.group(1).split(",")
-    if not 1 <= len(parts) <= 4:
+    if len(parts) > 4 and not allow_extra_profiles:
         raise GCodeError("Expected one to four per-tool filament weights")
     try:
         values = [float(part.strip()) for part in parts]
@@ -24,6 +24,14 @@ def _parse_line(line):
     if any(not math.isfinite(value) or value < 0 for value in values):
         raise GCodeError("Filament weights must be finite and non-negative")
     return values + [0.0] * (4 - len(values))
+
+
+def parse_slice_usage(line, *, allow_extra_profiles=False):
+    """An Orca project can declare more material profiles than physical heads."""
+    values = _parse_line(line, allow_extra_profiles=allow_extra_profiles)
+    if values is not None and len(values) > 4 and not any(values[4:]):
+        return values[:4]
+    return values
 
 
 def parse_u1_gcode_handle(handle, tail_bytes=1024 * 1024):

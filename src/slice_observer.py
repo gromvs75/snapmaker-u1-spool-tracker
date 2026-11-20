@@ -4,16 +4,17 @@ Internal v2.4.1 non-BBL format only. A forecast is evidence of a completed
 file, never evidence that this is the currently selected/unedited GUI plate.
 """
 import hashlib
-import io
 import os
 from pathlib import Path
 import re
 import stat
 import time
 
-from gcode import GCodeError, METADATA, parse_u1_gcode_handle
+from gcode import GCodeError, METADATA, parse_slice_usage
 from slice_bed_marker import embedded_bed_identity
 
+FILAMENT_COLOUR = re.compile(r'^;\s*filament_colour\s*=\s*(.*?)\s*$', re.IGNORECASE)
+HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}')
 NAME = re.compile(r'^\.[0-9]+\.[0-9]+\.gcode$')
 MAX_BYTES = 128 * 1024 * 1024
 
@@ -41,7 +42,7 @@ def read_snapshot(path):
     return content, fingerprint(after)
 
 
-def completed_weights(content):
+def completed_materials(content, *, allow_extra_profiles=False):
     text = content.decode('utf-8', errors='strict')
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     # Non-BBL Snorca writes the final config block after executable + usage.
@@ -59,14 +60,22 @@ def completed_weights(content):
     weights = [i for i, line in enumerate(lines) if METADATA.match(line)]
     if len(weights) != 1 or not positions[1] < weights[0] < positions[2]:
         raise GCodeError('Missing or ambiguous usage')
-    return parse_u1_gcode_handle(io.BytesIO(content))
+    usage = parse_slice_usage(lines[weights[0]], allow_extra_profiles=allow_extra_profiles)
+    colors = []
+    color_lines = [match.group(1) for line in lines[positions[2] + 1:positions[3]]
+                   if (match := FILAMENT_COLOUR.match(line))]
+    if len(color_lines) == 1:
+        colors = [color if HEX_COLOUR.fullmatch(color) else None
+                  for color in map(str.strip, color_lines[0].split(';'))]
+    return usage, colors
 
 
 class SliceObserver:
-    def __init__(self, root, settle_seconds=1.0, clock=time.monotonic, layout='snorca'):
+    def __init__(self, root, settle_seconds=1.0, clock=time.monotonic, layout='snorca', *, allow_extra_profiles=False):
         if layout not in ('snorca', 'cli'):
             raise ValueError('Unsupported observer layout')
         self.layout = layout
+        self.allow_extra_profiles = allow_extra_profiles
         self.root = Path(root).resolve(strict=True)
         self.settle = settle_seconds
         self.clock = clock
@@ -102,21 +111,24 @@ class SliceObserver:
             try:
                 if Path(str(path) + '.tmp').exists():
                     raise GCodeError('Slicing temporary file exists')
+                previous = self.entries.get(key, {})
+                candidate = self._candidates.get(key)
+                if (previous.get('state') == 'ready' and candidate
+                        and fingerprint(path.lstat()) == candidate[0][0]):
+                    continue
                 content, signature = read_snapshot(path)
                 digest = hashlib.sha256(content).hexdigest()
                 identity = (signature, digest)
-                candidate = self._candidates.get(key)
                 if not candidate or candidate[0] != identity:
                     self._candidates[key] = (identity, now)
                     self.entries[key] = {'source': key, 'state': 'pending'}
                     continue
                 if now - candidate[1] < self.settle:
                     continue
-                weights = completed_weights(content)
+                weights, colors = completed_materials(content, allow_extra_profiles=self.allow_extra_profiles)
                 plate, plate_identity = embedded_bed_identity(content)
-                previous = self.entries.get(key, {})
                 preview = {'source': key, 'state': 'ready', 'sha256': digest,
-                           'weights': weights, 'completed_at_ns': signature[3],
+                           'weights': weights, 'colors': colors, 'completed_at_ns': signature[3],
                            'plate': plate, 'plate_identity': plate_identity,
                            'observed_at': previous.get('observed_at', time.time()) if previous.get('sha256') == digest else time.time(),
                            'mapping': 'unknown'}

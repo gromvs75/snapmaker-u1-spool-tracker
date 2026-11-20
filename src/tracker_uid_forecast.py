@@ -8,33 +8,15 @@ from slice_identity import bed_identity
 from slice_observer import SliceObserver
 
 
-def forecast_entry(entry, heads, reserve):
-    """1.3.3 forecast rules adapted to explicit 2.0 bindings, without old Store.
-
-    Material i -> Ti remains a labelled assumption, never an accounting mapping.
-    Sum all heads of the same spool before applying the reserve once.
-    """
-    result=dict(entry,plate=entry.get('plate'),mapping_assumed=True)
-    if entry['state']!='ready':return dict(result,rows=[],status='unknown')
-    totals={}
-    for head,used in zip(heads,entry['weights']):
-        spool=head['spool']
-        if spool:totals[spool['spool_id']]=totals.get(spool['spool_id'],0)+used
-    rows=[]
-    for head,used in zip(heads,entry['weights']):
-        spool=head['spool'];remaining=spool['remaining_mg']/1000 if spool else None
-        required=totals.get(spool['spool_id'],used) if spool else used
-        unknown=bool(used and not head.get('forecast_usable',head['usable']))
-        provisional=bool(used and not unknown and not head['usable'])
-        enough=bool(not used or not unknown and remaining is not None and remaining>=required+reserve)
-        rows.append(dict(head,used=used,remaining=remaining,
-                         after=remaining-required if remaining is not None else None,
-                         deficit=max(0,required+reserve-remaining) if remaining is not None else None,
-                         unknown=unknown,enough=enough,provisional=provisional,
-                         status='unused' if not used else 'unknown' if unknown else 'ok' if enough else 'shortage'))
-    status=('unknown' if not any(entry['weights']) or any(r['unknown'] for r in rows)
-            else 'shortage' if any(not r['enough'] for r in rows) else 'ok')
-    return dict(result,rows=rows,status=status,provisional=any(r['provisional'] for r in rows))
+def forecast_entry(entry):
+    """Keep Orca's material numbers until the printer reports a job's head mapping."""
+    colors = entry.get('colors', [])
+    materials = [
+        dict(number=i + 1, grams=weight, color=colors[i] if i < len(colors) else None)
+        for i, weight in enumerate(entry.get('weights', [])) if weight > 0
+    ]
+    return dict(entry, plate=entry.get('plate'), materials=materials, rows=[],
+                status='unknown', mapping_assumed=False, requires_mapping=bool(materials))
 
 
 def enrich(snapshot, inventory):
@@ -46,11 +28,12 @@ def enrich(snapshot, inventory):
                       e.get('completed_at_ns',0)/1e9<=inventory['accounted'][e['sha256']])]
     ready=[e for e in current if e['state']=='ready']
     source=max(ready,key=lambda e:e['completed_at_ns'])['source'] if ready else None
-    printers={pid:dict(p,entries=[forecast_entry(e,p['heads'],inventory['safety_margin_g']) for e in current])
+    previews = [forecast_entry(entry) for entry in current]
+    printers={pid:dict(p,entries=previews)
               for pid,p in inventory['printers'].items()}
     selected=inventory['selected_printer']
     if selected not in printers:selected=next(iter(printers),'')
-    return dict(snapshot,entries=current,latest=source,project=project,printers=printers,
+    return dict(snapshot,entries=previews,latest=source,project=project,printers=printers,
                 selected_printer=selected,safety_margin_g=inventory['safety_margin_g'])
 
 
@@ -68,7 +51,7 @@ class SliceForecast:
         if not root.is_dir():
             result=dict(entries=[],latest=None,watch_root=str(root),checked_at=time.time(),error='Каталог нарезки пока не найден.')
         else:
-            if self.observer is None:self.observer=SliceObserver(root)
+            if self.observer is None:self.observer=SliceObserver(root, allow_extra_profiles=True)
             self.observer.poll()
             entries=copy.deepcopy(list(self.observer.entries.values()))
             for entry in entries:

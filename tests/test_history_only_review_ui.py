@@ -38,12 +38,47 @@ def test_history_only_choose_spool_send_restore_and_replay(tmp_path,remote,lost_
             row=page.locator('.history-row').filter(has_text='tangle.gcode');row.locator('.uid-expand').click()
             expect(page.locator('#uid-history-prepare')).to_be_visible()
             page.locator('#uid-history-prepare').click()
-            expect(page.locator('#uid-history-spool')).to_have_value('')
-            assert page.locator('.uid-extra-amount').count()==0
+            dialog=page.locator('#uid-history-dialog')
+            spool=page.locator('#uid-history-spool')
+            amount=dialog.get_by_label('Расход, г',exact=True).first
+            apply=page.locator('#uid-review-apply')
+            expect(spool).to_have_value('')
+            expect(amount).to_be_visible()
+            expect(amount).to_be_disabled()
+            expect(apply).to_be_disabled()
+            expect(dialog.locator('.uid-saved-plan')).to_have_count(0)
             assert not app.call('inspect')['debits'] and not value['writes']
-            page.locator('#uid-history-spool').select_option(sid);page.locator('#uid-history-add-spool').click()
-            expect(page.locator('.uid-extra-amount')).to_have_value('')
-            page.locator('.uid-extra-amount').fill('3.5');page.locator('#uid-review-ack').check()
+            if not lost_reply:
+                page.screenshot(path=str(out/'manual-empty.png'))
+            spool.select_option('other')
+            expect(amount).to_be_enabled()
+            expect(apply).to_have_text('Учесть в Tracker')
+            amount.fill('9')
+            spool.select_option(sid)
+            expect(amount).to_have_value('')
+            expect(apply).to_have_text('Учесть в Tracker и продолжить')
+            amount.fill('3.5')
+            expect(apply).to_be_disabled()
+            page.locator('#uid-review-ack').check()
+            for invalid in ('0','500.001'):
+                amount.fill(invalid)
+                expect(apply).to_be_disabled()
+            amount.fill('3.5')
+            expect(apply).to_be_enabled()
+            if lost_reply:
+                dialog.get_by_role('button',name='Добавить ещё катушку').click()
+                second=dialog.locator('.uid-manual-spools select').nth(1)
+                expect(second).to_have_value('')
+                expect(second.locator('option',has_text='Test PLA')).to_have_attribute('disabled','')
+                expect(apply).to_be_disabled()
+                dialog.get_by_role('button',name='Убрать строку').click()
+                expect(apply).to_be_enabled()
+                dialog.get_by_role('button',name='Добавить ещё катушку').click()
+                second.select_option('other')
+                dialog.get_by_label('Расход, г',exact=True).nth(1).fill('1.25')
+                expect(apply).to_be_enabled()
+            debit_count=2 if lost_reply else 1
+            accounted_mg=4750 if lost_reply else 3500
             audit_dialog(page,'history-only-manual')
             page.screenshot(path=str(out/('manual-'+str(lost_reply)+'.png')))
             lost=[]
@@ -56,7 +91,7 @@ def test_history_only_choose_spool_send_restore_and_replay(tmp_path,remote,lost_
             if lost_reply:
                 expect(page.locator('#uid-history-error')).to_be_visible();page.locator('#uid-review-apply').click()
             expect(page.locator('#uid-history-send')).to_be_visible()
-            assert len(app.call('inspect')['debits'])==1 and not value['writes']
+            assert len(app.call('inspect')['debits'])==debit_count and not value['writes']
             page.locator('#uid-history-send').click()
             expect(page.locator('#uid-history-dialog')).to_contain_text('Готово: Tracker и Spoolman')
             assert len(value['writes'])==1 and value['balance']==496.5
@@ -64,7 +99,7 @@ def test_history_only_choose_spool_send_restore_and_replay(tmp_path,remote,lost_
             for _ in range(3):
                 app.call('observe_history',pid,[job]);app.call('history',pid,[job])
             page.locator('#uid-history-delivery-refresh').click()
-            assert len(value['writes'])==1 and len(app.call('inspect')['debits'])==1
+            assert len(value['writes'])==1 and len(app.call('inspect')['debits'])==debit_count
             page.screenshot(path=str(out/('sent-'+str(lost_reply)+'.png')))
             page.locator('#uid-history-dialog .gd-close').click();page.locator('#nav-history').click()
             expect(page.locator('.history-row')).to_have_count(1)
@@ -72,12 +107,74 @@ def test_history_only_choose_spool_send_restore_and_replay(tmp_path,remote,lost_
             assert not errors
             browser.close()
         package=app.call('backup_package');restore(app,package)
-        assert app.call('history_detail',job_key=key)['accounted_mg']==3500
+        detail=app.call('history_detail',job_key=key)
+        assert detail['accounted_mg']==accounted_mg
+        assert {debit['spool_id']:debit['delta_mg'] for debit in detail['debits']}==(
+            {sid:3500,'other':1250} if lost_reply else {sid:3500})
         assert not app.call('history_detail',job_key=key)['can_review']
     finally:
         server.shutdown();server.server_close();thread.join();app.close()
     app=Session(tmp_path/'profile',allowed_urls=[])
     try:
-        assert app.call('history_detail',job_key=key)['accounted_mg']==3500
+        assert app.call('history_detail',job_key=key)['accounted_mg']==accounted_mg
         assert len(app.call('desktop_snapshot')['runs'])==1
     finally:app.close()
+
+
+def test_history_only_local_spool_has_amount_before_confirmation(tmp_path):
+    old=Store(tmp_path/'old')
+
+    def seed(data):
+        data['language']='ru'
+        data['spools']={'generic':dict(name='Generic Basis',material='PLA',remaining_g=445.7)}
+
+    old.update(seed)
+    app=Session(tmp_path/'profile')
+    restore(app,create_backup(old,'1.3.3'))
+    pid=app.call('settings')['values']['selected_printer']
+    job=dict(job_id='local-only',start_time=2000.,filename='local-only.gcode',status='completed')
+    app.call('observe_history',pid,[job])
+    server=serve(app,app.fleet)
+    thread=threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        with sync_playwright() as pw:
+            browser=pw.chromium.launch()
+            page=browser.new_page(viewport=dict(width=1202,height=950))
+            page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
+            page.locator('#nav-history').click()
+            row=page.locator('.history-row').filter(has_text='local-only.gcode')
+            row.locator('.uid-expand').click()
+            page.locator('#uid-history-prepare').click()
+
+            dialog=page.locator('#uid-history-dialog')
+            dialog.locator('#uid-history-spool').select_option('generic',timeout=7000)
+            page.locator('#uid-review-ack').check()
+            amount=dialog.get_by_label('Расход, г',exact=True)
+            apply=dialog.get_by_role('button',name='Учесть в Tracker',exact=True)
+            expect(amount).to_be_enabled()
+            expect(amount).to_have_value('')
+            expect(apply).to_be_disabled()
+            expect(page.locator('#uid-history-add-spool')).to_be_hidden()
+            assert not app.call('inspect')['debits']
+            out=Path('output/resumed-print-ui')
+            out.mkdir(parents=True,exist_ok=True)
+            page.screenshot(path=str(out/'manual-local-selected.png'))
+
+            amount.fill('15')
+            expect(apply).to_be_enabled()
+            apply.click()
+            expect(dialog).to_be_hidden()
+            expect(row).to_contain_text('Учтено')
+            app.call('observe_history',pid,[job])
+            app.call('history',pid,[job])
+            debit,=app.call('inspect')['debits']
+            assert (debit['spool_id'],debit['delta_mg'])==('generic',15000)
+            assert app.call('library_snapshot')['spools'][0]['remaining_mg']==430700
+            assert not app.call('delivery_list')
+            browser.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+        app.close()

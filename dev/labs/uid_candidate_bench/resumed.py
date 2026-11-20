@@ -36,6 +36,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--exe', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--require-direct-spool-selection', action='store_true')
     args = parser.parse_args()
     out = args.output.resolve(); out.mkdir(parents=True, exist_ok=True)
     root = Path(tempfile.mkdtemp(prefix='tracker-resumed-packaged-'))
@@ -141,10 +142,27 @@ def main():
             row.locator('.uid-expand').click()
             page.locator('#uid-history-prepare').click()
             expect(page.locator('#uid-history-spool')).to_have_value('')
-            assert page.locator('.uid-extra-amount').count() == 0 and not state()['debits']
-            page.locator('#uid-history-spool').select_option(sid); page.locator('#uid-history-add-spool').click()
-            expect(page.locator('.uid-extra-amount')).to_have_value('')
-            page.locator('.uid-extra-amount').fill('3.5'); page.locator('#uid-review-ack').check()
+            assert not state()['debits']
+            amount=page.locator('.uid-extra-amount')
+            first_field_present=amount.count()>0
+            if args.require_direct_spool_selection:
+                expect(amount).to_be_visible()
+                expect(page.locator('#uid-history-add-spool')).to_be_hidden()
+                assert first_field_present, 'First spool must not require an extra Add click'
+            if first_field_present:
+                expect(amount).to_be_disabled()
+                expect(page.locator('#uid-review-apply')).to_be_disabled()
+            page.locator('#uid-history-spool').select_option(sid)
+            if not first_field_present:
+                # The frozen rc4 executable needs an explicit add for the first spool.
+                page.locator('#uid-history-add-spool').click()
+            expect(amount).to_be_enabled()
+            expect(amount).to_have_value('')
+            if args.require_direct_spool_selection:
+                expect(page.locator('#uid-history-spool')).to_have_value(sid)
+                page.locator('#uid-review-ack').check()
+                expect(page.locator('#uid-review-apply')).to_be_disabled()
+            amount.fill('3.5'); page.locator('#uid-review-ack').check()
             page.screenshot(path=str(out/'native-manual-selection.png'))
             page.locator('#uid-review-apply').click(); expect(page.locator('#uid-history-send')).to_be_visible()
             assert len(state()['debits']) == 1 and not sm.puts
@@ -159,6 +177,8 @@ def main():
         assert len(state()['debits']) == 1 and len(sm.puts) == 1
         api('connections_stop', dict(confirmed=True)); stop()
         checks.append('history-only: explicit spool + 3.5 g, one Spoolman send, replay/restart deduplicated')
+        if args.require_direct_spool_selection:
+            checks.append('first spool enables grams without Add; confirmation unavailable with empty grams')
         (out/'results.json').write_text(json.dumps(dict(success=True, version=VERSION,
             commit=subprocess.check_output(['git','rev-parse','HEAD'], cwd=ROOT, text=True).strip(),
             checks=checks, native_webview2=sys.platform=='win32', real_printer_used=False,

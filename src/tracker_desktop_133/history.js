@@ -43,13 +43,14 @@
    d.review_block==='observing'?text('Печать наблюдается','Print being observed','Druck wird beobachtet','Друк спостерігається','Impresión en seguimiento'):
    text('Требуется проверка расхода','Usage review required','Verbrauch prüfen','Потрібна перевірка витрат','Revisar consumo');
   const statusBadge=node('p',status,'uid-history-state');statusBadge.dataset.state=d.review_block==='already_accounted'?'complete':d.review_block==='observing'?'active':d.job.state==='resolved'?'closed':'review';dialog.append(statusBadge);
-  dialog.append(node('p',text('Сохранённый план — без слайсера и подключения к принтеру','Saved plan — no slicer or printer connection required','Gespeicherter Plan — ohne Slicer oder Druckerverbindung','Збережений план — без слайсера та підключення до принтера','Plan guardado — sin necesidad del laminador ni conexión a la impresora')));
-  const table=node('table');table.className='uid-saved-plan';const header=node('tr');
-  for(const caption of [text('Головка','Toolhead','Druckkopf','Голівка','Cabezal'),text('Исходная катушка','Original spool','Ursprüngliche Spule','Початкова котушка','Bobina original'),text('План','Plan'),text('Уже учтено с катушки','Already accounted per spool','Bereits je Spule erfasst','Вже враховано з котушки','Ya contabilizado por bobina')])header.append(node('th',caption));
-  table.append(header);
-  for(const p of d.plan){const row=node('tr'),used=d.debits.filter(v=>v.spool_id===p.spool_id).reduce((sum,v)=>sum+v.delta_mg,0);for(const v of [p.mapping_verified===false?text('Материал ','Material ','Material ','Матеріал ','Material ')+(p.logical_tool+1)+' (?)':'T'+p.channel,data.spools[p.spool_id]?.name||p.spool_id||'—',weight(p.planned_mg),weight(used)])row.append(node('td',v));table.append(row)}
-  dialog.append(table);
-  if(!d.plan.length)dialog.append(node('p',text('План не сохранён. Его нельзя восстановить из текущего назначения.','No saved plan. Current assignments cannot reconstruct it.','Kein gespeicherter Plan. Aktuelle Zuweisungen können ihn nicht rekonstruieren.','План не збережено. Поточні призначення не дозволяють його відновити.','No hay plan guardado. Las asignaciones actuales no permiten reconstruirlo.')));
+  if(d.plan.length){
+   dialog.append(node('p',text('Сохранённый план — без слайсера и подключения к принтеру','Saved plan — no slicer or printer connection required','Gespeicherter Plan — ohne Slicer oder Druckerverbindung','Збережений план — без слайсера та підключення до принтера','Plan guardado — sin necesidad del laminador ni conexión a la impresora')));
+   const table=node('table');table.className='uid-saved-plan';const header=node('tr');
+   for(const caption of [text('Головка','Toolhead','Druckkopf','Голівка','Cabezal'),text('Исходная катушка','Original spool','Ursprüngliche Spule','Початкова котушка','Bobina original'),text('План','Plan'),text('Уже учтено с катушки','Already accounted per spool','Bereits je Spule erfasst','Вже враховано з котушки','Ya contabilizado por bobina')])header.append(node('th',caption));
+   table.append(header);
+   for(const p of d.plan){const row=node('tr'),used=d.debits.filter(v=>v.spool_id===p.spool_id).reduce((sum,v)=>sum+v.delta_mg,0);for(const v of [p.mapping_verified===false?text('Материал ','Material ','Material ','Матеріал ','Material ')+(p.logical_tool+1)+' (?)':'T'+p.channel,data.spools[p.spool_id]?.name||p.spool_id||'—',weight(p.planned_mg),weight(used)])row.append(node('td',v));table.append(row)}
+   dialog.append(table);
+  }else dialog.append(node('p',text('Для задания нет сохранённого плана.','This job has no saved plan.','Für diesen Auftrag gibt es keinen gespeicherten Plan.','Для завдання немає збереженого плану.','Este trabajo no tiene un plan guardado.')));
   dialog.append(node('p',text('Всего уже учтено: ','Already accounted: ','Bereits erfasst: ','Всього вже враховано: ','Ya contabilizado: ')+weight(d.accounted_mg)));
   let notes=dialog;
   if(d.review_block==='already_accounted'){notes=node('details');notes.append(node('summary',text('Источник плана и сведения об учёте','Plan source and accounting details','Planquelle und Buchungsdetails','Джерело плану та відомості про облік','Origen del plan y detalles del registro')));dialog.append(notes)}
@@ -92,20 +93,70 @@
   dialog.append(historyButton(labels.close(),()=>{if(!ack.checked)throw Error(labels.ask());return decide({job_key:d.job.job_key,action:'close',expected_revision:d.revision,request_id:crypto.randomUUID(),confirmed:true})}));
   window.graphiteHistoryDialog?.(dialog);
  }
+ function manualSpools(d,data){
+  const candidates=new Map(d.candidates.filter(s=>!s.reserved&&s.remaining_mg>0).map(s=>[s.spool_id,s]));
+  const container=node('div',undefined,'uid-manual-spools'),rows=[];
+  const choose=text('Выберите катушку','Choose a spool','Spule auswählen','Виберіть котушку','Elige una bobina');
+  const add=node('button',text('Добавить ещё катушку','Add another spool','Weitere Spule hinzufügen','Додати ще котушку','Añadir otra bobina'),'uid-history-secondary');
+  add.type='button';add.id='uid-history-add-spool';add.hidden=candidates.size<2;
+  function selections(){return rows.map(row=>[candidates.get(row.select.value),row.amount])}
+  function sync(){
+   const selected=new Set(rows.map(row=>row.select.value).filter(Boolean));
+   for(const {select} of rows){
+    for(const option of select.options){
+     option.disabled=option.value!==''&&(!candidates.has(option.value)||(option.value!==select.value&&selected.has(option.value)));
+    }
+   }
+   add.disabled=selected.size<rows.length||rows.length>=candidates.size;
+   container.dispatchEvent(new Event('input',{bubbles:true}));
+  }
+  function addRow(){
+   const row=node('div',undefined,'gd-two');
+   const spoolLabel=node('label',text('Катушка','Spool','Spule','Котушка','Bobina'),'gd-field');
+   const select=node('select');
+   const first=rows.length===0;
+   if(first)select.id='uid-history-spool';
+   select.append(new Option(choose,''));
+   for(const s of d.candidates){
+    const remote=data.spools[s.spool_id]?.spoolman;
+    select.append(new Option(s.name+' · '+weight(s.remaining_mg)+(remote?' · Spoolman #'+remote.id:''),s.spool_id));
+   }
+   select.disabled=candidates.size===0;
+   spoolLabel.append(select);
+   const amountLabel=node('label',text('Расход, г','Usage, g','Verbrauch, g','Витрати, г','Consumo, g'),'gd-field');
+   const amount=node('input');amount.type='number';amount.className='uid-extra-amount';
+   amount.min='0.001';amount.step='0.001';amount.required=true;amount.disabled=true;
+   amountLabel.append(amount);
+   row.append(spoolLabel,amountLabel);
+   const entry={select,amount};
+   if(!first){
+    const remove=node('button',text('Убрать строку','Remove row','Zeile entfernen','Видалити рядок','Quitar fila'),'uid-history-secondary gd-span');
+    remove.type='button';
+    remove.onclick=()=>{rows.splice(rows.indexOf(entry),1);row.remove();sync();add.focus()};
+    row.append(remove);
+   }
+   select.onchange=()=>{
+    const spool=candidates.get(select.value);
+    amount.value='';amount.disabled=!spool;
+    if(spool)amount.max=Math.min(spool.remaining_mg,100000000)/1000;
+    sync();
+   };
+   rows.push(entry);container.insertBefore(row,add);sync();return select;
+  }
+  add.onclick=()=>addRow().focus();
+  container.append(add);addRow();dialog.append(container);
+  if(!candidates.size)dialog.append(node('p',text('Нет доступных катушек для списания.','No spools are available for deduction.','Keine Spulen für die Abbuchung verfügbar.','Немає доступних котушок для списання.','No hay bobinas disponibles para descontar.')));
+  return {container,selections};
+ }
  function edit(d,data){view(d,data);
   if(d.uncertain){dialog.append(node('p',text('Сначала сверьте неопределённую отправку Spoolman. Этот расход уже учтён локально.','Reconcile the uncertain Spoolman delivery first. This usage is already accounted locally.','Zuerst die unklare Spoolman-Übertragung abgleichen. Dieser Verbrauch ist lokal bereits erfasst.','Спочатку звірте невизначену відправку Spoolman. Ці витрати вже враховано локально.','Primero concilie el envío incierto de Spoolman. Este consumo ya está contabilizado localmente.')));window.graphiteHistoryDialog?.(dialog);return}
   dialog.append(node('h3',text('Шаг 1 · Дополнительно списать, г','Step 1 · Additional deduction, g','Zusätzliche Abbuchung, g','Додатково списати, г','Descuento adicional, g')));
   const inputs=[];
   function amount(s){const i=field(s.name,'number',s.suggested_additional_mg===null?'':s.suggested_additional_mg/1000);i.step='0.001';i.min='0';i.max=s.remaining_mg/1000;i.dataset.spool=s.spool_id;i.className='uid-extra-amount';if(s.reserved){i.value='0';i.disabled=true}inputs.push([s,i]);return i}
+  let manual=null;
   if(d.manual_spool_selection){
-   dialog.append(node('p',text('Исходные катушки неизвестны. Выберите их вручную и укажите только ещё не учтённый расход. Проверьте другие записи этой печати после ошибки и продолжения. Текущие назначения не подставляются.','Original spools are unknown. Choose them and enter only usage not already accounted. Check other records of this print after error/resume. Current assignments are not used.','Ursprüngliche Spulen unbekannt. Spulen wählen und nur noch nicht erfassten Verbrauch eingeben. Andere Einträge nach Fehler/Fortsetzung prüfen.','Початкові котушки невідомі. Виберіть їх і вкажіть лише невраховані витрати. Перевірте інші записи після помилки та продовження.','Bobinas originales desconocidas. Elíjalas e indique solo consumo no contabilizado. Revise otros registros tras error y reanudación.')));
-   const label=node('label',text('Катушка','Spool','Spule','Котушка','Bobina')),select=node('select');select.id='uid-history-spool';select.append(new Option('—',''));
-   for(const s of d.candidates){const remote=data.spools[s.spool_id]?.spoolman;const option=new Option(s.name+' · '+weight(s.remaining_mg)+(remote?' · Spoolman #'+remote.id:''),s.spool_id);option.disabled=s.reserved;select.append(option)}
-   label.append(select);dialog.append(label);
-   const add=historyButton(text('Добавить катушку','Add spool','Spule hinzufügen','Додати котушку','Añadir bobina'),()=>{
-    const s=d.candidates.find(s=>s.spool_id===select.value);if(!s||s.reserved||inputs.some(([v])=>v.spool_id===s.spool_id))return;
-    const i=amount(s);i.parentElement.classList.add('gd-field');note.parentElement.before(i.parentElement);select.selectedOptions[0].disabled=true;select.value='';
-   });add.id='uid-history-add-spool';dialog.append(add);
+   dialog.append(node('p',text('Выберите использованную катушку и введите расход, который ещё не учтён. Если печать возобновлялась после ошибки, проверьте и другие записи этой печати.','Choose the spool used and enter usage that has yet to be accounted for. If the print resumed after an error, check its other history entries.','Wählen Sie die verwendete Spule und geben Sie den noch nicht erfassten Verbrauch ein. Prüfen Sie nach einer Fortsetzung auch die anderen Verlaufseinträge.','Виберіть використану котушку та введіть невраховані витрати. Якщо друк відновився після помилки, перевірте інші його записи.','Elige la bobina utilizada e introduce el consumo pendiente de contabilizar. Si la impresión se reanudó tras un error, revisa sus otras entradas.')));
+   manual=manualSpools(d,data);
   }else{
    d.candidates.forEach(amount);
    dialog.append(node('p',text('Подставлен дополнительный расход из сохранённого плана за вычетом уже учтённого. Отредактируйте при необходимости. При неизвестной привязке или замене катушек заполните расход вручную.','Additional usage is prefilled from the saved plan minus usage already accounted. Edit if needed. Unknown mappings or spool changes require manual amounts.')));
@@ -113,15 +164,32 @@
   const note=field(text('Комментарий (необязательно)','Comment (optional)','Kommentar (optional)','Коментар (необов’язково)','Comentario (opcional)'),'text');note.id='uid-review-note';note.maxLength=2000;
   const ack=field(text('Печать завершилась. Катушки и дополнительный расход проверены.','The print has ended. Spools and additional usage have been verified.','Der Druck ist beendet. Spulen und zusätzlicher Verbrauch wurden geprüft.','Друк завершено. Котушки й додаткові витрати перевірено.','La impresión terminó. Se verificaron las bobinas y el consumo adicional.'),'checkbox');ack.id='uid-review-ack';
   const request=crypto.randomUUID();let submitted=null;
-  const linked=d.candidates.some(s=>data.spools[s.spool_id]?.spoolman);
-  const apply=historyButton(linked?text('Учесть в Tracker и продолжить','Account in Tracker and continue'):labels.confirm(),async()=>{
-   if(!ack.checked||!inputs.length||inputs.some(([s,i])=>i.value===''||!i.validity.valid))throw Error(text('Проверьте значения и подтвердите расход.','Check amounts and confirm usage.','Mengen, Begründung und Bestätigung prüfen.','Перевірте значення, підставу та підтвердження.','Revise cantidades, motivo y confirmación.'));
-   const payload={job_key:d.job.job_key,action:'account',expected_revision:d.revision,request_id:request,confirmed:true,completed:true,note:note.value,allocations_mg:Object.fromEntries(inputs.map(([s,i])=>[s.spool_id,Math.round(Number(i.value)*1000)]))};
+  const linked=s=>data.spools[s?.spool_id]?.spoolman;
+  const continueLabel=text('Учесть в Tracker и продолжить','Account in Tracker and continue');
+  const canSubmit=rows=>ack.checked&&rows.length>0&&rows.every(([s,i])=>s&&i.value!==''&&i.validity.valid);
+  const apply=historyButton(d.candidates.some(linked)?continueLabel:labels.confirm(),async()=>{
+   const rows=manual?manual.selections():inputs;
+   if(!canSubmit(rows))throw Error(text('Проверьте значения и подтвердите расход.','Check amounts and confirm usage.','Mengen und Bestätigung prüfen.','Перевірте значення й підтвердження.','Revise las cantidades y la confirmación.'));
+   const payload={job_key:d.job.job_key,action:'account',expected_revision:d.revision,request_id:request,confirmed:true,completed:true,note:note.value,allocations_mg:Object.fromEntries(rows.map(([s,i])=>[s.spool_id,Math.round(Number(i.value)*1000)]))};
    const encoded=JSON.stringify(payload);if(submitted&&submitted!==encoded)throw Error(text('Запрос уже отправлен. Повторите без изменений или откройте задание заново.','Request already sent. Retry unchanged or reopen the job.'));
-   submitted=encoded;await api('/api/history_decide',payload);await loadData();
-   const result=await detail(d.job.job_key);
-   if(result.remote_operations.length)await deliveryStep(d.job.job_key,desktopFormData||data);else dialog.close();
+   submitted=encoded;
+   if(manual){manual.container.inert=true;note.disabled=true;ack.disabled=true}
+   try{
+    await api('/api/history_decide',payload);await loadData();
+    const result=await detail(d.job.job_key);
+    if(result.remote_operations.length)await deliveryStep(d.job.job_key,desktopFormData||data);else dialog.close();
+   }finally{
+    if(manual){manual.container.inert=false;note.disabled=false;ack.disabled=false}
+   }
   });apply.id='uid-review-apply';actions(primary(apply));dialog.append(node('p',text('Шаг 1: учёт в Tracker. Для связанных катушек следующий шаг в этом окне — отправка в Spoolman.','Step 1: account in Tracker. For linked spools, the next step in this window sends usage to Spoolman.','Bei verknüpften Spoolman-Spulen kommt der Verbrauch in die Warteschlange. Unklare Übertragungen werden nicht automatisch wiederholt.','Для пов’язаної котушки Spoolman витрати потраплять до черги. Невизначена відправка автоматично не повторюється.','Para bobinas de Spoolman, el consumo entra en la cola. Los envíos inciertos nunca se repiten automáticamente.')));
+  if(manual){
+   const update=()=>{
+    const rows=manual.selections();
+    apply.disabled=!canSubmit(rows);
+    apply.textContent=rows.some(([s])=>linked(s))?continueLabel:text('Учесть в Tracker','Account in Tracker','In Tracker erfassen','Врахувати у Tracker','Contabilizar en Tracker');
+   };
+   manual.container.addEventListener('input',update);ack.addEventListener('change',update);update();
+  }
   window.graphiteHistoryDialog?.(dialog);
  }
  async function deliveryStep(key,data,notice=''){
@@ -219,6 +287,8 @@
  #uid-history-dialog label{font-size:14px;line-height:1.5}
  #uid-history-dialog label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:10px}
  #uid-history-dialog label input[type=checkbox]{order:-1;flex-shrink:0;margin:3px 0 0;min-height:0}
+ #uid-history-dialog .uid-manual-spools{display:grid;gap:14px}
+ #uid-history-dialog .uid-manual-spools button{justify-self:start;margin:0}
  #review-content .uid-review-row{display:flex;align-items:center;justify-content:space-between;gap:20px;border-top:1px solid var(--border);padding:16px 0}
  #review-content .uid-review-info{display:grid;gap:6px;min-width:0;line-height:1.4}
  #review-content .uid-review-info strong{font-size:14px;overflow-wrap:anywhere}

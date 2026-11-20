@@ -85,7 +85,11 @@ def test_forecast_printer_isolation_and_accounted_file_exclusion():
     inv=dict(printers={'a':dict(heads=heads(30000)),'b':dict(heads=heads(29000))},
              selected_printer='b',safety_margin_g=5,accounted={})
     f=enrich(snap,inv)
-    assert f['printers']['a']['entries'][0]['materials'] == f['printers']['b']['entries'][0]['materials']
+    a_material = f['printers']['a']['entries'][0]['materials'][0]
+    b_material = f['printers']['b']['entries'][0]['materials'][0]
+    assert a_material['grams'] == b_material['grams'] == 25
+    assert all(choice['deficit'] == 0 for choice in a_material['choices'])
+    assert all(choice['deficit'] == 1 for choice in b_material['choices'])
     assert f['printers']['a']['heads'][0]['spool']['remaining_mg'] == 30000
     assert f['printers']['b']['heads'][0]['spool']['remaining_mg'] == 29000
     assert f['selected_printer']=='b'

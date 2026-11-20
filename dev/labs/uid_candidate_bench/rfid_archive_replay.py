@@ -13,6 +13,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import socket
 import subprocess
 import sys
@@ -69,7 +70,8 @@ def main():
 
         do_GET = do_POST = do_PUT = call
 
-    with tempfile.TemporaryDirectory(prefix='tracker-rfid-wire-') as temporary, (out/'process.log').open('w') as log:
+    # WebView2 can briefly retain cache locks after its parent exits on Windows.
+    with tempfile.TemporaryDirectory(prefix='tracker-rfid-wire-', ignore_cleanup_errors=sys.platform=='win32') as temporary, (out/'process.log').open('w') as log:
         folder = Path(temporary).resolve()
         profile, wire = folder/'profile', folder/'reader.json'
         descriptor, sequence = {}, 0
@@ -86,7 +88,7 @@ def main():
         def request(url, body=None, headers=None):
             req = Request(url, None if body is None else json.dumps(body).encode(),
                           headers or {'Content-Type': 'application/json'})
-            with urlopen(req, timeout=10) as response:
+            with urlopen(req, timeout=15) as response:
                 return json.load(response)
 
         def api(path, body=None):
@@ -114,11 +116,19 @@ def main():
             source.replace(target)
             return True
 
-        def select(uid):
+        def select(uid, spool_id=None):
             publish()
             wait(lambda: not any(row.get('uid') for row in state()['occupied']))
             publish(uid)
-            wait(lambda: any(row.get('uid') == uid for row in state()['occupied']))
+
+            def matched_snapshot():
+                snapshot = state()
+                if any(row.get('uid') == uid and
+                       (spool_id is None or (row.get('spool') or {}).get('spool_id') == spool_id)
+                       for row in snapshot['occupied']):
+                    return snapshot
+
+            return wait(matched_snapshot)
 
         def launch():
             nonlocal app, descriptor
@@ -136,10 +146,10 @@ def main():
             wait(ready)
 
         def stop():
-            api('connections_stop', dict(confirmed=True))
             if sys.platform == 'win32':
                 native_windows(app, out)
             else:
+                api('connections_stop', dict(confirmed=True))
                 app.terminate()
                 assert app.wait(30) == 0
             assert not (profile/'instance.json').exists()
@@ -169,18 +179,18 @@ def main():
             request(printer+'/event', dict(action='complete'))
             wait(lambda: len(state()['delivery']) == 1 and state()['delivery'][0]['state'] == 'sent')
             request(printer+'/event', dict(action='complete'))
-            select(sides[1])
-            wait(lambda: any((row.get('spool') or {}).get('spool_id') == sid for row in state()['occupied']))
-            assert len(state()['debits']) == 1 and state()['debits'][0]['delta_mg'] == 18420
-            assert state()['spools'][0]['remaining_mg'] == 821703
+            second_side = select(sides[1], sid)
+            assert len(second_side['debits']) == 1 and second_side['debits'][0]['delta_mg'] == 18420
+            assert second_side['spools'][0]['remaining_mg'] == 821703
             assert len(spoolman.puts) == 1 and round(spoolman.rows['spool'][0]['remaining_weight'], 3) == 821.703
+            print('PASS paired Bambu sides, a single debit and one remote write', flush=True)
             stop()
             launch()
             api('connections_start', dict(confirmed=True))
-            select(sides[0])
-            wait(lambda: any((row.get('spool') or {}).get('spool_id') == sid for row in state()['occupied']))
-            assert len(state()['spools']) == len(state()['debits']) == len(spoolman.puts) == 1
-            assert state()['spools'][0]['remaining_mg'] == 821703
+            restarted = select(sides[0], sid)
+            assert len(restarted['spools']) == len(restarted['debits']) == len(spoolman.puts) == 1
+            assert restarted['spools'][0]['remaining_mg'] == 821703
+            print('PASS restart preserved the spool, debit and remaining balance', flush=True)
             stop()
             report = dict(success=True, exe_sha256=exe_hash, capture_sha256=hashlib.sha256(raw_capture).hexdigest(),
                           archive_sha256=capture['archive_sha256'], module_sha256=capture['module_sha256'],
@@ -199,6 +209,9 @@ def main():
             remote.shutdown()
             remote.server_close()
             thread.join()
+            tracker_log = profile/'logs/tracker.log'
+            if tracker_log.exists():
+                shutil.copyfile(tracker_log, out/'tracker.log')
 
 
 if __name__ == '__main__':

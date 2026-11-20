@@ -171,7 +171,9 @@ def main():
             first_field_present=amount.count()>0
             if args.require_direct_spool_selection:
                 expect(amount).to_be_visible()
-                expect(page.locator('#uid-history-add-spool')).to_be_hidden()
+                # The forecast fixture adds alternative spools. They can be
+                # added only after the first spool has been chosen.
+                expect(page.locator('#uid-history-add-spool')).to_be_disabled()
                 assert first_field_present, 'First spool must not require an extra Add click'
             if first_field_present:
                 expect(amount).to_be_disabled()

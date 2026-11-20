@@ -6,6 +6,8 @@ import pytest
 from test_rfid_u1_trial import trial
 from scripts import rfid_u1_trial as tool
 
+pytestmark=pytest.mark.skipif(sys.platform=='win32',reason='POSIX offline installation')
+
 @pytest.mark.parametrize('failure',[errno.ENOSPC,errno.EACCES,errno.EROFS])
 def test_disable_removes_activation_when_recovery_writes_fail(trial,monkeypatch,failure):
     t,module=trial;t.install(t.plan(module,['bambu']),module)

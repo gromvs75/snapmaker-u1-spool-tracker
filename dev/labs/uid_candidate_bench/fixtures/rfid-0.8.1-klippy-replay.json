@@ -1,0 +1,155 @@
+{
+  "archive_sha256": "ca98212f19fa6ea38fb88779aa7ec6df19de5ada50110326267760151a8db87f",
+  "module_sha256": "1e611400ce0fcf69acd51ada17f4470787389042d52136a58965ce650b30dc67",
+  "statuses": {
+    "initial": {
+      "epoch": "b9e02c245aa64b13b9338690a07302d2",
+      "sequence": 0,
+      "channels": {
+        "0": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "1": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "2": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "3": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        }
+      },
+      "schema_version": 1,
+      "module_version": "0.8.1-read-budget-bench",
+      "state": "ready",
+      "reason": "",
+      "driver_version": "2.1.0.157"
+    },
+    "0DF58A36": {
+      "epoch": "b9e02c245aa64b13b9338690a07302d2",
+      "sequence": 8,
+      "channels": {
+        "0": {
+          "state": "present",
+          "uid": "0DF58A36",
+          "sequence": 8,
+          "tag": {
+            "schema": 1,
+            "format": "bambu",
+            "uid": "0DF58A36",
+            "identity": "bambu:63183A92E6C54600B8E30C6EE7BC3C14",
+            "manufacturer": "Bambu Lab",
+            "material": "PLA",
+            "name": "PLA Basic",
+            "material_id": "GFA00",
+            "variant_id": "A00-R00",
+            "color": "C12E1F",
+            "colors": [
+              "C12E1F"
+            ],
+            "alpha": 255,
+            "diameter_mm": 1.75,
+            "nominal_weight_g": 1000,
+            "nozzle_min_c": 190,
+            "nozzle_max_c": 230,
+            "bed_c": 0
+          },
+          "age_seconds": 0.49472258298192173,
+          "uid_length": 4
+        },
+        "1": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "2": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "3": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        }
+      },
+      "schema_version": 1,
+      "module_version": "0.8.1-read-budget-bench",
+      "state": "ready",
+      "reason": "",
+      "driver_version": "2.1.0.157"
+    },
+    "9D1A8636": {
+      "epoch": "b9e02c245aa64b13b9338690a07302d2",
+      "sequence": 10,
+      "channels": {
+        "0": {
+          "state": "present",
+          "uid": "9D1A8636",
+          "sequence": 10,
+          "tag": {
+            "schema": 1,
+            "format": "bambu",
+            "uid": "9D1A8636",
+            "identity": "bambu:63183A92E6C54600B8E30C6EE7BC3C14",
+            "manufacturer": "Bambu Lab",
+            "material": "PLA",
+            "name": "PLA Basic",
+            "material_id": "GFA00",
+            "variant_id": "A00-R00",
+            "color": "C12E1F",
+            "colors": [
+              "C12E1F"
+            ],
+            "alpha": 255,
+            "diameter_mm": 1.75,
+            "nominal_weight_g": 1000,
+            "nozzle_min_c": 190,
+            "nozzle_max_c": 230,
+            "bed_c": 0
+          },
+          "age_seconds": 0.35688008298166096,
+          "uid_length": 4
+        },
+        "1": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "2": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        },
+        "3": {
+          "state": "unknown",
+          "uid": null,
+          "age_seconds": null,
+          "uid_length": 0
+        }
+      },
+      "schema_version": 1,
+      "module_version": "0.8.1-read-budget-bench",
+      "state": "ready",
+      "reason": "",
+      "driver_version": "2.1.0.157"
+    }
+  }
+}

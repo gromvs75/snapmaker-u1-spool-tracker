@@ -1,0 +1,46 @@
+name: RFID 0.8.1 replay against the delivered Windows preview
+on:
+  push:
+    branches: ['test/rfid-081-windows-replay-20261120']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  windows-replay:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          architecture: x64
+      - name: Install isolated replay dependencies
+        run: python -m pip install pytest==8.3.5 pywinauto==0.6.9 pywin32==311 aiohttp==3.11.18 filelock==3.16.1
+      - name: Retrieve the previously verified Windows preview, without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          name: rc4-manual-windows-tested-exe
+          path: output/windows-preview
+          run-id: '44708227980'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Replay paired Bambu observations through the shipped EXE
+        shell: pwsh
+        run: |
+          $zip = 'output/windows-preview/Snapmaker-Tracker-2.1.0rc4-Manual-Preview-Windows-x64.zip'
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() -ne '941aa69f6fdd03e5cef70cb9107aa9d10ebfce63a4190ef5be10a863359c83ed') { throw 'Unexpected Windows ZIP' }
+          Expand-Archive -LiteralPath $zip -DestinationPath output/replay-app
+          python dev/labs/uid_candidate_bench/rfid_archive_replay.py `
+            --exe output/replay-app/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe `
+            --exe-sha256 69a37603abd5007dd8c60140fedae2ff967ef2108552c31766d70b89651c82d6 `
+            --capture dev/labs/uid_candidate_bench/fixtures/rfid-0.8.1-klippy-replay.json `
+            --output output/rfid-windows-replay
+          if ($LASTEXITCODE) { throw 'RFID replay failed' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rfid-081-windows-replay-evidence
+          path: output/rfid-windows-replay/
+          retention-days: 14

@@ -102,6 +102,7 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 expect(page.locator('.dash-percent')).to_have_text('62%')
                 expect(page.locator('#dashboard-elapsed')).to_have_text('3 ч 18 мин')
                 expect(page.locator('#dashboard-remaining')).to_have_text('2 ч 2 мин')
+                assert page.locator('.overview-card').bounding_box()['height'] < 245
                 heads=page.locator('#sidebar-slots .sidebar-slot')
                 expect(heads).to_have_count(4)
                 expect(heads.nth(1)).to_have_class('sidebar-slot selected-head')
@@ -112,6 +113,7 @@ def test_dashboard_live_http_states_cards_languages_and_layout(tmp_path):
                 assert heads.nth(2).locator('[role=meter]').count()==0
                 assert heads.nth(3).locator('.is-low').count()==1
                 sources=page.locator('#dashboard-sources')
+                assert sources.bounding_box()['y'] < heads.first.bounding_box()['y']
                 expect(sources.locator('details')).to_have_count(4)
                 expect(sources.locator('[data-source=connection]')).to_contain_text('есть связь')
                 expect(sources.locator('[data-source=head] .dash-source-badge')).to_have_text('T1')

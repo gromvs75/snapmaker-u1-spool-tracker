@@ -37,6 +37,7 @@ def forecast_entry(entry, heads=(), reserve=0):
 
     spools = {head['channel']: head['spool'] for head in heads if head['spool']}
     available = {head['channel']: head.get('forecast_usable', head['usable']) for head in heads}
+    active_usage = {head['channel']: head.get('active_print_mg', 0) for head in heads}
     spool_profiles = {}
     for channel, spool in spools.items():
         details = spool.get('details', {})
@@ -71,11 +72,13 @@ def forecast_entry(entry, heads=(), reserve=0):
 
     def estimate(channel, used, total):
         spool = spools[channel]
-        remaining = spool['remaining_mg'] / 1000 if available[channel] else None
+        current = active_usage[channel]
+        remaining = max(0, spool['remaining_mg'] - current) / 1000 if available[channel] and current is not None else None
         after = remaining - total if remaining is not None else None
         deficit = max(0, round(reserve - after, 9)) if after is not None else None
         return dict(channel=channel, spool=spool, used=used, remaining=remaining, after=after,
                     deficit=deficit, unknown=remaining is None, enough=(deficit == 0),
+                    active_print_g=current / 1000 if current is not None else None,
                     status='unknown' if remaining is None else 'shortage' if deficit else 'ok')
 
     rows = []
@@ -94,7 +97,9 @@ def forecast_entry(entry, heads=(), reserve=0):
     status = ('shortage' if any(row['status'] == 'shortage' for row in rows)
               else 'unknown' if mapping_needed or any(row['unknown'] for row in rows)
               else 'ok')
-    return dict(result, rows=rows, status=status, requires_mapping=mapping_needed)
+    return dict(result, rows=rows, status=status, requires_mapping=mapping_needed,
+                includes_active_print=any((row['active_print_g'] or 0) > 0 for row in rows),
+                active_print_unknown=any(row['active_print_g'] is None for row in rows))
 
 
 def enrich(snapshot, inventory):

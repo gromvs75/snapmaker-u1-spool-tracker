@@ -215,6 +215,25 @@ def main():
             page.locator('#uid-history-delivery-refresh').click()
             page.screenshot(path=str(out/'native-manual-sent.png'))
             assert len(state()['debits']) == 1 and len(sm.puts) == 1 and not ui_errors
+
+            page.locator('#uid-history-dialog').get_by_role('button', name='Закрыть', exact=True).click()
+            page.locator('#nav-overview').click()
+            event('start', filename='active-forecast.gcode')
+            temporary.write_bytes(payload('420, 0, 0, 0').replace(
+                b'; printer_model', b'; filament_colour = #000000;#FFFFFF;#FD8008;#449532\n'
+                b'; filament_type = PLA;PLA;PLA;PLA\n; printer_model'))
+            temporary.replace(plate)
+            expect(page.locator('#desktop-forecast-separate')).to_have_text('С учётом текущей печати', timeout=25000)
+            expect(page.locator('#forecast-status')).to_have_text('По прогнозу материала не хватает')
+            expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
+                'Материал 1 · 420 гр. → T0 · после текущей ≈ 412,28 гр.')
+            assert page.locator('#dashboard-sources').bounding_box()['y'] < cards.first.bounding_box()['y']
+            snapshot = state()
+            assert len(snapshot['debits']) == 1 and len(sm.puts) == 1
+            assert next(spool for spool in snapshot['spools'] if spool['name'] == 'fixture-head-1')['remaining_mg'] == 430700
+            page.screenshot(path=str(out/'forecast-during-print.png'), full_page=True)
+            checks.append('slice: active job reserves 18.42 g on T0 for the next forecast without another debit')
+
             api('connections_stop', dict(confirmed=True))
         stop(native=True); launch(); connect(); time.sleep(1.2)
         assert len(state()['debits']) == 1 and len(sm.puts) == 1

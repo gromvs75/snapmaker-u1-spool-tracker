@@ -102,6 +102,12 @@ class AccountingOwner:
                         result = history_review.prepare_history(*args, **kwargs)
                     elif operation == 'forecast_inventory':
                         result = library.forecast_inventory(fleet=fleet.snapshot())
+                        for printer_id, printer in result['printers'].items():
+                            heads = printer['heads']
+                            pending = lifecycle.pending_print_usage(printer_id, guard.live.get(printer_id, {}), heads)
+                            for head in heads:
+                                if head['spool']:
+                                    head['active_print_mg'] = None if pending is None else pending.get(head['spool']['spool_id'], 0)
                     elif operation == 'monitor_status':result=guard.status(*args,**kwargs)
                     elif operation == 'monitor_clear':result=guard.live.pop(args[0],None)
                     elif operation == 'monitor_error':

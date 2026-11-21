@@ -1,4 +1,4 @@
-name: rc4 color forecast Windows preview
+name: rc4 overview and next-print forecast Windows preview
 on:
   push:
     branches: ['test/rc4-color-forecast-20261120']
@@ -24,7 +24,7 @@ jobs:
       - name: Verify the actual EXE, WebView2 and Windows tray
         run: python dev/labs/uid_candidate_bench/resumed.py --exe output/native-dist/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe --output output/windows-evidence/native --require-direct-spool-selection
       - name: Verify forecast, real head mapping and manual accounting
-        run: python -m pytest tests/test_history_only_review_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_uid_history_review.py tests/test_resumed_print_accounting.py tests/test_resumed_print_live.py tests/test_user_launch.py tests/test_uid_forecast.py tests/test_slice_observer.py tests/test_uid_guard.py tests/test_uid_calculated_history.py tests/test_user_hook.py tests/test_user_tray.py tests/test_forecast_library_layout.py -x -q --timeout=90 --junitxml=output/windows-evidence/tests.xml
+        run: python -m pytest tests/test_history_only_review_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_uid_history_review.py tests/test_resumed_print_accounting.py tests/test_resumed_print_live.py tests/test_user_launch.py tests/test_uid_forecast.py tests/test_slice_observer.py tests/test_uid_guard.py tests/test_uid_calculated_history.py tests/test_user_hook.py tests/test_user_tray.py tests/test_forecast_library_layout.py tests/test_dashboard.py -x -q --timeout=90 --junitxml=output/windows-evidence/tests.xml
       - name: Package verified EXE and its runtime
         shell: pwsh
         run: |
@@ -32,10 +32,10 @@ jobs:
           $guide = Get-Content docs/guides/slice-forecast-rc4-preview-ru.md -Raw
           [System.IO.File]::WriteAllText("$pwd/$folder/ИНСТРУКЦИЯ.txt", $guide, [System.Text.UTF8Encoding]::new($true))
           $exe = "$folder/Snapmaker-Tracker-2.1-Candidate.exe"
-          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.0rc4-color-preview') { throw 'Wrong EXE version' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.0rc4-overview-preview') { throw 'Wrong EXE version' }
           $build = Get-Content "$folder/_internal/tracker_build.json" -Raw | ConvertFrom-Json
           if ($build.commit -ne $env:GITHUB_SHA -or $build.dirty) { throw 'Windows EXE does not match the clean Actions checkout' }
-          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Color-Fix-Windows-x64.zip'
+          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Overview-Preview-Windows-x64.zip'
           New-Item -ItemType Directory -Force output/windows-delivery | Out-Null
           Compress-Archive -LiteralPath $folder -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()

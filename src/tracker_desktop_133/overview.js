@@ -7,10 +7,10 @@
  .overview-card,#slice-forecast{padding:24px!important;border-radius:14px;border-color:var(--border)!important}
  .overview-card #overview-title,#slice-forecast #forecast-heading{font-size:11px;letter-spacing:1.4px;margin:0;color:#a4b0c4}
  .overview-card .overview-heading>div{width:100%;min-width:0}
- .overview-card #overview-connection{display:block;width:fit-content;max-width:100%;padding:0;margin:9px 0 0;background:none;font-size:24px;line-height:1.25;font-weight:650;white-space:normal;letter-spacing:-.45px}
+ .overview-card #overview-connection{display:block;width:fit-content;max-width:100%;padding:0;margin:4px 0 0;background:none;font-size:21px;line-height:1.25;font-weight:650;white-space:normal;letter-spacing:-.45px}
  .overview-card #overview-connection.is-connected{color:#7fe1af;background:none}
  .overview-card[data-state=paused] #overview-connection,.overview-card[data-state=error] #overview-connection{color:#f1c876}
- .overview-card #overview-file{margin:6px 0 0;font-size:14px;overflow-wrap:anywhere}
+ .overview-card #overview-file{margin:3px 0 0;font-size:13px;overflow-wrap:anywhere}
  #guard-content:empty{display:none}
  #guard-content{margin-top:20px}
  .desktop-check{padding:14px 16px;background:#302a20;border-left:3px solid #f1c876;border-radius:9px;color:#f6dca5}
@@ -85,7 +85,10 @@
    box.classList.add('is-ok');
    box.querySelector('p').textContent=t('Данные на момент запуска задания. Изменение остатка не пересчитывает эту проверку.','Data recorded at job start. Adjusting the balance does not recalculate this check.','Daten beim Auftragsstart. Eine Restmengenkorrektur berechnet diese Prüfung nicht neu.','Дані на момент старту завдання. Зміна залишку не перераховує цю перевірку.','Datos del inicio del trabajo. Ajustar el saldo no recalcula esta comprobación.');
    past.append(box);historyArchive.append(past);
-  }else content.append(box);
+  }else{
+   if(!warn&&same)details.querySelector('summary').after(box.querySelector('p'));
+   content.append(box);
+  }
  };
  const forecast=el('slice-forecast'),header=forecast.querySelector('.overview-heading'),meta=forecast.querySelector('.forecast-meta');
  const separate=node('span');separate.id='desktop-forecast-separate';header.append(separate);
@@ -97,7 +100,11 @@
  window.desktopForecastGrouped=(entry,state)=>{
   window.desktopForecastHeads?.(state.printer_id, entry?.rows||[]);
   el('forecast-heading').textContent=t('Прогноз нарезки','Slice forecast','Slicing-Prognose','Прогноз нарізки','Previsión del laminado');
-  separate.textContent=t('Отдельно от текущей печати','Separate from the current print','Getrennt vom aktuellen Druck','Окремо від поточного друку','Independiente de la impresión actual');
+  separate.textContent=entry?.active_print_unknown
+   ?t('Расход текущей печати пока неизвестен','Current print usage is unknown','Verbrauch des aktuellen Drucks unbekannt','Витрати поточного друку поки невідомі','Consumo de la impresión actual desconocido')
+   :entry?.includes_active_print
+    ?t('С учётом текущей печати','Includes the current print','Aktueller Druck berücksichtigt','З урахуванням поточного друку','Incluye la impresión actual')
+    :t('Отдельно от текущей печати','Separate from the current print','Getrennt vom aktuellen Druck','Окремо від поточного друку','Independiente de la impresión actual');
   separate.hidden=!entry;sourceLabel.hidden=!entry;footer.hidden=!entry;details.hidden=false;exact.hidden=!entry;
   forecast.querySelector('.forecast-mapping').hidden=true;
   el('forecast-reserve').hidden=!entry?.rows?.length;
@@ -125,6 +132,7 @@
    forecast.querySelector('.forecast-mapping').textContent=t('Расчёт по цвету и типу','Estimated by color and type','Schätzung nach Farbe und Typ','Розрахунок за кольором і типом','Estimación por color y tipo');
   }
   const label=t('Материал','Material','Material','Матеріал','Material');
+  const rowsByHead=new Map(entry.rows.map(row=>[row.tool,row]));
   for(const material of materials){
    const item=node('span');
    if(material.color){
@@ -135,7 +143,15 @@
     item.append(swatch);
    }
    item.append(`${label} ${material.number} · ${material.grams.toLocaleString(currentLang,{maximumFractionDigits:3})} ${gramUnit()}`);
-   if(material.channel!=null)item.append(' → T'+material.channel);
+   if(material.channel!=null){
+    const tool='T'+material.channel;
+    item.append(' → '+tool);
+    const row=rowsByHead.get(tool);
+    if(row?.active_print_g>0&&row.remaining!=null){
+     const afterCurrent=t('после текущей ≈','after the current print ≈','nach aktuellem Druck ≈','після поточного друку ≈','tras la impresión actual ≈');
+     item.append(' · '+afterCurrent+' '+row.remaining.toLocaleString(currentLang,{maximumFractionDigits:2})+' '+gramUnit());
+    }
+   }
    if(material.choices?.length){
     const choices=material.choices.map(choice=>{
      const value=choice.after==null?balance:choice.deficit>0

@@ -1,8 +1,69 @@
 import copy,json
+import time
 import pytest
 from test_uid_motion_adapter import bench,history
 from test_uid_accounting import snapshot
 from tracker_uid_motion_lifecycle import MotionLifecycle
+
+
+def test_next_slice_uses_the_unbooked_plan_of_the_same_spool(bench):
+    from tracker_uid_forecast import forecast_entry
+
+    _, catalog, fleet, adapter = bench
+    fleet.states = {'a': snapshot('a', {'3': '04112233', '1': '04AABBCC'})}
+    life = MotionLifecycle(adapter)
+    accounting = adapter.service.accounting
+    start = catalog.inventory_snapshot('a', fleet.states)
+    key = life.start('a', filename='job.gcode', observed_at=1011, capture_id='forecast',
+                     epoch='original', start=start, channels=['1', '3'])['job_key']
+    order = [3, 1, 2, 0]
+    current = history()
+    task = dict(extruder_map_table=order, extruders_replenished=[0, 1, 2, 3], auto_replenish_filament=False)
+    status = dict(print_stats=dict(state='printing', filename='job.gcode'), print_task_config=task)
+    monitor = dict(status['print_stats'], checked_at=time.time(), connected=True)
+    life.recovery_profile('a', current, dict(
+        filename='job.gcode', started_at=1010.0, file_sha256='a' * 64, mapping=order,
+        replenished=[0, 1, 2, 3], logical_weights=[20, 0, 0, 0], auto_replenish=False,
+    ))
+    upcoming = dict(weights=[485, 5, 0, 0], colors=['#fd8008', '#ffffff'], filament_types=['PLA', 'PLA'])
+
+    def forecast():
+        heads = []
+        for channel, uid, color in [('3', '04112233', '#fd8008'), ('1', '04AABBCC', '#ffffff')]:
+            spool = dict(catalog.spool(uid), details=dict(color=color, material='PLA'))
+            heads.append(dict(channel=channel, spool=spool, usable=True))
+        pending = life.pending_print_usage('a', monitor, heads)
+        for head in heads:
+            head['active_print_mg'] = None if pending is None else pending.get(head['spool']['spool_id'], 0)
+        return forecast_entry(upcoming, heads, reserve=5)
+
+    monitor['state'] = 'complete'
+    life.replacement_observe('a', history('completed', ident='older'),
+                             dict(status, print_stats=dict(state='complete', filename='job.gcode')))
+    assert forecast()['status'] == 'ok'
+    monitor['state'] = 'printing'
+    assert forecast()['active_print_unknown']
+    life.replacement_observe('a', current, status)
+    projected = forecast()
+    assert projected['status'] == 'shortage' and projected['includes_active_print']
+    assert [(row['channel'], row['remaining'], row['active_print_g']) for row in projected['rows']] == [
+        ('3', 480, 20), ('1', 300, 0),
+    ]
+    assert projected['rows'][0]['deficit'] == 10
+    assert not catalog.db.execute('SELECT * FROM uid_debits').fetchall()
+
+    source = adapter.source('original', 'forecast')
+    accounting.apply(key, 1, {'1': 0, '3': 5000}, state='active', source=source, basis='executed_gcode')
+    monitor['state'] = 'paused'
+    partial = forecast()
+    assert partial['rows'][0]['remaining'] == 480
+    assert partial['rows'][0]['active_print_g'] == 15
+    monitor['state'] = 'complete'
+    assert forecast()['rows'][0]['remaining'] == 480
+    accounting.apply(key, 2, {'1': 0, '3': 20000}, state='completed', source=source, basis='executed_gcode')
+    final = forecast()
+    assert final['rows'][0]['remaining'] == 480 and not final['includes_active_print']
+    assert catalog.spool('04112233')['remaining_mg'] == 480000
 
 
 def scenario(bench,auto=True,profile_overrides=None):

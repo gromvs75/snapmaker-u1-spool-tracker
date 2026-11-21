@@ -23,6 +23,8 @@ def tray_model(snapshot):
                     'unknown': 'Нужно сверить головки или остатки'}[status]
         label = estimate + ' · Расход ' + grams(sum(m['grams'] for m in materials), 2)
         mapping = ('Уточните головки в окне подготовки Orca' if entry['requires_mapping']
+                   else 'Расход текущей печати пока неизвестен' if entry.get('active_print_unknown')
+                   else 'С учётом текущей печати' if entry.get('includes_active_print')
                    else 'Прогноз по цвету и типу')
     if entry:
         if not materials:label='Нет данных о расходе материала'

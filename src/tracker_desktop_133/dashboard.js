@@ -10,8 +10,10 @@
  const percent=node('strong','—','dash-percent'),bar=node('progress');bar.max=100;bar.id='dashboard-progress';
  const layer=node('span',undefined,'dash-layer'),metrics=node('div',undefined,'dash-metrics'),hint=node('p',undefined,'dash-hint');
  const cells=['elapsed','remaining','finish'].map(id=>{const wrap=node('div'),label=node('small'),value=node('strong');value.id='dashboard-'+id;wrap.append(label,value);metrics.append(wrap);return {label,value}});
- const row=node('div',undefined,'dash-progress-row');row.append(layer,percent);telemetry.append(row,bar,metrics,hint);
- card.querySelector('.overview-heading').after(telemetry);
+ const heading=card.querySelector('.overview-heading');
+ heading.append(percent);
+ telemetry.append(layer,bar,metrics,hint);
+ heading.after(telemetry);
  function print(data){
   const m=data.monitor||{},age=Date.now()/1000-m.checked_at,fresh=m.connected&&age>=-5&&age<5;
   const p=fresh&&known(m.progress)&&m.progress<=1?m.progress:null;

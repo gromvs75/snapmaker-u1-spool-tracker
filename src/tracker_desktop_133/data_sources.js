@@ -2,7 +2,7 @@
 (()=>{
  const t=desktopText,section=node('section',undefined,'dash-sources');section.id='dashboard-sources';
  const title=node('h3');section.append(title);const grid=node('div',undefined,'dash-source-grid');section.append(grid);
- document.querySelector('#view-overview .sidebar').after(section);
+ document.querySelector('#view-overview .sidebar').before(section);
  const paths=['M9 3v5m6-5v5M6 8h12v4a6 6 0 0 1-6 6v4m0-4a6 6 0 0 1-6-6V8',
   'M6 3h12v10H6zM9 13v5l3 3 3-3v-5M9 6h6',
   'M3 8a14 14 0 0 1 18 0M6 12a9 9 0 0 1 12 0M9 16a4 4 0 0 1 6 0M12 20h.01',
@@ -30,7 +30,7 @@
    faults=channels.filter(c=>['unreadable','stale','conflict'].includes(c.state)).length,ready=live&&reader.state==='ready';
   set(2,'RFID / UID',!live?unknown():reader.state==='module_missing'?t('нет модуля','no module','kein Modul','немає модуля','sin módulo'):ready?faults?t('нужна проверка','needs review','Prüfung nötig','потрібна перевірка','requiere revisión'):t('готов','ready','bereit','готовий','listo'):t('недоступен','unavailable','nicht verfügbar','недоступний','no disponible'),
    ready?t('Читаются метки: ','Tags read: ','Gelesene Tags: ','Читаються мітки: ','Etiquetas leídas: ')+read+' / 4':t('Чтение меток не подтверждено','Tag reading unconfirmed','Tag-Lesung unbestätigt','Читання міток не підтверджено','Lectura de etiquetas sin confirmar'),
-   t('Готовность считывателя не означает привязку всех меток. Состояние каждой катушки показано выше. Без модуля доступно ручное назначение.','Reader readiness does not mean all tags are linked. Each spool status is shown above. Manual assignment works without the module.','Leserbereitschaft bedeutet nicht, dass alle Tags verknüpft sind. Spulenstatus steht oben. Manuelle Zuordnung funktioniert ohne Modul.','Готовність зчитувача не означає прив’язку всіх міток. Стани котушок показані вище. Без модуля доступне ручне призначення.','Un lector listo no implica que todas las etiquetas estén vinculadas. Consulte cada bobina. La asignación manual funciona sin módulo.'),ready&&!faults?'ok':faults?'warning':'neutral');
+   t('Состояние меток показано на карточках катушек ниже. Без модуля доступно ручное назначение.','Tag status appears on the spool cards below. Manual assignment works without the module.','Der Tag-Status steht auf den Spulenkarten unten. Manuelle Zuordnung funktioniert ohne Modul.','Стани міток показані нижче на картках котушок. Без модуля доступне ручне призначення.','El estado de las etiquetas se muestra en las tarjetas de bobina. La asignación manual funciona sin módulo.'),ready&&!faults?'ok':faults?'warning':'neutral');
   const sm=data.data_sources?.spoolman||{},label={unconfigured:t('не настроен','not configured','nicht eingerichtet','не налаштовано','sin configurar'),disabled:t('отключён','disabled','deaktiviert','вимкнено','desactivado'),unchecked:t('не проверен','not checked','nicht geprüft','не перевірено','sin comprobar'),unavailable:t('ошибка чтения','read failed','Lesefehler','помилка читання','error de lectura'),stale:t('данные устарели','stale data','Daten veraltet','дані застаріли','datos obsoletos'),current:t('каталог получен','catalog received','Katalog empfangen','каталог отримано','catálogo recibido')}[sm.state]||unknown();
   const when=sm.checked_at?new Date(sm.checked_at*1000).toLocaleTimeString():null;
   set(3,'Spoolman',label,t('Привязано: ','Linked: ','Verknüpft: ','Прив’язано: ','Vinculadas: ')+(sm.linked||0)+(sm.pending?' · '+t('в очереди: ','pending: ','ausstehend: ','у черзі: ','pendientes: ')+sm.pending:''),

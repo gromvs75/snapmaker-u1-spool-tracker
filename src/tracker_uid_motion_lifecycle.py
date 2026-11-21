@@ -5,8 +5,10 @@ never a reason to consult current slots. No network or legacy debit operations.
 """
 import json
 import math
+import time
 import uuid
-from tracker_uid_accounting import job_key
+from tool_mapping import physical_weights, validate_mapping
+from tracker_uid_accounting import job_key, mg
 from tracker_uid_recovery import Recovery, TERMINAL
 
 
@@ -15,6 +17,7 @@ class MotionLifecycle:
         self.adapter = adapter
         self.db = adapter.db
         self.session = uuid.uuid4().hex
+        self.forecast_observations = {}
         self.recovery = Recovery(self.db)
         from tracker_uid_replacements import Replacements
         self.replacements = Replacements(self.db)
@@ -101,8 +104,66 @@ class MotionLifecycle:
 
     def replacement_observe(self,printer_id,history,status):
         hk=job_key(printer_id,history['job_id'],str(float(history['start_time'])))
+        stats = status.get('print_stats', {})
+        previous = self.forecast_observations.get(printer_id)
+        active = history['status'] == 'in_progress' and stats.get('state') in ('printing', 'paused')
+        finishing = previous and previous[0] == hk and stats.get('state') == 'complete'
+        if (active or finishing) and stats.get('filename') == history['filename']:
+            self.forecast_observations[printer_id] = (hk, time.monotonic(), history['filename'], status)
         row=self.db.execute('SELECT key FROM uid_motion_captures WHERE history_key=?',(hk,)).fetchone()
         if row:self.replacements.observe(row['key'],status,self.adapter.service.fleet.snapshot())
+
+    def pending_print_usage(self, printer_id, monitor, heads):
+        """Estimated usage still to be booked by spool, or None if uncertain."""
+        observation = self.forecast_observations.get(printer_id)
+        state = monitor.get('state')
+        active = state in ('printing', 'paused')
+        # A terminal poll can arrive before the final debit. Hold the plan
+        # through that boundary until the accounting row changes atomically.
+        terminal = state in ('complete', 'cancelled', 'error')
+        if not observation:
+            return None if active else {}
+        history_key, checked_at, filename, status = observation
+        job = self.db.execute("""SELECT j.job_key,j.state,j.mapping_valid,p.profile,p.quarantined
+            FROM uid_motion_captures c JOIN uid_jobs j ON j.job_key=c.key
+            LEFT JOIN uid_recovery_profiles p USING(history_key)
+            WHERE c.printer_id=? AND c.history_key=?""", (printer_id, history_key)).fetchone()
+        if not monitor.get('connected') or not 0 <= time.time() - monitor['checked_at'] < 5:
+            return None if job is None or job['state'] == 'active' else {}
+        if not (active or terminal) or monitor.get('filename') != filename:
+            return None if active else {}
+        if job and job['state'] != 'active':
+            return {}
+        if (job is None or not job['mapping_valid'] or job['quarantined'] != 0
+                or time.monotonic() - checked_at >= 5 or state in ('cancelled', 'error')):
+            return None
+        try:
+            plan = json.loads(job['profile'])
+            task = status['print_task_config']
+            mapping = validate_mapping(task['extruder_map_table'])
+            if (status['print_stats']['filename'] != filename or plan['filename'] != filename
+                    or plan['mapping'] != mapping or plan['replenished'] != [0, 1, 2, 3]
+                    or task.get('auto_replenish_filament') != plan.get('auto_replenish')
+                    or validate_mapping(task['extruders_replenished']) != [0, 1, 2, 3]):
+                return None
+            planned = physical_weights(plan['logical_weights'], mapping)
+        except (ValueError, KeyError, TypeError):
+            return None
+        tools = {row['channel']: row for row in self.db.execute(
+            'SELECT channel,spool_id,used_mg FROM uid_job_tools WHERE job_key=?', (job['job_key'],))}
+        spools = {head['channel']: head['spool']['spool_id'] for head in heads if head['spool']}
+        pending = {}
+        for channel, grams in enumerate(planned):
+            if grams <= 0:
+                continue
+            channel = str(channel)
+            tool = tools.get(channel)
+            if tool is None or spools.get(channel) != tool['spool_id']:
+                return None
+            sid = tool['spool_id']
+            unaccounted = max(0, mg(grams) - tool['used_mg'])
+            pending[sid] = pending.get(sid, 0) + unaccounted
+        return pending or None
 
     def recovery_terminal(self, printer_id, history, status, digest):
         self.history(printer_id,[history])

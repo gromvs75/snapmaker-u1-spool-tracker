@@ -228,11 +228,19 @@ def main():
             expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
                 'Материал 1 · 420 гр. → T0 · после текущей ≈ 412,28 гр.')
             assert page.locator('#dashboard-sources').bounding_box()['y'] < cards.first.bounding_box()['y']
+            details = page.locator('#dashboard-print-details')
+            toggle = page.locator('.overview-card').get_by_role('button', name='Детали')
+            expect(details).to_be_hidden()
+            toggle.click()
+            expect(details).to_be_visible()
+            toggle.click()
+            expect(details).to_be_hidden()
             snapshot = state()
             assert len(snapshot['debits']) == 1 and len(sm.puts) == 1
             assert next(spool for spool in snapshot['spools'] if spool['name'] == 'fixture-head-1')['remaining_mg'] == 430700
             page.screenshot(path=str(out/'forecast-during-print.png'), full_page=True)
             checks.append('slice: active job reserves 18.42 g on T0 for the next forecast without another debit')
+            checks.append('overview: current print details expand and collapse under the compact status')
 
             api('connections_stop', dict(confirmed=True))
         stop(native=True); launch(); connect(); time.sleep(1.2)

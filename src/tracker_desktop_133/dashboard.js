@@ -9,13 +9,38 @@
  const telemetry=node('section',undefined,'dash-telemetry');telemetry.id='dashboard-telemetry';
  const percent=node('strong','—','dash-percent'),bar=node('progress');bar.max=100;bar.id='dashboard-progress';
  const layer=node('span',undefined,'dash-layer'),metrics=node('div',undefined,'dash-metrics'),hint=node('p',undefined,'dash-hint');
- const cells=['elapsed','remaining','finish'].map(id=>{const wrap=node('div'),label=node('small'),value=node('strong');value.id='dashboard-'+id;wrap.append(label,value);metrics.append(wrap);return {label,value}});
+ const cells=['elapsed','remaining','finish'].map(id=>{const wrap=node('div'),label=node('small'),value=node('strong');value.id='dashboard-'+id;wrap.append(label,value);metrics.append(wrap);return {wrap,label,value}});
  const heading=card.querySelector('.overview-heading');
- heading.append(percent);
- telemetry.append(layer,bar,metrics,hint);
+ const remainingSummary=node('div',undefined,'dash-remaining-summary');
+ const toggle=node('button',undefined,'dash-print-toggle');
+ const details=node('div',undefined,'dash-print-details');
+ details.id='dashboard-print-details';toggle.type='button';
+ toggle.setAttribute('aria-controls',details.id);
+ let activeFile=null,expanded=false,warningJob=null;
+ function showDetails(open){
+  expanded=open;details.hidden=activeFile!==null&&!open;
+  toggle.setAttribute('aria-expanded',String(open));
+ }
+ toggle.onclick=()=>showDetails(!expanded);
+ window.dashboardPrintWarning=job=>{
+  if(job&&warningJob!==job)showDetails(true);
+  warningJob=job;toggle.classList.toggle('has-warning',Boolean(job));
+ };
+ heading.append(remainingSummary,percent,toggle);
+ details.append(layer,metrics,hint,card.querySelector('#guard-content'));
+ telemetry.append(bar,details);
  heading.after(telemetry);
  function print(data){
   const m=data.monitor||{},age=Date.now()/1000-m.checked_at,fresh=m.connected&&age>=-5&&age<5;
+  const printing=m.state==='printing',file=printing?m.filename||'':null;
+  if(file!==activeFile){
+   activeFile=file;
+   if(printing)remainingSummary.append(cells[1].wrap);
+   else metrics.insertBefore(cells[1].wrap,cells[2].wrap);
+   showDetails(false);
+  }
+  remainingSummary.hidden=toggle.hidden=!printing;
+  toggle.textContent=t('Детали','Details','Details','Деталі','Detalles');
   const p=fresh&&known(m.progress)&&m.progress<=1?m.progress:null;
   percent.textContent=p===null?'—':`${Math.min(m.state==='complete'?100:99,Math.floor(p*100))}%`;
   if(p===null){bar.removeAttribute('value');bar.classList.add('is-unknown')}else{bar.value=p*100;bar.classList.remove('is-unknown')}

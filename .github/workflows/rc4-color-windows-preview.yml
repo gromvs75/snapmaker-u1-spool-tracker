@@ -24,7 +24,7 @@ jobs:
       - name: Verify the actual EXE, WebView2 and Windows tray
         run: python dev/labs/uid_candidate_bench/resumed.py --exe output/native-dist/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe --output output/windows-evidence/native --require-direct-spool-selection
       - name: Verify forecast, real head mapping and manual accounting
-        run: python -m pytest tests/test_history_only_review_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_uid_history_review.py tests/test_resumed_print_accounting.py tests/test_resumed_print_live.py tests/test_user_launch.py tests/test_uid_forecast.py tests/test_slice_observer.py tests/test_uid_guard.py tests/test_uid_calculated_history.py tests/test_user_hook.py tests/test_user_tray.py tests/test_forecast_library_layout.py tests/test_dashboard.py -x -q --timeout=90 --junitxml=output/windows-evidence/tests.xml
+        run: python -m pytest tests/test_history_only_review_ui.py tests/test_history_review_ui.py tests/test_history_delivery_flow.py tests/test_uid_history_review.py tests/test_resumed_print_accounting.py tests/test_resumed_print_live.py tests/test_user_launch.py tests/test_uid_forecast.py tests/test_slice_observer.py tests/test_uid_guard.py tests/test_uid_calculated_history.py tests/test_user_hook.py tests/test_user_tray.py tests/test_forecast_library_layout.py tests/test_dashboard.py tests/test_grouped_overview.py -x -q --timeout=90 --junitxml=output/windows-evidence/tests.xml
       - name: Package verified EXE and its runtime
         shell: pwsh
         run: |

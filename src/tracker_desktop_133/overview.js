@@ -45,7 +45,9 @@
  renderOverview=data=>{overview(data);card.dataset.state=data.monitor.state;
   el('overview-title').textContent=t('Текущая печать','Current print','Aktueller Druck','Поточний друк','Impresión actual');
   // The main heading is live telemetry. A historical start check stays below.
-  el('overview-file').textContent=data.monitor.connected?data.monitor.filename||'':data.last_preflight?.filename?t('Последнее задание: ','Last job: ','Letzter Auftrag: ','Останнє завдання: ','Último trabajo: ')+data.last_preflight.filename:'';
+  const file=el('overview-file');
+  file.textContent=data.monitor.connected?data.monitor.filename||'':data.last_preflight?.filename?t('Последнее задание: ','Last job: ','Letzter Auftrag: ','Останнє завдання: ','Último trabajo: ')+data.last_preflight.filename:'';
+  file.title=file.textContent;
  };
  const reason=value=>String(value||'')
   .replaceAll('assignment/balance unconfirmed',t('назначение катушки или остаток не подтверждены','spool assignment or balance is unconfirmed','Spulenzuordnung oder Restmenge unbestätigt','призначення котушки або залишок не підтверджені','asignación de bobina o saldo sin confirmar'))
@@ -59,7 +61,8 @@
   const next=JSON.stringify([g,m.state,m.connected,m.filename,currentLang]);if(!force&&next===signature)return;signature=next;
   historyArchive.replaceChildren();
   const content=el('guard-content'),open=content.querySelector('details')?.open;
-  originalGuard(data,true);const actions=content.querySelector('.form-inline');content.replaceChildren();if(!g)return;
+  originalGuard(data,true);const actions=content.querySelector('.form-inline');content.replaceChildren();
+  if(!g){window.dashboardPrintWarning?.(null);return}
   const stateText=guardText[currentLang]||guardText.en;
   const warn=g.state&&g.state!=='ok',box=node('div',undefined,'desktop-check'+(warn?'':' is-ok'));
   const same=m.connected&&m.filename===g.filename;
@@ -79,6 +82,7 @@
   }
   box.append(details);if(actions)box.append(actions);
   const ongoing=same&&['printing','paused'].includes(m.state);
+  window.dashboardPrintWarning?.(ongoing&&warn?g.identity||g.filename:null);
   if(!ongoing&&!actions){
    const past=node('details');past.id='desktop-past-check';
    past.append(node('summary',t('Проверка при старте — сохранённый результат','Start check — saved result','Startprüfung — gespeichertes Ergebnis','Перевірка на старті — збережений результат','Comprobación inicial — resultado guardado')));

@@ -216,7 +216,7 @@ def main():
             page.screenshot(path=str(out/'native-manual-sent.png'))
             assert len(state()['debits']) == 1 and len(sm.puts) == 1 and not ui_errors
 
-            page.locator('#uid-history-dialog').get_by_role('button', name='Закрыть', exact=True).click()
+            page.reload()
             page.locator('#nav-overview').click()
             event('start', filename='active-forecast.gcode')
             temporary.write_bytes(payload('420, 0, 0, 0').replace(

@@ -93,7 +93,9 @@ def main():
             if linked:
                 data['spoolman'] = dict(blank(), url=smurl, mode='send', epoch='synthetic')
                 data['spools'][sid]['spoolman'] = dict(url=smurl, id=1)
-                for channel, color, remaining in [('1', '#151a1c', 430.7), ('3', '#ff7f26', 833.6)]:
+                for channel, color, remaining in [
+                    ('1', '#151a1c', 430.7), ('2', '#ffffff', 193.8), ('3', '#ff7f26', 833.6),
+                ]:
                     key = 'fixture-head-' + channel
                     data['spools'][key] = dict(name=key, material='PLA', remaining_g=remaining, color=color)
                     data['slots'][channel] = key
@@ -161,6 +163,21 @@ def main():
             assert not state()['debits'] and not sm.puts
             page.screenshot(path=str(out/'forecast-before-print.png'))
             checks.append('slice: color estimates shown on T2 and T0 with no debit before print')
+
+            temporary = plate.with_suffix('.gcode.tmp')
+            temporary.write_bytes(payload('0, 4.27, 0, 0').replace(
+                b'; printer_model', b'; filament_colour = #000000;#FFFFFFFF;#FD8008;#449532\n'
+                b'; filament_type = PLA;PLA;PLA;PLA\n; printer_model'))
+            temporary.replace(plate)
+            expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
+                ['Материал 2 · 4,27 гр. → T1'], timeout=20000)
+            expect(page.locator('#forecast-status')).to_have_text('По прогнозу хватает с резервом')
+            expect(page.locator('.forecast-material-color')).to_have_attribute('title', '#FFFFFF')
+            expect(cards.nth(1).locator('.dash-head-forecast')).to_contain_text('4,27')
+            assert 'Orca' not in page.locator('.forecast-mapping').text_content()
+            assert not state()['debits'] and not sm.puts
+            checks.append('slice: white RGBA forecasts 4.27 g on T1 without debit or an Orca check')
+
             page.locator('#nav-history').click()
             row = page.locator('.history-row').filter(has_text='unobserved-tangle.gcode')
             row.locator('.uid-expand').click()

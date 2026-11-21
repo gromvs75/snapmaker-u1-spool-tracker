@@ -35,7 +35,7 @@ jobs:
           if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.0rc4-color-preview') { throw 'Wrong EXE version' }
           $build = Get-Content "$folder/_internal/tracker_build.json" -Raw | ConvertFrom-Json
           if ($build.commit -ne $env:GITHUB_SHA -or $build.dirty) { throw 'Windows EXE does not match the clean Actions checkout' }
-          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Color-Preview-Windows-x64.zip'
+          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Color-Fix-Windows-x64.zip'
           New-Item -ItemType Directory -Force output/windows-delivery | Out-Null
           Compress-Archive -LiteralPath $folder -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()

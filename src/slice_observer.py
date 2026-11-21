@@ -14,7 +14,7 @@ from gcode import GCodeError, METADATA, parse_slice_usage
 from slice_bed_marker import embedded_bed_identity
 
 FILAMENT_CONFIG = re.compile(r'^;\s*filament_(colour|type)\s*=\s*(.*?)\s*$', re.IGNORECASE)
-HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}')
+HEX_COLOUR = re.compile(r'#[0-9a-fA-F]{6}(?:[0-9a-fA-F]{2})?')
 NAME = re.compile(r'^\.[0-9]+\.[0-9]+\.gcode$')
 MAX_BYTES = 128 * 1024 * 1024
 
@@ -67,7 +67,8 @@ def completed_materials(content, *, allow_extra_profiles=False):
         if match:
             fields[match[1].lower()].append(match[2])
     raw_colors = fields['colour'][0].split(';') if len(fields['colour']) == 1 else []
-    colors = [color if HEX_COLOUR.fullmatch(color) else None for color in map(str.strip, raw_colors)]
+    # Snapmaker Orca can include a trailing alpha channel. Match spools by RGB.
+    colors = [color[:7] if HEX_COLOUR.fullmatch(color) else None for color in map(str.strip, raw_colors)]
     types = fields['type'][0].split(';') if len(fields['type']) == 1 else []
     return usage, colors, types
 

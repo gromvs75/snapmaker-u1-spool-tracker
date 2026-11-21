@@ -23,7 +23,7 @@ def tray_model(snapshot):
                     'unknown': 'Нужно сверить головки или остатки'}[status]
         label = estimate + ' · Расход ' + grams(sum(m['grams'] for m in materials), 2)
         mapping = ('Уточните головки в окне подготовки Orca' if entry['requires_mapping']
-                   else 'Прогноз по цвету и типу · Сверьте с Orca')
+                   else 'Прогноз по цвету и типу')
     if entry:
         if not materials:label='Нет данных о расходе материала'
         label+=' · '+('Стол '+str(entry['plate']) if entry.get('plate') else 'Стол не определён')+' · '+datetime.fromtimestamp(entry['completed_at_ns']/1e9).strftime('%d.%m %H:%M')

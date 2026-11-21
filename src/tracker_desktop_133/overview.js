@@ -122,7 +122,7 @@
   if(entry.rows.length){
    status.style.color=entry.shortage?'#ff8f8f':entry.unknown?'':'#82dfb0';
    forecast.querySelector('.forecast-mapping').hidden=false;
-   forecast.querySelector('.forecast-mapping').textContent=t('Расчёт по цвету и типу. Перед стартом сверьте головки в Orca.','Estimated by color and type. Before starting, check the heads in Orca.','Schätzung nach Farbe und Typ. Vor dem Start die Köpfe in Orca prüfen.','Розрахунок за кольором і типом. Перед стартом звірте головки в Orca.','Estimación por color y tipo. Antes de iniciar, compruebe los cabezales en Orca.');
+   forecast.querySelector('.forecast-mapping').textContent=t('Расчёт по цвету и типу','Estimated by color and type','Schätzung nach Farbe und Typ','Розрахунок за кольором і типом','Estimación por color y tipo');
   }
   const label=t('Материал','Material','Material','Матеріал','Material');
   for(const material of materials){

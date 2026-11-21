@@ -22,7 +22,7 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
     s.call('restore_backup',package=package,expected_revision=preview['current_revision'],confirmed=True)
     folder=tmp_path/'slices'/'Test project'/'Metadata';folder.mkdir(parents=True)
     (folder/'.42.3.gcode').write_bytes(payload('15.08, 2.36').replace(
-        b'; printer_model', b'; filament_colour = #FD8008;#000000\n; filament_type = PLA;PLA\n; printer_model'))
+        b'; printer_model', b'; filament_colour = #FD8008FF;#000000\n; filament_type = PLA;PLA\n; printer_model'))
     (folder/'model_settings.config').write_text('<config><plate><metadata key="plater_id" value="2"/><metadata key="gcode_file" value="Metadata/.42.3.gcode"/></plate></config>')
     forecast=SliceForecast(s,tmp_path/'slices');forecast.poll();forecast.observer.settle=0;forecast.poll()
     server=serve(s,s.fleet,forecast=forecast);thread=threading.Thread(target=server.serve_forever);thread.start()
@@ -33,6 +33,7 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
             errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(f'http://127.0.0.1:{server.server_port}/desktop')
             page.wait_for_function("document.getElementById('forecast-status').textContent.includes('По прогнозу хватает с резервом')")
+            assert page.locator('.forecast-mapping').text_content() == 'Расчёт по цвету и типу'
             assert 'Стол 2' in page.locator('#forecast-single').inner_text()
             materials = page.locator('#desktop-forecast-materials > span')
             assert materials.all_text_contents() == ['Материал 1 · 15,08 гр. → T2', 'Материал 2 · 2,36 гр. → T0']

@@ -1,3 +1,5 @@
+from dev.observer_fixture import payload
+from slice_observer import SliceObserver
 from tracker_user_tray import tray_model,create_tray_icon,create_toolhead_menu_icon,create_material_menu_icon
 from tracker_uid_forecast import enrich
 from test_uid_forecast import entry,heads
@@ -29,6 +31,30 @@ def test_tray_shows_deficit_on_color_matched_head():
     assert 'После ≈ 428,34 г' in model['heads'][0]['title']
     assert 'Не хватает с резервом 5,08 г' in model['heads'][2]['title']
     assert 'Нужно' not in model['heads'][1]['title']
+
+
+def test_white_rgba_slice_shows_forecast_on_t1_before_print(tmp_path):
+    folder = tmp_path / 'project' / 'Metadata'
+    folder.mkdir(parents=True)
+    (folder / '.42.7.gcode').write_bytes(payload('0.00, 4.27, 0.00, 0.00').replace(
+        b'; printer_model', b'; filament_colour = #000000;#FFFFFFFF;#FD8008;#449532\n'
+        b'; filament_type = PLA;PLA;PLA;PLA\n; printer_model',
+    ))
+    observer = SliceObserver(tmp_path, settle_seconds=0)
+    observer.poll()
+    sliced, = observer.poll()
+    h = heads()
+    for head, color in zip(h, ('#151a1c', '#ffffff', '#ff7f26', '#2b9c70')):
+        head['spool']['details'] = dict(color=color, material='PLA')
+    h[1]['spool']['remaining_mg'] = 193800
+    model = tray_model(enrich(dict(entries=[sliced], latest=sliced['source']), dict(
+        printers={'u1': dict(heads=h)}, selected_printer='u1', safety_margin_g=5, accounted={},
+    )))
+    assert model['status'] == 'ok'
+    assert 'Orca' not in model['mapping']
+    assert [(m['number'], m['color'], m['channel']) for m in model['materials']] == [(2, '#FFFFFF', '1')]
+    assert 'Нужно 4,27 г · После ≈ 189,53 г' in model['heads'][1]['title']
+    assert all(head['status'] is None for i, head in enumerate(model['heads']) if i != 1)
 
 
 def test_artwork_has_four_dots_and_separate_badges():

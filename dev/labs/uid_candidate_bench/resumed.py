@@ -110,17 +110,26 @@ def main():
     try:
         sim = subprocess.Popen([sys.executable, str(Path(__file__).with_name('simulator.py')), str(printer_port)], stdout=log, stderr=log)
         wait(lambda: request(printer+'/ready'))
-        for label, reset, omit in [('counter-kept', False, False), ('counter-reset', True, False), ('counter-reset-unannounced', True, True)]:
+        for label in ('counter-kept', 'counter-reset', 'counter-reset-unannounced', 'quick-standby'):
             profile = root/label; launch(); restore(label); connect()
             wait(lambda: state()['manual_assignments'][0]['confirmed'])
             event('start', filename=label+'.gcode'); wait(lambda: state()['recovery_plans'])
-            event('motion', stamp=1, length=100); event('error')
-            wait(lambda: any(j['history_status']=='error' for j in state()['jobs']))
-            assert not state()['debits']
-            event('resume', reset_counter=reset, omit_counter=omit); time.sleep(1)
-            event('motion', stamp=2, length=200 if omit else 50); event('complete')
+            quick_standby = label == 'quick-standby'
+            reset = label.startswith('counter-reset')
+            omit = label == 'counter-reset-unannounced'
+            event('motion', stamp=1, length=69.452 if quick_standby else 100)
+            if not quick_standby:
+                event('error')
+                wait(lambda: any(j['history_status']=='error' for j in state()['jobs']))
+                assert not state()['debits']
+                event('resume', reset_counter=reset, omit_counter=omit); time.sleep(1)
+                event('motion', stamp=2, length=200 if omit else 50)
+            event('complete')
+            if quick_standby:
+                time.sleep(.8)
+                event('standby')
             wait(lambda: state()['debits']); snapshot = state()
-            expected = 18420 if reset else 447
+            expected = 207 if quick_standby else 18420 if reset else 447
             assert sum(d['delta_mg'] for d in snapshot['debits']) == expected, snapshot
             assert snapshot['spools'][0]['remaining_mg'] == 500000-expected
             api('connections_stop', dict(confirmed=True)); connect(); time.sleep(1.2)
@@ -140,6 +149,12 @@ def main():
             b'; printer_model', b'; filament_colour = #FD8008;#000000\n; filament_type = PLA;PLA\n; printer_model'))
         launch(); sid = restore('manual-history', linked=True)
         api('settings', dict(values=dict(spoolman_mode='send'), expected_revision=state()['settings']['revision']))
+        for grams in (694, 500):
+            sm.rows['spool'][0]['remaining_weight'] = grams
+            assert api('desktop/spoolman/refresh', {})['items'][0]['remaining_g'] == grams
+            assert api('desktop/data')['spools'][sid]['remaining_g'] == grams
+        assert not state()['debits'] and not sm.puts
+        checks.append('Spoolman catalogue refresh updates Overview balance without usage')
         connect()
         with sync_playwright() as pw:
             if sys.platform == 'win32':

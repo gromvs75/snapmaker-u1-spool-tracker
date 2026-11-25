@@ -89,6 +89,7 @@ class MotionStreamRecorder:
         capture_epoch = uuid.uuid4().hex
         capture_id = None
         completion_time = None
+        terminal = None
         cancel_heads = None
         cancel_comparison = None
         cancel_total_mm = None
@@ -150,29 +151,37 @@ class MotionStreamRecorder:
                         allocation_error=allocation_error, started_mid_print=started_mid_print,
                         printer_comparison=comparison, feeder_evidence=feed.report(), tag_evidence=tags.report(feed.report()),
                         provisional=True, note=note)
+        def terminal_snapshot(state):
+            report = feed.report()
+            return dict(state=state, filename=filename, profile=current_profile(),
+                        printer_total_mm=printer_total_mm, counter_reset=counter_reset,
+                        feed=report, tags=tags.report(report), mapping_changed=mapping_changed,
+                        mappings=tuple(observed_mappings))
+
         def try_commit():
-            profile = current_profile()
+            profile = terminal['profile']
+            if profile is None and print_state == terminal['state'] and filename == terminal['filename']:
+                profile = current_profile()
             if not start_ready or not summary.valid or profile is None:
                 raise ValueError('Start, stream or verified profile unavailable')
-            if mapping_changed:
+            if terminal['mapping_changed']:
                 self.lifecycle.disconnected(self.printer_id, 'Automatic transition requires research; debit blocked')
                 raise ValueError('Automatic transition requires research; debit blocked')
             if self.lifecycle is not None:
-                report = feed.report()
-                cancelled = print_state == 'cancelled'
+                cancelled = terminal['state'] == 'cancelled'
                 try:
-                    comparison = cancel_comparison if cancelled else summary.compare_printer_total(printer_total_mm)
+                    comparison = cancel_comparison if cancelled else summary.compare_printer_total(terminal['printer_total_mm'])
                 except MotionDataError:
                     # Preserve observed feeder/placement continuity when the
                     # printer has no usable aggregate motion counter.
                     comparison = {'matches': False, 'printer_total_mm': None}
                 evidence = {'complete': attachment_profile is None, 'observed_from_attachment': attachment_profile is not None,
                             'continuous': True,
-                            'counter_reset': counter_reset,
+                            'counter_reset': terminal['counter_reset'],
                             'comparison': comparison,
                             'mapping_consistent': ((initial_mapping is None or initial_mapping == profile['mapping'])
-                                                   and all(m == profile['mapping'] for m in observed_mappings)),
-                            'feed': report, 'tags': tags.report(report),
+                                                   and all(m == profile['mapping'] for m in terminal['mappings'])),
+                            'feed': terminal['feed'], 'tags': terminal['tags'],
                             'heads': cancel_heads if cancelled else summary.result(),
                             'profile': profile, 'start': spool_snapshot, 'epoch': capture_epoch,
                             'capture_id': capture_id,
@@ -207,7 +216,7 @@ class MotionStreamRecorder:
                 else:
                     try:
                         if try_commit():
-                            self._write('auto_accounting_committed', filename=filename,
+                            self._write('auto_accounting_committed', filename=terminal['filename'],
                                         note='Estimated usage; untagged spool identity follows user slot assignment')
                         completion_time = None
                     except (ValueError, MotionDataError, KeyError, TypeError) as exc:
@@ -325,6 +334,7 @@ class MotionStreamRecorder:
                                     observed_at=observed_start, capture_id=capture_id, epoch=capture_epoch,
                                     start=spool_snapshot, channels=self.channels if self.channels is not None else [str(i) for i in range(4) if spool_snapshot['slots'].get(str(i+1))])
                             completion_time = None
+                            terminal = None
                             cancel_heads = None
                             cancel_comparison = None
                             cancel_total_mm = None
@@ -334,7 +344,14 @@ class MotionStreamRecorder:
                             printer_total_mm = stats['filament_used']
                         if 'filename' in stats:
                             filename = stats['filename'] if isinstance(stats['filename'], str) else ''
+                        if (completion_time is not None and state == terminal['state']
+                                and filename == terminal['filename'] and 'filament_used' in stats
+                                and state == 'complete'):
+                            terminal['printer_total_mm'] = printer_total_mm
                         if state == 'complete' and print_state in ('printing', 'paused') and summary.valid:
+                            # Idle updates can clear the job, counter and verified
+                            # profile before the final motion batches settle.
+                            terminal = terminal_snapshot(state)
                             write_summary('Diagnostic estimate only; completion batches may arrive later; no debit')
                             completion_time = now
                             previous_profile = getattr(self.store, '_motion_slicer_profile', None)
@@ -358,6 +375,7 @@ class MotionStreamRecorder:
                                 except MotionDataError:
                                     cancel_comparison = None
                                 cancel_search_open = cancel_comparison is not None
+                                terminal = terminal_snapshot(state)
                                 completion_time = now
                             error_job_start = None
                         print_state = state
@@ -365,7 +383,7 @@ class MotionStreamRecorder:
                     try:
                         head = int(method[-1])
                         rows = params.get('data') if isinstance(params, dict) else None
-                        if print_state == 'cancelled' and cancel_search_open and isinstance(rows, list):
+                        if completion_time is not None and terminal['state'] == 'cancelled' and cancel_search_open and isinstance(rows, list):
                             # A batch may contain both queued print moves and
                             # the later cancellation retract. Search only the
                             # forward prefix against the frozen U1 counter.

@@ -23,8 +23,10 @@ def until(fn, timeout=20):
     raise AssertionError('Local simulator condition timed out')
 
 
-@pytest.mark.parametrize('reset_counter,omit_counter',[(False,False),(True,False),(True,True)])
-def test_real_collectors_tangle_resume_complete_manual_spool(tmp_path,reset_counter,omit_counter):
+@pytest.mark.parametrize('scenario',[
+    'counter-kept', 'counter-reset', 'counter-reset-unannounced', 'quick-standby',
+])
+def test_real_collectors_complete_manual_spool(tmp_path,scenario):
     with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
     url=f'http://127.0.0.1:{port}'
     simulator=Path(__file__).resolve().parents[1]/'dev/labs/uid_candidate_bench/simulator.py'
@@ -52,21 +54,29 @@ def test_real_collectors_tangle_resume_complete_manual_spool(tmp_path,reset_coun
                 app.call('refresh')
                 return ready()['motion_clients'] and app.call('inspect')['manual_assignments'][0]['confirmed']
             until(connected)
-            event('start',filename='tangled.gcode')
+            short_print=scenario=='quick-standby'
+            reset_counter=scenario.startswith('counter-reset')
+            omit_counter=scenario=='counter-reset-unannounced'
+            event('start',filename='short.gcode' if short_print else 'tangled.gcode')
             until(lambda:app.call('inspect')['recovery_plans'])
-            event('motion',stamp=1,length=100)
-            event('error')
-            until(lambda:app.call('inspect')['jobs'][0]['history_status']=='error')
-            assert not app.call('inspect')['debits']
-            event('resume',reset_counter=reset_counter,omit_counter=omit_counter)
-            time.sleep(1)
-            event('motion',stamp=2,length=200 if omit_counter else 50)
+            event('motion',stamp=1,length=69.452 if short_print else 100)
+            if not short_print:
+                event('error')
+                until(lambda:app.call('inspect')['jobs'][0]['history_status']=='error')
+                assert not app.call('inspect')['debits']
+                event('resume',reset_counter=reset_counter,omit_counter=omit_counter)
+                time.sleep(1)
+                event('motion',stamp=2,length=200 if omit_counter else 50)
             event('complete')
+            if short_print:
+                time.sleep(.8)
+                event('standby')
+                assert not app.call('inspect')['debits']
             until(lambda:app.call('inspect')['debits'])
             state=app.call('inspect')
             # Total motion is 150mm. With a reset aggregate counter, preserve
             # original placement and use the verified full-file estimate.
-            expected=18420 if reset_counter else 447
+            expected=207 if short_print else 18420 if reset_counter else 447
             assert sum(d['delta_mg'] for d in state['debits'])==expected,state
             assert state['spools'][0]['remaining_mg']==500000-expected
             key=state['jobs'][0]['job_key']
@@ -76,7 +86,7 @@ def test_real_collectors_tangle_resume_complete_manual_spool(tmp_path,reset_coun
             time.sleep(1.2)
             assert len(app.call('inspect')['debits'])==1
             out=Path('output/resumed-print-live');out.mkdir(parents=True,exist_ok=True)
-            (out/('counter-reset-unannounced' if omit_counter else 'counter-reset' if reset_counter else 'counter-kept')).with_suffix('.json').write_text(json.dumps(dict(success=True,real_printer_used=False,rfid_module=False,expected_mg=expected,job=state['jobs'][0],debits=state['debits']),indent=2))
+            (out/scenario).with_suffix('.json').write_text(json.dumps(dict(success=True,real_printer_used=False,rfid_module=False,expected_mg=expected,job=state['jobs'][0],debits=state['debits']),indent=2))
             app.close();app=None
             app=Session(tmp_path/'profile',allowed_urls=[])
             assert app.call('history_detail',job_key=key)['accounted_mg']==expected

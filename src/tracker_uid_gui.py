@@ -22,16 +22,17 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
             return (self.headers.get('Host')==f'127.0.0.1:{self.server.server_port}'
                     and self.headers.get('X-Tracker-Token')==token
                     and self.headers.get('Origin',f'http://127.0.0.1:{self.server.server_port}')==f'http://127.0.0.1:{self.server.server_port}')
-        def refresh_spoolman(self):
+        def refresh_spoolman(self, *, require_enabled=True):
             from tracker_uid_spoolman import Client
             settings=owner.call('settings')['values'];url=settings.get('spoolman_url','')
-            if settings.get('spoolman_mode','read')=='off' or sender is None or not sender.permits(url):
+            if (require_enabled and settings.get('spoolman_mode','read')=='off') or sender is None or not sender.permits(url):
                 raise ValueError('Сервер Spoolman не разрешён для этого сеанса.')
+            context=owner.call('catalog_refresh_context',url)
             try:items=Client(url).catalog()
             except Exception:
-                owner.call('cache_catalog',url,None)
+                owner.call('cache_catalog',url,None,refresh_context=context)
                 raise ValueError('Spoolman недоступен. Каталог не обновлён.')
-            return owner.call('cache_catalog',url,items)
+            return owner.call('cache_catalog',url,items,refresh_context=context)
         def do_GET(self):
             if self.headers.get('Host')!=f'127.0.0.1:{self.server.server_port}':return self.reply(403,{'error':'Invalid host'})
             if self.path=='/favicon.ico':
@@ -213,18 +214,7 @@ def serve(owner, fleet, port=0, *, status_reader=None, sender=None, app_info=Non
                 if self.path in commands:
                     return self.reply(200,owner.call(commands[self.path],**data))
                 if self.path=='/api/refresh_catalog':
-                    from tracker_uid_spoolman import Client
-                    settings=owner.call('settings')
-                    url=settings['values'].get('spoolman_url','')
-                    # Apply the same policy to catalogue reads as to delivery.
-                    # Check BEFORE constructing a client or updating cached data.
-                    if sender is None or not sender.permits(url):
-                        raise ValueError('Сервер Spoolman не разрешён для этого сеанса.')
-                    try: items=Client(url).catalog()
-                    except Exception:
-                        if url:owner.call('cache_catalog',url,None)
-                        raise ValueError('Spoolman недоступен. Каталог не обновлён.')
-                    return self.reply(200,owner.call('cache_catalog',url,items))
+                    return self.reply(200,self.refresh_spoolman(require_enabled=False))
                 command={'/api/assign' :'assign_manual','/api/transfer':'transfer_manual'}.get(self.path)
                 if not command:return self.reply(404,{'error':'Not found'})
                 if not isinstance(data.get('expected_version'),str) or data.get('confirmed') is not True:raise ValueError('Подтвердите физическое назначение.')

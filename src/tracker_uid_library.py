@@ -181,13 +181,56 @@ class Library:
         result=dict(spool_id=spool_id,previous_mg=spool['remaining_mg'],remaining_mg=amount if amount is not None else spool['remaining_mg'],status='saved')
         return result
 
-    def cache_catalog(self, url, items=None):
+    def catalog_refresh_context(self, url):
+        url = endpoint(url)
+        cached = self.db.execute('SELECT revision FROM uid_remote_catalog WHERE url=?', (url,)).fetchone()
+        settings = self.settings()['values']
+        targets = {}
+        if url == settings.get('spoolman_url') and settings.get('spoolman_mode', 'read') != 'off':
+            active_replacements = set()
+            if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='uid_replacement_events'").fetchone():
+                for row in self.db.execute("""SELECT e.payload FROM uid_replacement_events e JOIN uid_jobs j USING(job_key)
+                                              WHERE j.state='active'"""):
+                    event = json.loads(row[0])
+                    active_replacements.update((event.get('old_spool_id'), event.get('new_spool_id')))
+            for row in self.db.execute("""
+                SELECT s.spool_id, s.remaining_mg, l.remote_id,
+                       (SELECT COUNT(*) FROM uid_remote_outbox o WHERE o.spool_id=s.spool_id) AS deliveries
+                FROM uid_remote_links l JOIN uid_spools s USING(spool_id)
+                WHERE l.url=?
+                AND NOT EXISTS (
+                    SELECT 1 FROM uid_remote_outbox o WHERE o.spool_id=s.spool_id AND o.state<>'sent'
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key)
+                    WHERE t.spool_id=s.spool_id AND j.state='active'
+                )
+            """, (url,)):
+                if row['spool_id'] not in active_replacements:
+                    targets[row['spool_id']] = (row['remote_id'], row['remaining_mg'], row['deliveries'])
+        return (cached[0] if cached else '', targets)
+
+    def cache_catalog(self, url, items=None, *, refresh_context=None):
         url=endpoint(url)
         if items is not None and (not isinstance(items,dict) or any(str(v['id'])!=k for k,v in items.items())):
             raise ValueError('Invalid remote catalog')
-        with self.db:
-            self.db.execute('INSERT OR REPLACE INTO uid_remote_catalog VALUES(?,?,?,?,?)',
-                (url,uuid.uuid4().hex,time.time(),int(items is not None),json.dumps(items or {},allow_nan=False)))
+        with self.accounting.transaction():
+            cached_revision, targets = self.catalog_refresh_context(url)
+            expected_revision, original_targets = refresh_context if refresh_context is not None else (cached_revision, targets)
+            if cached_revision == expected_revision:
+                self.db.execute('INSERT OR REPLACE INTO uid_remote_catalog VALUES(?,?,?,?,?)',
+                    (url,uuid.uuid4().hex,time.time(),int(items is not None),json.dumps(items or {},allow_nan=False)))
+                for sid, target in targets.items():
+                    # A read in flight can overlap a debit, delivery or assignment.
+                    # Only rebase spools that were eligible throughout this refresh.
+                    if target != original_targets.get(sid):
+                        continue
+                    remote_id, remaining_mg, _ = target
+                    item = (items or {}).get(str(remote_id))
+                    if item and not item['archived'] and item['remaining_g'] is not None:
+                        amount = mg(item['remaining_g'])
+                        if amount != remaining_mg:
+                            self.db.execute('UPDATE uid_spools SET remaining_mg=? WHERE spool_id=?', (amount, sid))
         return self.remote_catalog(url)
 
     def remote_catalog(self, url, query=''):

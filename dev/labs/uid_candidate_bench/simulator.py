@@ -67,6 +67,8 @@ async def handler(r):
             else:jobs[0]['status']='in_progress'
         if action=='complete':
             stats['state']='complete';jobs[0].update(status='completed',end_time=time.time(),filament_used=stats['filament_used'])
+        if action=='standby':
+            stats.update(state='standby',filename='',filament_used=0)
         msg=dict(status={'print_stats':stats},eventtime=time.monotonic()) if action!='motion' else dict(data=[[a['stamp'],1,a['length'],0,[0,0,0],[1,0,0]]])
         if action=='resume' and a.get('omit_counter'):
             msg['status']['print_stats']={k:v for k,v in stats.items() if k!='filament_used'}

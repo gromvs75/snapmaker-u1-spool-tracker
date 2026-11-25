@@ -7,6 +7,7 @@ from tracker_uid_motion_lifecycle import MotionLifecycle
 
 
 def test_next_slice_uses_the_unbooked_plan_of_the_same_spool(bench):
+    from tracker_desktop_model import current_print_forecast
     from tracker_uid_forecast import forecast_entry
 
     _, catalog, fleet, adapter = bench
@@ -27,6 +28,15 @@ def test_next_slice_uses_the_unbooked_plan_of_the_same_spool(bench):
     ))
     upcoming = dict(weights=[485, 5, 0, 0], colors=['#fd8008', '#ffffff'], filament_types=['PLA', 'PLA'])
 
+    def current_cards():
+        spool = catalog.spool('04112233')
+        sid = spool['spool_id']
+        return current_print_forecast(dict(
+            monitor=monitor, selected_printer='a', slots={'4': sid},
+            slot_status={'4': 'recognized'}, safety_margin_g=5,
+            spools={sid: dict(remaining_g=spool['remaining_mg'] / 1000)},
+        ), life)
+
     def forecast():
         heads = []
         for channel, uid, color in [('3', '04112233', '#fd8008'), ('1', '04AABBCC', '#ffffff')]:
@@ -43,7 +53,9 @@ def test_next_slice_uses_the_unbooked_plan_of_the_same_spool(bench):
     assert forecast()['status'] == 'ok'
     monitor['state'] = 'printing'
     assert forecast()['active_print_unknown']
+    assert current_cards() == []
     life.replacement_observe('a', current, status)
+    assert [(r['tool'], r['used'], r['after'], r['enough']) for r in current_cards()] == [('T3', 20, 480, True)]
     projected = forecast()
     assert projected['status'] == 'shortage' and projected['includes_active_print']
     assert [(row['channel'], row['remaining'], row['active_print_g']) for row in projected['rows']] == [
@@ -58,8 +70,10 @@ def test_next_slice_uses_the_unbooked_plan_of_the_same_spool(bench):
     partial = forecast()
     assert partial['rows'][0]['remaining'] == 480
     assert partial['rows'][0]['active_print_g'] == 15
+    assert [(r['used'], r['after']) for r in current_cards()] == [(20, 480)]
     monitor['state'] = 'complete'
     assert forecast()['rows'][0]['remaining'] == 480
+    assert current_cards() == []
     accounting.apply(key, 2, {'1': 0, '3': 20000}, state='completed', source=source, basis='executed_gcode')
     final = forecast()
     assert final['rows'][0]['remaining'] == 480 and not final['includes_active_print']

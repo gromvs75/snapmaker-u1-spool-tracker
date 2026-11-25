@@ -119,10 +119,11 @@ class AccountingOwner:
                     elif operation == 'guard_decision':result=guard.decision(*args,**kwargs)
                     elif operation == 'guard_result':result=guard.result(*args,**kwargs)
                     elif operation == 'desktop_snapshot':
-                        from tracker_desktop_model import snapshot as desktop_snapshot
+                        from tracker_desktop_model import current_print_forecast, snapshot as desktop_snapshot
                         result=desktop_snapshot(library,history_review,fleet.snapshot())
                         observed=guard.snapshot(result['selected_printer']);live=observed['monitor']
                         if live and 0<=__import__('time').time()-live['checked_at']<5:result['monitor'].update(live)
+                        result['current_print_forecast']=current_print_forecast(result,lifecycle)
                         result['last_guard']=observed['guard']
                         if observed['guard']:
                             from tracker_uid_migration import history_identity

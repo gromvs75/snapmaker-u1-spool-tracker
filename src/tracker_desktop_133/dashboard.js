@@ -69,13 +69,17 @@
  let forecastPrinter=null, forecastRows=new Map();
  function heads(data){
   const m=data.monitor||{},age=Date.now()/1000-m.checked_at;
+  const printing=m.connected&&['printing','paused'].includes(m.state);
+  const currentRows=new Map(printing&&age>=-5&&age<5?(data.current_print_forecast||[]).map(row=>[row.tool,row]):[]);
+  const usageLabel=printing?t('По G-code','G-code estimate','Laut G-Code','За G-code','Según G-code'):
+   t('По нарезке','Slice usage','Slicing-Verbrauch','За нарізкою','Consumo previsto');
   [...el('sidebar-slots').querySelectorAll('.sidebar-slot')].forEach((head,i)=>{
-   const spool=data.spools?.[data.slots?.[String(i+1)]],channel=data.uid_channels?.[data.selected_printer]?.channels?.[String(i)],tag=channel?.tag;
+   const sid=data.slots?.[String(i+1)],spool=data.spools?.[sid],channel=data.uid_channels?.[data.selected_printer]?.channels?.[String(i)],tag=channel?.tag;
    const active=m.connected&&age>=-5&&age<5&&m.state==='printing'&&m.active_head===i;
-   const sliceRow=forecastRows.get('T'+i);
-   const estimate=data.selected_printer===forecastPrinter&&spool&&sliceRow?.spool_id===data.slots?.[String(i+1)]
-      &&!(m.connected&&['printing','paused'].includes(m.state))?sliceRow:null;
-   const signature=JSON.stringify([estimate,spool,channel?.state,channel?.uid,channel?.tag,data.slot_status?.[String(i+1)],rfid(data,i,spool),active,currentLang]);
+   const tool='T'+i;
+   const row=printing?currentRows.get(tool):data.selected_printer===forecastPrinter?forecastRows.get(tool):null;
+   const estimate=spool&&row?.spool_id===sid?row:null;
+   const signature=JSON.stringify([estimate,estimate&&usageLabel,spool,channel?.state,channel?.uid,channel?.tag,data.slot_status?.[String(i+1)],rfid(data,i,spool),active,currentLang]);
    if(head.dataset.dashboard===signature)return;head.dataset.dashboard=signature;
    head.classList.toggle('selected-head',active);
    const color=spool?.color||(tag?.color?'#'+tag.color:null),safe=validColor(color)?color:null;
@@ -98,7 +102,7 @@
    if(spool&& !['recognized','manual_confirmed'].includes(data.slot_status?.[String(i+1)]))statuses.append(node('small',t('Назначение требует проверки','Assignment needs review','Zuordnung prüfen','Призначення потребує перевірки','Revise la asignación'),'dash-warning'));
    const children=[stripe,info,balance,meter,note];
    if(estimate){
-    const used=t('По нарезке','Slice usage','Slicing-Verbrauch','За нарізкою','Consumo previsto')+' '+estimate.used.toLocaleString(currentLang,{maximumFractionDigits:3})+' '+gramUnit();
+    const used=usageLabel+' '+estimate.used.toLocaleString(currentLang,{maximumFractionDigits:3})+' '+gramUnit();
     const result=estimate.unknown?words.balance():estimate.enough
      ? t('После ≈','After ≈','Danach ≈','Після ≈','Después ≈')+' '+displayGrams(estimate.after)+' '+gramUnit()
      : t('Не хватает с резервом','Short with reserve','Fehlt mit Reserve','Не вистачає із запасом','Falta con reserva')+' '+displayGrams(estimate.deficit)+' '+gramUnit();

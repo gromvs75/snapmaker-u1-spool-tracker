@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 
-VERSION = '2.1.0rc4-assignment-preview'
+VERSION = '2.1.0rc4-print-plan-preview'
 
 
 def data_directory():

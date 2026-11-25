@@ -115,6 +115,18 @@ class MotionLifecycle:
 
     def pending_print_usage(self, printer_id, monitor, heads):
         """Estimated usage still to be booked by spool, or None if uncertain."""
+        spools = {head['channel']: head['spool']['spool_id'] for head in heads if head['spool']}
+        plan = self.print_usage_plan(printer_id, monitor, spools)
+        if plan is None:
+            return None
+        pending = {}
+        for row in plan.values():
+            sid = row['spool_id']
+            pending[sid] = pending.get(sid, 0) + row['pending_mg']
+        return pending
+
+    def print_usage_plan(self, printer_id, monitor, spools):
+        """Verified G-code usage for the current spool on each physical head."""
         observation = self.forecast_observations.get(printer_id)
         state = monitor.get('state')
         active = state in ('printing', 'paused')
@@ -151,8 +163,7 @@ class MotionLifecycle:
             return None
         tools = {row['channel']: row for row in self.db.execute(
             'SELECT channel,spool_id,used_mg FROM uid_job_tools WHERE job_key=?', (job['job_key'],))}
-        spools = {head['channel']: head['spool']['spool_id'] for head in heads if head['spool']}
-        pending = {}
+        rows = {}
         for channel, grams in enumerate(planned):
             if grams <= 0:
                 continue
@@ -160,10 +171,9 @@ class MotionLifecycle:
             tool = tools.get(channel)
             if tool is None or spools.get(channel) != tool['spool_id']:
                 return None
-            sid = tool['spool_id']
-            unaccounted = max(0, mg(grams) - tool['used_mg'])
-            pending[sid] = pending.get(sid, 0) + unaccounted
-        return pending or None
+            rows[channel] = dict(spool_id=tool['spool_id'], planned_g=grams,
+                                 pending_mg=max(0, mg(grams) - tool['used_mg']))
+        return rows or None
 
     def recovery_terminal(self, printer_id, history, status, digest):
         self.history(printer_id,[history])

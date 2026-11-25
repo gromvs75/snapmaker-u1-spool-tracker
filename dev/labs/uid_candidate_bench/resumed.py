@@ -233,7 +233,13 @@ def main():
 
             page.reload()
             page.locator('#nav-overview').click()
+            plate.unlink()
+            expect(page.locator('#desktop-forecast-materials > span')).to_have_count(0)
             event('start', filename='active-forecast.gcode')
+            current_plan = cards.nth(0).locator('.dash-head-forecast')
+            expect(current_plan).to_contain_text('По G-code 18,42 гр.', timeout=25000)
+            expect(current_plan).to_contain_text('После ≈ 412,3 гр.')
+            assert page.locator('.dash-head-forecast').count() == 1
             temporary.write_bytes(payload('420, 0, 0, 0').replace(
                 b'; printer_model', b'; filament_colour = #000000;#FFFFFF;#FD8008;#449532\n'
                 b'; filament_type = PLA;PLA;PLA;PLA\n; printer_model'))
@@ -242,6 +248,7 @@ def main():
             expect(page.locator('#forecast-status')).to_have_text('По прогнозу материала не хватает')
             expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
                 'Материал 1 · 420 гр. → T0 · после текущей ≈ 412,28 гр.')
+            expect(current_plan).to_contain_text('По G-code 18,42 гр.')
             assert page.locator('#dashboard-sources').bounding_box()['y'] < cards.first.bounding_box()['y']
             details = page.locator('#dashboard-print-details')
             toggle = page.locator('.overview-card').get_by_role('button', name='Детали')
@@ -254,6 +261,7 @@ def main():
             assert len(snapshot['debits']) == 1 and len(sm.puts) == 1
             assert next(spool for spool in snapshot['spools'] if spool['name'] == 'fixture-head-1')['remaining_mg'] == 430700
             page.screenshot(path=str(out/'forecast-during-print.png'), full_page=True)
+            checks.append('G-code: the current print forecast appears on the verified spool card without local slicing')
             checks.append('slice: active job reserves 18.42 g on T0 for the next forecast without another debit')
             checks.append('overview: current print details expand and collapse under the compact status')
 

@@ -100,6 +100,31 @@ def snapshot(library, history_review, fleet):
                     channels=fleet.get(p['id'],{}).get('channels',{})) for p in printers})
 
 
+def current_print_forecast(data, lifecycle):
+    monitor = data['monitor']
+    if monitor['state'] not in ('printing', 'paused'):
+        return []
+    bindings = {str(int(slot) - 1): sid for slot, sid in data['slots'].items()
+                if sid and data['slot_status'].get(slot) in ('recognized', 'manual_confirmed')}
+    plan = lifecycle.print_usage_plan(data['selected_printer'], monitor, bindings)
+    if not plan:
+        return []
+    spools = data['spools']
+    uncertain = set()
+    if any(spools[usage['spool_id']].get('pending_deliveries') for usage in plan.values()):
+        uncertain = {row[0] for row in lifecycle.db.execute(
+            "SELECT spool_id FROM uid_remote_outbox WHERE state IN ('sending','uncertain')")}
+    rows = []
+    for channel, usage in plan.items():
+        sid = usage['spool_id']
+        remaining = spools[sid]['remaining_g']
+        after = None if sid in uncertain else remaining - usage['pending_mg'] / 1000
+        deficit = None if after is None else max(0, round(data['safety_margin_g'] - after, 9))
+        rows.append(dict(tool='T' + channel, spool_id=sid, used=usage['planned_g'], after=after,
+                         deficit=deficit, unknown=after is None, enough=deficit == 0))
+    return rows
+
+
 def forecast_view(forecast,printer_id):
     """Use the new freshness/identity rules through the established forecast view."""
     entries=[]

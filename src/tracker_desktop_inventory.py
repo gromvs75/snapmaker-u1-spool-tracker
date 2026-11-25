@@ -5,7 +5,7 @@ import time
 
 from tracker_uid_accounting import AccountingConflict, mg
 from tracker_uid_library import revision
-from tracker_printer_capabilities import manual_edit_available
+from tracker_printer_capabilities import can_replace_stale_uid, manual_edit_available
 
 
 def context(library, fleet):
@@ -90,12 +90,13 @@ class DesktopInventory:
         changed=[]
         for slot,target in data.items():
             ch=str(int(slot)-1)
-            if ch in tagged:
-                # UI may display the tagged spool, but cannot override its UID.
-                if target!=(tagged[ch].get('spool') or {}).get('spool_id','') or ch in manual:
-                    raise AccountingConflict('Назначение RFID изменяется только по наблюдённой метке.')
-                continue
             current=manual.get(ch)
+            observed=tagged.get(ch)
+            if observed:
+                if current is None and target==(observed.get('spool') or {}).get('spool_id',''):
+                    continue
+                if not target or not can_replace_stale_uid(fleet.get(pid,{}), observed):
+                    raise AccountingConflict('Назначение RFID изменяется только по наблюдённой метке.')
             if target!=(current['spool_id'] if current else '') or (current and not current['confirmed']):changed.append((ch,current,target))
         if changed:
             if not manual_edit_available(fleet.get(pid,{})):raise AccountingConflict('Нет связи с принтером или печать не завершена. Назначение не подтверждено.')

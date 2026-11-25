@@ -95,6 +95,72 @@ def test_atomic_swap_reconnect_confirm_and_other_printer_preserved(inventory):
     assert l.db.execute('SELECT spool_id FROM manual_assignments').fetchone()[0]==c['spool_id']
 
 
+def test_confirm_positions_after_uid_module_removal_restores_forecast(inventory):
+    from types import SimpleNamespace
+    from tracker_uid_forecast import forecast_entry
+    from tracker_uid_motion_lifecycle import MotionLifecycle
+
+    l, d, fleet = inventory
+    MotionLifecycle(SimpleNamespace(db=l.db))
+    spools = [l.create('PLA ' + str(i), grams, fleet=fleet, details=dict(color=color, material='PLA'))['spool_id']
+              for i, (grams, color) in enumerate([(392.9, '#151A1C'), (189.5, '#FFFFFF'),
+                                                (833.6, '#FF7F26'), (831.9, '#299467')])]
+    perform(l, d, fleet, 'slots', slots(*spools))
+    original_tagged = l.catalog.register('04112233', 'Original RFID spool', 800000)
+    l.catalog.reconcile({'a':snapshot('a', {'0':'04112233', '1':'04AABBCC'}),
+                         'b':snapshot('b', {'2':'04AABBCA'})})
+    fleet['a'].update(state='module_missing', printer_connected=True, print_state='standby',
+                      channels={str(i):dict(state='unknown', uid=None) for i in range(4)})
+    fleet['b'] = snapshot('b', {'2':'04AABBCA'})
+    plan = dict(weights=[8.28, 0, 0, 0], colors=['#000000'], filament_types=['PLA'], plate=1)
+    def preview():
+        heads = l.forecast_inventory(fleet=fleet)['printers']['a']['heads']
+        return forecast_entry(plan, heads, reserve=5)
+
+    assert preview()['status'] == 'unknown'
+    before = {r['spool_id']:r['remaining_mg'] for r in l.snapshot()['spools']}
+    with pytest.raises(ValueError, match='Unresolved UID'):
+        perform(l, d, fleet, 'slots', slots(original_tagged['spool_id'], *spools[1:]))
+    assert preview()['status'] == 'unknown'
+    perform(l, d, fleet, 'slots', slots(*spools))
+    result = preview()
+    assert result['status'] == 'ok'
+    assert [(r['channel'], r['after']) for r in result['rows']] == [('0', pytest.approx(384.62))]
+    assert {r['spool_id']:r['remaining_mg'] for r in l.snapshot()['spools']} == before
+    assert l.catalog.spool('04112233') == original_tagged
+    assert [tuple(r) for r in l.db.execute('SELECT printer_id,channel FROM uid_locations')] == [('b', '2')]
+    assert l.db.execute('SELECT COUNT(*) FROM uid_debits').fetchone()[0] == 0
+    assert l.catalog.inventory_snapshot('a', fleet)['slots']['1'] == spools[0]
+
+    # A reader that comes back can establish a new conflict.
+    fleet['a'] = snapshot('a', {'0':'04112233'})
+    assert preview()['status'] == 'unknown'
+    assert l.catalog.inventory_snapshot('a', fleet)['slots']['1'] != spools[0]
+
+
+@pytest.mark.parametrize('state,connected,printing', [
+    ('stopped', False, False),
+    ('module_unavailable', True, False),
+    ('module_missing', False, False),
+    ('module_missing', True, True),
+    ('ready', True, False),
+])
+def test_manual_confirmation_cannot_discard_uid_without_idle_stock_connection(inventory, state, connected, printing):
+    l, d, fleet = inventory
+    sid = l.create('Manual PLA', 392.9, fleet=fleet)['spool_id']
+    perform(l, d, fleet, 'slots', slots(sid))
+    present = snapshot('a', {'0':'04112233'})
+    l.catalog.reconcile({'a':present})
+    fleet['a'] = dict(present, state=state, printer_connected=connected,
+                      print_state='printing' if printing else 'standby')
+    if state != 'ready':
+        fleet['a']['channels'] = {str(i):dict(state='unknown', uid=None) for i in range(4)}
+    with pytest.raises(ValueError):
+        perform(l, d, fleet, 'slots', slots(sid))
+    assert l.db.execute("SELECT COUNT(*) FROM uid_locations WHERE printer_id='a'").fetchone()[0] == 1
+    assert l.db.execute('SELECT COUNT(*) FROM uid_debits').fetchone()[0] == 0
+
+
 def test_delete_only_unused_and_no_active_weight_rewrite(inventory):
     l,d,f=inventory
     unused=perform(l,d,f,'spools/add',dict(name='Unused',remaining_g='1'))['spool_id']

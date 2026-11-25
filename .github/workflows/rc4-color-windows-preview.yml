@@ -32,10 +32,10 @@ jobs:
           $guide = Get-Content docs/guides/slice-forecast-rc4-preview-ru.md -Raw
           [System.IO.File]::WriteAllText("$pwd/$folder/ИНСТРУКЦИЯ.txt", $guide, [System.Text.UTF8Encoding]::new($true))
           $exe = "$folder/Snapmaker-Tracker-2.1-Candidate.exe"
-          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.0rc4-accounting-preview') { throw 'Wrong EXE version' }
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.0rc4-assignment-preview') { throw 'Wrong EXE version' }
           $build = Get-Content "$folder/_internal/tracker_build.json" -Raw | ConvertFrom-Json
           if ($build.commit -ne $env:GITHUB_SHA -or $build.dirty) { throw 'Windows EXE does not match the clean Actions checkout' }
-          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Accounting-Preview-Windows-x64.zip'
+          $zip = 'output/windows-delivery/Snapmaker-Tracker-2.1.0rc4-Assignment-Preview-Windows-x64.zip'
           New-Item -ItemType Directory -Force output/windows-delivery | Out-Null
           Compress-Archive -LiteralPath $folder -DestinationPath $zip
           $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()

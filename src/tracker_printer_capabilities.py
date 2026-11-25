@@ -17,3 +17,8 @@ def manual_available(snapshot):
 def manual_edit_available(snapshot):
     return manual_available(snapshot) and snapshot.get('print_state', 'standby') in (
         'standby', 'complete', 'cancelled', 'error')
+
+
+def can_replace_stale_uid(snapshot, location):
+    return (snapshot.get('state') == 'module_missing'
+            and manual_edit_available(snapshot) and not location['confirmed'])

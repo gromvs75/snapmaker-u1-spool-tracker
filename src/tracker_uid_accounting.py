@@ -9,7 +9,7 @@ import hashlib
 import json
 import time
 from tracker_uid_client import canonical_uid
-from tracker_printer_capabilities import manual_available, manual_edit_available, printer_available
+from tracker_printer_capabilities import can_replace_stale_uid, manual_available, manual_edit_available, printer_available
 
 
 class AccountingConflict(ValueError): pass
@@ -166,15 +166,24 @@ class UidAccounting:
         obs=snapshot.get('channels',{}).get(channel,{})
         if not manual_edit_available(snapshot) or obs.get('state') not in ('absent','unreadable','unknown'):
             raise AccountingConflict('Connection or tag evidence conflicts with manual assignment')
-        if any(r.get('identity_mode')!='manual' and (r.get('spool') or {}).get('spool_id')==spool_id for r in rows):
+        tagged = [r for r in rows if r.get('identity_mode')!='manual']
+        if any((r.get('spool') or {}).get('spool_id')==spool_id for r in tagged):
             raise AccountingConflict('Unresolved UID location for this spool')
-        if any(r['printer_id']==printer_id and r['channel']==channel and r.get('identity_mode')!='manual' for r in rows):
-            raise AccountingConflict('Unresolved UID location on this channel')
+        prior = next((r for r in tagged if r['printer_id']==printer_id and r['channel']==channel), None)
+        if prior:
+            has_uid = spool['uid'] is not None or self.db.execute(
+                'SELECT 1 FROM uid_rfid_aliases WHERE spool_id=?', (spool_id,)).fetchone() is not None
+            if has_uid or not can_replace_stale_uid(snapshot, prior):
+                raise AccountingConflict('Unresolved UID location on this channel')
         if self.db.execute("SELECT 1 FROM uid_job_tools t JOIN uid_jobs j USING(job_key) WHERE j.state='active' AND (t.spool_id=? OR (j.printer_id=? AND t.channel=?))",(spool_id,printer_id,channel)).fetchone():
             raise AccountingConflict('Spool or channel reserved by active job')
         other=self.db.execute('SELECT * FROM manual_assignments WHERE spool_id=?',(spool_id,)).fetchone()
         if other and (other['printer_id'],other['channel'])!=(printer_id,channel):
             raise AccountingConflict('Explicitly release the previous manual location first')
+        if prior:
+            # The operator confirmed an untagged spool on a connected stock
+            # printer. Discard the obsolete placement, keeping the UID identity.
+            self.db.execute('DELETE FROM uid_locations WHERE printer_id=? AND channel=?', (printer_id, channel))
         import uuid
         version=uuid.uuid4().hex
         self.db.execute('INSERT INTO manual_assignments VALUES(?,?,?,?,?,1) ON CONFLICT(printer_id,channel) DO UPDATE SET spool_id=excluded.spool_id,version=excluded.version,token=excluded.token,confirmed=1',

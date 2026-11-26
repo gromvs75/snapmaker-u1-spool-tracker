@@ -15,7 +15,7 @@ Start a print from **Snapmaker Space** on your phone while Tracker is running an
 2. With the printer idle, add your spools and enter their remaining filament weight. In **Overview → Assignments**, match the installed spools to T0–T3 and click **Confirm positions**.
 3. Keep the computer awake and connected, then start a short print from Space. Check the cards during printing and the balances afterward.
 
-Phone-started accounting was tested on a real U1 with a preceding macOS build. The beta's new card display was checked on a simulator with both packages, including the Windows EXE in WebView2. Real-printer testing of the new Windows flow and third-party RFID tags is ongoing.
+The macOS beta was tested on a real U1. In a four-toolhead print started from Snapmaker Space, Tracker recorded usage for all four spools. The Windows EXE passed simulator checks in WebView2. Real-printer testing of the Windows beta and third-party RFID tags is planned.
 
 ## Show plate numbers after slicing in Snapmaker Orca
 

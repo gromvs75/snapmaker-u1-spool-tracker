@@ -74,7 +74,11 @@ def test_live_mix_remap_updates_cards_and_tray_without_changing_balances(tmp_pat
             calls.append(address)
             return context(path, content)
 
-        forecast = SliceForecast(session, root, orca=OrcaPreprint(lambda: dialog, read_context))
+        def read_dialog():
+            return dialog
+
+        read_dialog.permission_required = False
+        forecast = SliceForecast(session, root, orca=OrcaPreprint(read_dialog, read_context))
         forecast.poll()
         forecast.observer.settle = 0
         initial = forecast.poll()
@@ -118,12 +122,16 @@ def test_live_mix_remap_updates_cards_and_tray_without_changing_balances(tmp_pat
         assert current['mapping_source'] == 'orca_pending' and not current['rows']
 
         dialog = None
+        read_dialog.permission_required = True
         closed = forecast.poll()
+        assert tray_model(closed)['orca_permission_required']
+        assert forecast_view(closed, 'u1')['orca_permission_required']
         current = forecast_view(closed, 'u1')['entries'][0]
         assert 'mapping_source' not in current
         assert tray_model(closed)['orca_event'] is None
 
         dialog = (URL, controls('4'))
+        read_dialog.permission_required = False
         reopened = tray_model(forecast.poll())['orca_event']
         assert reopened[0] != first_orca[0] and reopened[1] == model['orca_event'][1]
         assert session.call('inspect')['debits'] == []

@@ -173,7 +173,8 @@ def enrich(snapshot, inventory, selection=None):
             for entry in visible
         ]
         printers[pid] = dict(printer, entries=forecasts, latest=chosen, project=folder,
-                             orca_source=live.source if live else None)
+                             orca_source=live.source if live else None,
+                             orca_dialog=live.dialog_number if live else None)
     selected = inventory['selected_printer']
     if selected not in printers:
         selected = next(iter(printers), '')

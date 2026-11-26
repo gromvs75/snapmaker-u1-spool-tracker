@@ -91,19 +91,29 @@ class UidWindow:
     def _watch_forecast(self, tray):
         import logging
         from tracker_user_tray import tray_model, build_menu, create_tray_icon
-        last=None;last_event=None;first=True
-        def refresh(model, popup):
+        last = last_event = last_orca = None
+
+        def refresh(model, notification):
             if self._quitting or self._menu_presented:return
-            tray.menu=build_menu(model,self.show,self.show_forecast,self.quit)
-            tray.icon=create_tray_icon(model['status'])
-            if popup and sys.platform=='darwin' and self._can_popup_forecast():
-                self._menu_presented=True
-                try:
-                    logging.getLogger('tracker20').info('Opening tray for newly completed slice')
-                    tray.visible=True
-                    tray._status_item.button().performClick_(None)
-                except Exception:logging.getLogger('tracker20').exception('Slice menu could not open')
-                finally:self._menu_presented=False
+            if notification == 'Orca head assignment change':
+                current = tray_model(self._forecast.snapshot())
+                if current.get('orca_event') != model['orca_event']:
+                    return
+                model = current
+            tray.menu = build_menu(model, self.show, self.show_forecast, self.quit)
+            tray.icon = create_tray_icon(model['status'])
+            if not notification or not self._can_popup_forecast():
+                return
+            logger = logging.getLogger('tracker20')
+            self._menu_presented = True
+            try:
+                logger.info('Opening tray for %s', notification)
+                tray.visible = True
+                tray._status_item.button().performClick_(None)
+            except Exception:
+                logger.exception('Forecast menu could not open')
+            finally:
+                self._menu_presented = False
         while not self._tray_stop.is_set():
             try:
                 model=tray_model(self._forecast.snapshot())
@@ -111,15 +121,23 @@ class UidWindow:
                     # Rediscovery goes pending -> ready after startup as well.
                     # It is not a new slicing event and must not open a modal
                     # NSMenu during the window's first presentation.
-                    popup=(not first and model['event'] is not None
-                           and model['event']!=last_event
-                           and model['event'][1] > self._started_at_ns)
-                    if sys.platform=='darwin':
+                    event = model['event']
+                    notification = None
+                    if last is not None and event and event != last_event and event[1] > self._started_at_ns:
+                        notification = 'newly completed slice'
+                    orca = model.get('orca_event')
+                    if orca:
+                        if last_orca and orca[0] == last_orca[0] and orca[1] != last_orca[1]:
+                            notification = 'Orca head assignment change'
+                        last_orca = orca
+                    if sys.platform == 'darwin':
                         from PyObjCTools import AppHelper
-                        AppHelper.callAfter(refresh,model,popup)
-                    else:refresh(model,False)
-                    if model['event'] is not None:last_event=model['event']
-                    first=False;last=model
+                        AppHelper.callAfter(refresh, model, notification)
+                    else:
+                        refresh(model, None)
+                    if event:
+                        last_event = event
+                    last = model
             except Exception:logging.getLogger('tracker20').exception('Tray forecast refresh failed')
             self._tray_stop.wait(1)
 

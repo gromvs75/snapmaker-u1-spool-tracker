@@ -47,13 +47,18 @@ def tray_model(snapshot):
                 title += ' · Не хватает с резервом ' + grams(row['deficit'], 2)
         heads.append(dict(title=title, color=(spool.get('details', {}).get('color') or None) if spool else None,
                           status=row['status'] if row else None))
-    # Changing Orca's target plate or heads refreshes the menu without opening it.
+    # Keep the ordinary slice event independent of the open Orca dialog.
     event = entry
     if printer.get('orca_source'):
         event = next((e for e in snapshot['entries'] if e['source'] == snapshot.get('latest')), None)
+    orca_event = None
+    if materials and entry.get('mapping_source') == 'orca':
+        key = (snapshot['selected_printer'], printer['orca_dialog'], entry['source'], entry['sha256'])
+        orca_event = (key, tuple((material['number'], material['channel']) for material in materials))
     return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status=status,
                 forecast=label,mapping=mapping,materials=materials,heads=heads,
-                event=(event['source'],event['completed_at_ns'],event.get('sha256')) if event else None)
+                event=(event['source'],event['completed_at_ns'],event.get('sha256')) if event else None,
+                orca_event=orca_event)
 
 
 def build_menu(model, show, forecast, quit):

@@ -77,7 +77,10 @@ def test_live_mix_remap_updates_cards_and_tray_without_changing_balances(tmp_pat
         forecast = SliceForecast(session, root, orca=OrcaPreprint(lambda: dialog, read_context))
         forecast.poll()
         forecast.observer.settle = 0
-        displayed = forecast_view(forecast.poll(), 'u1')
+        initial = forecast.poll()
+        first_orca = tray_model(initial)['orca_event']
+        assert first_orca[1] == ((1, '0'), (2, '1'))
+        displayed = forecast_view(initial, 'u1')
         first_revision = displayed['slice_revision']
         first = displayed['entries'][0]
         assert first['mapping_source'] == 'orca'
@@ -93,7 +96,10 @@ def test_live_mix_remap_updates_cards_and_tray_without_changing_balances(tmp_pat
         assert [(r['tool'], r['used'], round(r['after'], 2)) for r in current['rows']] == [
             ('T0', 21.68, 369.09), ('T3', 21.44, 796.15),
         ]
-        assert tray_model(snapshot)['mapping'] == 'По назначениям Orca'
+        model = tray_model(snapshot)
+        assert model['orca_event'] == (first_orca[0], ((1, '0'), (2, '3')))
+        assert model['event'] == tray_model(initial)['event']
+        assert model['mapping'] == 'По назначениям Orca'
         assert 'Нужно 21,44 г' in tray_model(snapshot)['heads'][3]['title']
         assert forecast_view(snapshot, 'other')['entries'][0].get('mapping_source') is None
         assert calls == [preprint_address(URL)]
@@ -112,8 +118,14 @@ def test_live_mix_remap_updates_cards_and_tray_without_changing_balances(tmp_pat
         assert current['mapping_source'] == 'orca_pending' and not current['rows']
 
         dialog = None
-        current = forecast_view(forecast.poll(), 'u1')['entries'][0]
+        closed = forecast.poll()
+        current = forecast_view(closed, 'u1')['entries'][0]
         assert 'mapping_source' not in current
+        assert tray_model(closed)['orca_event'] is None
+
+        dialog = (URL, controls('4'))
+        reopened = tray_model(forecast.poll())['orca_event']
+        assert reopened[0] != first_orca[0] and reopened[1] == model['orca_event'][1]
         assert session.call('inspect')['debits'] == []
         assert session.call('inspect')['jobs'] == []
     finally:

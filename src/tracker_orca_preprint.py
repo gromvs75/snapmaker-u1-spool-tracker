@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from http.client import HTTPConnection, HTTPException
 import json
 import math
@@ -99,6 +99,7 @@ class PreprintSelection:
     sha256: str
     # None means the dialog is bound to this slice but its selections are unresolved.
     channels: dict | None
+    dialog_number: int = 0
 
 
 def match_selection(context, nodes, root, entries, printers):
@@ -167,6 +168,7 @@ class OrcaPreprint:
         self.context_loader = context_loader
         self.address = None
         self.context = None
+        self.dialog_number = 0
 
     def read(self, root, entries, printers):
         document = self.reader()
@@ -174,8 +176,11 @@ class OrcaPreprint:
         if address != self.address:
             self.address = address
             self.context = None
+            if address is not None:
+                self.dialog_number += 1
         if address is None:
             return None
         if self.context is None:
             self.context = self.context_loader(address)
-        return match_selection(self.context, document[1], root, entries, printers)
+        selection = match_selection(self.context, document[1], root, entries, printers)
+        return replace(selection, dialog_number=self.dialog_number) if selection else None

@@ -1,5 +1,10 @@
 # Documentation
 
+## Tracker 2.1.1 beta
+
+- [English user guide](guides/Tracker-2.1-Beta-Guide-EN.md) · [Русская инструкция](guides/Tracker-2.1-Beta-Guide-RU.md)
+- [Release notes](releases/2.1.1-beta.1.md)
+
 ## Tracker 2.1.0rc3 — dashboard and RFID candidate
 
 - [Запуск Mac/Windows rc3](guides/start-2.1.0rc3-ru.md)

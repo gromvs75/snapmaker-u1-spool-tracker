@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 
-VERSION = '2.1.0rc4-orca-head-popup'
+VERSION = '2.1.1-beta.1'
 
 
 def data_directory():

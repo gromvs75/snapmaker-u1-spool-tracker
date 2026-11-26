@@ -145,7 +145,8 @@ def forecast_view(forecast,printer_id):
                             unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
     value=dict(entries=entries,printer_id=printer_id,latest=printer.get('latest',forecast.get('latest')),safety_margin_g=forecast.get('safety_margin_g',5),
                project=printer.get('project',forecast.get('project')),orca_source=printer.get('orca_source'),
-               error=forecast.get('error',''),mapping=None,mapping_assumed=False)
+               error=forecast.get('error',''),mapping=None,mapping_assumed=False,
+               orca_permission_required=forecast.get('orca_permission_required',False))
     from tracker_uid_library import revision
     value['revision']=revision(value)
     # Inventory changes update the forecast but are not a newly completed slice.

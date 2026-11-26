@@ -109,6 +109,9 @@
    :entry?.includes_active_print
     ?t('С учётом текущей печати','Includes the current print','Aktueller Druck berücksichtigt','З урахуванням поточного друку','Incluye la impresión actual')
     :t('Отдельно от текущей печати','Separate from the current print','Getrennt vom aktuellen Druck','Окремо від поточного друку','Independiente de la impresión actual');
+  if(state.orca_permission_required){
+   separate.textContent=t('Требуется разрешение macOS для чтения окна Orca','macOS permission required to read Orca','macOS-Freigabe zum Lesen von Orca erforderlich','Для читання вікна Orca потрібен дозвіл macOS','Se necesita permiso de macOS para leer Orca');
+  }
   separate.hidden=!entry;sourceLabel.hidden=!entry;footer.hidden=!entry;details.hidden=false;exact.hidden=!entry;
   forecast.querySelector('.forecast-mapping').hidden=true;
   el('forecast-reserve').hidden=!entry?.rows?.length;

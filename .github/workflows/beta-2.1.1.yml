@@ -1,0 +1,89 @@
+name: Tracker 2.1.1 beta packages
+on:
+  push:
+    branches: ['release/2.1.1-beta.1']
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: macos
+            architecture: arm64
+          - runner: windows-latest
+            platform: windows
+            architecture: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          architecture: ${{ matrix.architecture }}
+      - name: Install build and test dependencies
+        run: python -m pip install -r requirements/runtime.txt pyinstaller==6.22.3 websocket-client==1.8.0 pytest==8.3.5 pytest-timeout==2.3.1 playwright==1.56.0 aiohttp==3.11.18
+      - if: matrix.platform == 'windows'
+        name: Install Windows desktop test dependencies
+        run: python -m pip install pywin32==311 pywinauto==0.6.9
+      - run: python -m playwright install chromium
+      - name: Run forecast, desktop and accounting tests
+        run: python -m pytest -q -x --timeout=90 tests/test_orca_preprint.py tests/test_native_startup_tray.py tests/test_user_tray.py tests/test_uid_forecast.py tests/test_slice_observer.py tests/test_slice_bed_marker.py tests/test_uid_motion_lifecycle.py tests/test_uid_accounting.py tests/test_resumed_print_accounting.py tests/test_resumed_print_live.py tests/test_history_only_review_ui.py tests/test_history_delivery_flow.py tests/test_user_hook.py tests/test_forecast_library_layout.py tests/test_grouped_overview.py tests/test_dashboard.py
+      - name: Build the beta
+        run: python -m PyInstaller --clean --noconfirm --distpath output/native-dist --workpath output/native-build packaging/TrackerUser.spec
+      - if: matrix.platform == 'macos'
+        name: Verify and package the macOS app
+        shell: bash
+        run: |
+          app='output/native-dist/Snapmaker-Tracker-2.1-Candidate.app'
+          binary="$app/Contents/MacOS/Snapmaker-Tracker-2.1-Candidate"
+          test "$(lipo -archs "$binary")" = arm64
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = 2.1.1
+          codesign --verify --deep --strict "$app"
+          mkdir -p output/beta
+          ditto -c -k --keepParent "$app" output/beta/Snapmaker-Tracker-2.1.1-beta.1-Mac-arm64.zip
+          ditto -x -k output/beta/Snapmaker-Tracker-2.1.1-beta.1-Mac-arm64.zip output/extracted
+          app='output/extracted/Snapmaker-Tracker-2.1-Candidate.app'
+          codesign --verify --deep --strict "$app"
+          python dev/labs/uid_candidate_bench/resumed.py --exe "$app/Contents/MacOS/Snapmaker-Tracker-2.1-Candidate" --output output/beta-evidence
+          cp output/beta-evidence/results.json output/beta/MACOS-SIMULATOR-VERIFIED.json
+      - if: matrix.platform == 'windows'
+        name: Verify and package the Windows EXE
+        shell: pwsh
+        run: |
+          $folder = 'output/native-dist/Snapmaker-Tracker-2.1-Candidate'
+          Copy-Item docs/guides/Tracker-2.1-Beta-Guide-*.md $folder
+          New-Item -ItemType Directory -Force output/beta | Out-Null
+          $zip = 'output/beta/Snapmaker-Tracker-2.1.1-beta.1-Windows-x64.zip'
+          Compress-Archive -LiteralPath $folder -DestinationPath $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath output/extracted
+          $exe = 'output/extracted/Snapmaker-Tracker-2.1-Candidate/Snapmaker-Tracker-2.1-Candidate.exe'
+          if ((Get-Item $exe).VersionInfo.ProductVersion -ne '2.1.1-beta.1') { throw 'Wrong EXE version' }
+          python dev/labs/uid_candidate_bench/resumed.py --exe $exe --output output/beta-evidence --require-direct-spool-selection
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item output/beta-evidence/results.json output/beta/WINDOWS-SIMULATOR-VERIFIED.json
+      - name: Check build provenance
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+          result = json.loads(Path("output/beta-evidence/results.json").read_text(encoding="utf-8"))
+          assert result["success"] and result["version"] == "2.1.1-beta.1", result
+          assert result["commit"] == os.environ["GITHUB_SHA"], result
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: beta-evidence-${{ matrix.platform }}
+          path: output/beta-evidence/
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tracker-2.1.1-beta.1-${{ matrix.platform }}
+          path: output/beta/
+          if-no-files-found: error

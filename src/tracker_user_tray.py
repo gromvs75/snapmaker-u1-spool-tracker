@@ -58,7 +58,7 @@ def tray_model(snapshot):
     return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status=status,
                 forecast=label,mapping=mapping,materials=materials,heads=heads,
                 event=(event['source'],event['completed_at_ns'],event.get('sha256')) if event else None,
-                orca_event=orca_event)
+                orca_event=orca_event, orca_permission_required=snapshot.get('orca_permission_required', False))
 
 
 def build_menu(model, show, forecast, quit):
@@ -71,6 +71,8 @@ def build_menu(model, show, forecast, quit):
         items.append(item)
     if model['mapping']:
         items.append(pystray.MenuItem(model['mapping'],forecast))
+    if model['orca_permission_required']:
+        items.append(pystray.MenuItem('Требуется разрешение macOS для чтения окна Orca', forecast))
     items.append(pystray.Menu.SEPARATOR)
     for head in model['heads']:
         item=pystray.MenuItem(head['title'],forecast)

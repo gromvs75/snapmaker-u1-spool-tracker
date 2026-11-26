@@ -170,6 +170,10 @@ class OrcaPreprint:
         self.context = None
         self.dialog_number = 0
 
+    @property
+    def permission_required(self):
+        return getattr(self.reader, "permission_required", False)
+
     def read(self, root, entries, printers):
         document = self.reader()
         address = preprint_address(document[0]) if document else None

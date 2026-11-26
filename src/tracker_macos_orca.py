@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import ctypes as c
+import logging
 import time
 
 from tracker_orca_preprint import clean, preprint_address
@@ -87,14 +88,15 @@ class MacOrcaDialog:
     def __init__(self, accessibility=None):
         self.ax = accessibility if accessibility is not None else Accessibility()
         self.enabled = None
+        self.permission_required = False
 
     def __call__(self):
         from AppKit import NSRunningApplication
         from Foundation import NSBundle
         import objc
 
-        if not self.ax.trusted():
-            return None
+        was_required = self.permission_required
+        self.permission_required = False
         with objc.autorelease_pool():
             applications = NSRunningApplication.runningApplicationsWithBundleIdentifier_(BUNDLE_ID)
             if len(applications) != 1:
@@ -102,6 +104,13 @@ class MacOrcaDialog:
             app = applications[0]
             bundle = NSBundle.bundleWithURL_(app.bundleURL())
             if not bundle or str(bundle.objectForInfoDictionaryKey_('CFBundleShortVersionString')) != SUPPORTED_VERSION:
+                return None
+            self.permission_required = not self.ax.trusted()
+            if self.permission_required != was_required:
+                logging.getLogger('tracker20').info(
+                    'Orca window access granted=%s', not self.permission_required,
+                )
+            if self.permission_required:
                 return None
             return self.read_windows(app.processIdentifier())
 

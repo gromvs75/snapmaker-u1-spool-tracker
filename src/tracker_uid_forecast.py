@@ -212,6 +212,7 @@ class SliceForecast:
         selection = None
         if self.orca and any(entry['state'] == 'ready' for entry in result['entries']):
             selection = self.orca.read(root, result['entries'], inventory['printers'])
+            result['orca_permission_required'] = getattr(self.orca, 'permission_required', False)
         result = enrich(result, inventory, selection)
         with self.lock:
             old=[(e['source'],e['state'],e.get('sha256')) for e in self.value['entries']]

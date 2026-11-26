@@ -7,9 +7,9 @@ Track filament on the four U1 toolheads, compare spool balances with estimated u
 | Release | Downloads | Setup |
 | --- | --- | --- |
 | **1.3.3 stable** | [macOS Apple Silicon and Windows x64](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v1.3.3) | [English](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/v1.3.3/docs/guides/en.md) · [Русский](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/v1.3.3/docs/guides/ru.md) |
-| **2.1 beta** | [macOS Apple Silicon and Windows x64](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v2.1.0-beta.1) | [English](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/download/v2.1.0-beta.1/Tracker-2.1-Beta-Guide-EN.md) · [Русский](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/download/v2.1.0-beta.1/Tracker-2.1-Beta-Guide-RU.md) |
+| **2.1.1 beta** | [macOS Apple Silicon and Windows x64](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/tag/v2.1.1-beta.1) | [English](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/download/v2.1.1-beta.1/Tracker-2.1-Beta-Guide-EN.md) · [Русский](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases/download/v2.1.1-beta.1/Tracker-2.1-Beta-Guide-RU.md) |
 
-## Print from your phone with 2.1 beta
+## Print from your phone with 2.1.1 beta
 
 Start a print from **Snapmaker Space** on your phone while Tracker is running and connected to the U1. Snapmaker Orca can be closed. **Keep the computer on and awake and leave Tracker running and connected until the print finishes.** Tracker reads the active G-code from the printer. When it can verify the job and the spool assignments, the used toolhead cards show estimated grams and the expected balance after printing. Check **History** after the job for recorded usage or a review request.
 
@@ -18,6 +18,10 @@ Start a print from **Snapmaker Space** on your phone while Tracker is running an
 3. Keep the computer awake and connected, then start a short print from Space. Check the cards during printing and the balances afterward.
 
 The macOS beta was tested on a real U1. In a four-toolhead print started from Snapmaker Space, Tracker recorded usage for all four spools. The Windows EXE passed simulator checks in WebView2. The next Windows test is on a real U1.
+
+## Preview selected toolheads before printing on Mac
+
+With Snapmaker Orca 2.4.1, the Mac beta reads assignments from **Print Preprocessing** and opens the forecast menu after a toolhead change. It uses the selected spools, including the physical components of a color mix. If a beta update leaves the old accessibility permission in place, re-add the installed Tracker app in System Settings. [macOS setup and troubleshooting](https://github.com/gromvs75/snapmaker-u1-spool-tracker/blob/v2.1.1-beta.1/docs/guides/Tracker-2.1-Beta-Guide-EN.md#forecast-from-selected-toolheads-on-mac)
 
 ## RFID on stock Snapmaker firmware
 

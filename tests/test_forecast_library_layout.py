@@ -1,9 +1,11 @@
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from playwright.sync_api import sync_playwright
 from tracker_uid_session import Session
 from tracker_uid_gui import serve
 from tracker_uid_forecast import SliceForecast
+from tracker_orca_preprint import PreprintSelection
 from backup import create_backup
 from storage import Store
 from dev.observer_fixture import payload
@@ -65,6 +67,22 @@ def test_imported_forecast_and_library_fit_all_languages(tmp_path):
                     assert metrics['sh']<=metrics['h']+1,(lang,width,metrics)
                 page.set_viewport_size(dict(width=1202,height=950))
                 if lang=='ru':page.screenshot(path=str(screens/'library.png'),full_page=True)
+            page.locator('#lang-picker').select_option('ru')
+            page.locator('#nav-overview').click()
+            ready = next(entry for entry in forecast.snapshot()['entries'] if entry['state'] == 'ready')
+            selected_head = '1'
+            pid = s.call('forecast_inventory')['selected_printer']
+            forecast.orca = SimpleNamespace(read=lambda *_: PreprintSelection(
+                pid, ready['source'], ready['sha256'], {1: '0', 2: selected_head},
+            ))
+            forecast.poll()
+            page.wait_for_function("document.getElementById('forecast-status').textContent.includes('хватает с резервом')")
+            assert 'По назначениям Orca 2,36' in previews.nth(1).locator('.dash-head-forecast').inner_text()
+            selected_head = '3'
+            forecast.poll()
+            page.wait_for_function("document.querySelectorAll('.sidebar-slot')[3].textContent.includes('По назначениям Orca 2,36')")
+            assert previews.nth(1).locator('.dash-head-forecast').count() == 0
+            assert 'После ≈ 884,2' in previews.nth(3).locator('.dash-head-forecast').inner_text()
             assert not errors
             browser.close()
         assert not s.connected and s.call('inspect')['debits']==[]

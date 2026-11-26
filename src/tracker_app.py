@@ -8,7 +8,7 @@ import signal
 import sys
 import threading
 
-VERSION = '2.1.0rc4-visual-color-preview'
+VERSION = '2.1.0rc4-orca-head-preview'
 
 
 def data_directory():
@@ -62,7 +62,14 @@ def main(argv=None):
     sender = Sender(session, lambda: [session.call('settings')['values'].get('spoolman_url','')])
     from tracker_uid_forecast import SliceForecast
     import tempfile
-    forecast = SliceForecast(session, directory/'slices' if os.environ.get('TRACKER20_DATA_DIR') else Path(tempfile.gettempdir())/'snapmaker_orca_model')
+    isolated = bool(os.environ.get('TRACKER20_DATA_DIR'))
+    orca = None
+    if sys.platform == 'darwin' and not isolated:
+        from tracker_macos_orca import MacOrcaDialog
+        from tracker_orca_preprint import OrcaPreprint
+        orca = OrcaPreprint(MacOrcaDialog())
+    forecast = SliceForecast(session, directory/'slices' if isolated else Path(tempfile.gettempdir())/'snapmaker_orca_model',
+                             orca=orca)
     server = thread = shell = None
     previous_signals = {}
     descriptor=directory/'instance.json'

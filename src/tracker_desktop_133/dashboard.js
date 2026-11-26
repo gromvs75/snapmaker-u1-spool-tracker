@@ -71,14 +71,16 @@
   const m=data.monitor||{},age=Date.now()/1000-m.checked_at;
   const printing=m.connected&&['printing','paused'].includes(m.state);
   const currentRows=new Map(printing&&age>=-5&&age<5?(data.current_print_forecast||[]).map(row=>[row.tool,row]):[]);
-  const usageLabel=printing?t('По G-code','G-code estimate','Laut G-Code','За G-code','Según G-code'):
-   t('По нарезке','Slice usage','Slicing-Verbrauch','За нарізкою','Consumo previsto');
   [...el('sidebar-slots').querySelectorAll('.sidebar-slot')].forEach((head,i)=>{
    const sid=data.slots?.[String(i+1)],spool=data.spools?.[sid],channel=data.uid_channels?.[data.selected_printer]?.channels?.[String(i)],tag=channel?.tag;
    const active=m.connected&&age>=-5&&age<5&&m.state==='printing'&&m.active_head===i;
    const tool='T'+i;
    const row=printing?currentRows.get(tool):data.selected_printer===forecastPrinter?forecastRows.get(tool):null;
-   const estimate=spool&&row?.spool_id===sid?row:null;
+   const orca=row?.mapping_source==='orca';
+   const estimate=(spool&&row?.spool_id===sid)||(orca&&!spool&&!row.spool_id)?row:null;
+   const usageLabel=printing?t('По G-code','G-code estimate','Laut G-Code','За G-code','Según G-code'):
+    orca?t('По назначениям Orca','Orca assignment','Orca-Zuordnung','За призначенням Orca','Asignación de Orca'):
+    t('По нарезке','Slice usage','Slicing-Verbrauch','За нарізкою','Consumo previsto');
    const signature=JSON.stringify([estimate,estimate&&usageLabel,spool,channel?.state,channel?.uid,channel?.tag,data.slot_status?.[String(i+1)],rfid(data,i,spool),active,currentLang]);
    if(head.dataset.dashboard===signature)return;head.dataset.dashboard=signature;
    head.classList.toggle('selected-head',active);
@@ -103,7 +105,8 @@
    const children=[stripe,info,balance,meter,note];
    if(estimate){
     const used=usageLabel+' '+estimate.used.toLocaleString(currentLang,{maximumFractionDigits:3})+' '+gramUnit();
-    const result=estimate.unknown?words.balance():estimate.enough
+    const result=estimate.unknown?spool?words.balance():
+     t('Назначьте катушку','Assign a spool','Spule zuweisen','Призначте котушку','Asigne una bobina'):estimate.enough
      ? t('После ≈','After ≈','Danach ≈','Після ≈','Después ≈')+' '+displayGrams(estimate.after)+' '+gramUnit()
      : t('Не хватает с резервом','Short with reserve','Fehlt mit Reserve','Не вистачає із запасом','Falta con reserva')+' '+displayGrams(estimate.deficit)+' '+gramUnit();
     const preview=node('div',undefined,'dash-head-forecast '+(estimate.unknown?'unknown':estimate.enough?'ok':'shortage'));

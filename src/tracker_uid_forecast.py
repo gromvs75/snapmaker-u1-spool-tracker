@@ -43,7 +43,7 @@ def visual_color(color):
     return group
 
 
-def forecast_entry(entry, heads=(), reserve=0):
+def forecast_entry(entry, heads=(), reserve=0, *, selection=None):
     """Estimate pre-print head usage from the slice and saved spool assignments."""
     colors = entry.get('colors', [])
     types = entry.get('filament_types', [])
@@ -55,49 +55,60 @@ def forecast_entry(entry, heads=(), reserve=0):
                   mapping_assumed=False, requires_mapping=bool(materials))
     if not heads or not materials:
         return result
+    if selection is not None:
+        result['mapping_source'] = 'orca' if selection.channels is not None else 'orca_pending'
+        if selection.channels is None:
+            return result
 
     spools = {head['channel']: head['spool'] for head in heads if head['spool']}
     available = {head['channel']: head.get('forecast_usable', head['usable']) for head in heads}
     active_usage = {head['channel']: head.get('active_print_mg', 0) for head in heads}
-    spool_profiles = {}
-    for channel, spool in spools.items():
-        details = spool.get('details', {})
-        if not details.get('archived'):
-            spool_profiles[channel] = (material_family(details.get('material')), rgb(details.get('color')))
-
-    proposed = {}
     choices = {}
-    for material in materials:
-        index = material['number'] - 1
-        family = material_family(types[index]) if index < len(types) else None
-        color = rgb(material['color'])
-        compatible = [channel for channel, (kind, _) in spool_profiles.items() if family and kind == family]
-        swatches = [(channel, spool_profiles[channel][1]) for channel in compatible
-                    if color is not None and spool_profiles[channel][1] is not None]
-        group = visual_color(color) if color is not None else None
-        exact = [channel for channel, spool_color in swatches if color == spool_color]
-        candidates = exact or [channel for channel, spool_color in swatches
-                               if math.dist(color, spool_color) <= MAX_COLOR_DISTANCE
-                               or (group is not None and group == visual_color(spool_color))]
-        choices[index + 1] = candidates or (compatible if family else spool_profiles)
-        if len(candidates) == 1:
-            proposed[index + 1] = candidates[0]
+    counts = Counter()
+    if selection is not None:
+        for material in materials:
+            material['channel'] = selection.channels[material['number']]
+    else:
+        spool_profiles = {}
+        for channel, spool in spools.items():
+            details = spool.get('details', {})
+            if not details.get('archived'):
+                spool_profiles[channel] = (material_family(details.get('material')), rgb(details.get('color')))
 
-    # Competing logical profiles need a user choice, even if both match exactly.
-    counts = Counter(proposed.values())
-    for material in materials:
-        channel = proposed.get(material['number'])
-        material['channel'] = channel if counts[channel] == 1 else None
+        proposed = {}
+        for material in materials:
+            index = material['number'] - 1
+            family = material_family(types[index]) if index < len(types) else None
+            color = rgb(material['color'])
+            compatible = [channel for channel, (kind, _) in spool_profiles.items() if family and kind == family]
+            swatches = [(channel, spool_profiles[channel][1]) for channel in compatible
+                        if color is not None and spool_profiles[channel][1] is not None]
+            group = visual_color(color) if color is not None else None
+            exact = [channel for channel, spool_color in swatches if color == spool_color]
+            candidates = exact or [channel for channel, spool_color in swatches
+                                   if math.dist(color, spool_color) <= MAX_COLOR_DISTANCE
+                                   or (group is not None and group == visual_color(spool_color))]
+            choices[index + 1] = candidates or (compatible if family else spool_profiles)
+            if len(candidates) == 1:
+                proposed[index + 1] = candidates[0]
+
+        # Competing logical profiles need a user choice, even if both match exactly.
+        counts = Counter(proposed.values())
+        for material in materials:
+            channel = proposed.get(material['number'])
+            material['channel'] = channel if counts[channel] == 1 else None
 
     used_spools = defaultdict(float)
     for material in materials:
-        if material['channel'] is not None:
-            used_spools[spools[material['channel']]['spool_id']] += material['grams']
+        spool = spools.get(material['channel'])
+        if spool:
+            used_spools[spool['spool_id']] += material['grams']
 
     def estimate(channel, used, total):
-        spool = spools[channel]
-        current = active_usage[channel]
-        remaining = max(0, spool['remaining_mg'] - current) / 1000 if available[channel] and current is not None else None
+        spool = spools.get(channel)
+        current = active_usage.get(channel, 0)
+        remaining = (max(0, spool['remaining_mg'] - current) / 1000
+                     if spool and available[channel] and current is not None else None)
         after = remaining - total if remaining is not None else None
         deficit = max(0, round(reserve - after, 9)) if after is not None else None
         return dict(channel=channel, spool=spool, used=used, remaining=remaining, after=after,
@@ -105,11 +116,11 @@ def forecast_entry(entry, heads=(), reserve=0):
                     active_print_g=current / 1000 if current is not None else None,
                     status='unknown' if remaining is None else 'shortage' if deficit else 'ok')
 
-    rows = []
+    usage_by_head = defaultdict(float)
     for material in materials:
         channel = material['channel']
         if channel is not None:
-            rows.append(estimate(channel, material['grams'], used_spools[spools[channel]['spool_id']]))
+            usage_by_head[channel] += material['grams']
         else:
             # A choice shown here assumes this material alone on that head.
             material['choices'] = [
@@ -117,7 +128,12 @@ def forecast_entry(entry, heads=(), reserve=0):
                 for candidate in (estimate(ch, material['grams'], material['grams'])
                                   for ch in choices[material['number']] if counts[ch] != 1)
             ]
-    mapping_needed = len(rows) != len(materials)
+    rows = []
+    for channel, usage in usage_by_head.items():
+        spool = spools.get(channel)
+        total = used_spools[spool['spool_id']] if spool else usage
+        rows.append(estimate(channel, usage, total))
+    mapping_needed = any(material['channel'] is None for material in materials)
     status = ('shortage' if any(row['status'] == 'shortage' for row in rows)
               else 'unknown' if mapping_needed or any(row['unknown'] for row in rows)
               else 'ok')
@@ -126,28 +142,51 @@ def forecast_entry(entry, heads=(), reserve=0):
                 active_print_unknown=any(row['active_print_g'] is None for row in rows))
 
 
-def enrich(snapshot, inventory):
-    """Shared overview/tray view model. Selected plate stays a GUI-only choice."""
-    entries=snapshot['entries'];latest=next((e for e in entries if e['source']==snapshot['latest']),None)
-    project=str(Path(latest['source']).parent.parent) if latest else None
-    current=[e for e in entries if (project is None or str(Path(e['source']).parent.parent)==project)
-             and not (e.get('sha256') in inventory['accounted'] and
-                      e.get('completed_at_ns',0)/1e9<=inventory['accounted'][e['sha256']])]
-    ready=[e for e in current if e['state']=='ready']
-    source=max(ready,key=lambda e:e['completed_at_ns'])['source'] if ready else None
-    previews = [forecast_entry(entry) for entry in current]
-    printers={pid:dict(p,entries=[forecast_entry(e, p['heads'], inventory['safety_margin_g']) for e in current])
-              for pid,p in inventory['printers'].items()}
-    selected=inventory['selected_printer']
-    if selected not in printers:selected=next(iter(printers),'')
-    return dict(snapshot,entries=previews,latest=source,project=project,printers=printers,
-                selected_printer=selected,safety_margin_g=inventory['safety_margin_g'])
+def project_entries(entries, source, accounted, *, keep=None):
+    project = str(Path(source).parent.parent) if source else None
+    current = [
+        entry for entry in entries
+        if (project is None or str(Path(entry['source']).parent.parent) == project)
+        and (entry['source'] == keep
+             or entry.get('completed_at_ns', 0) / 1e9 > accounted.get(entry.get('sha256'), -1))
+    ]
+    ready = [entry for entry in current if entry['state'] == 'ready']
+    latest = keep or (max(ready, key=lambda entry: entry['completed_at_ns'])['source'] if ready else None)
+    return current, latest, project
+
+
+def enrich(snapshot, inventory, selection=None):
+    """Shared overview/tray view model. A live mapping is scoped to one printer and slice."""
+    entries = snapshot['entries']
+    accounted = inventory['accounted']
+    current, latest, project = project_entries(entries, snapshot['latest'], accounted)
+    printers = {}
+    for pid, printer in inventory['printers'].items():
+        live = selection if selection and pid == selection.printer_id else None
+        visible, chosen, folder = current, latest, project
+        if live:
+            visible, chosen, folder = project_entries(entries, live.source, accounted, keep=live.source)
+        forecasts = [
+            forecast_entry(entry, printer['heads'], inventory['safety_margin_g'],
+                           selection=live if live and entry['source'] == live.source
+                           and entry.get('sha256') == live.sha256 else None)
+            for entry in visible
+        ]
+        printers[pid] = dict(printer, entries=forecasts, latest=chosen, project=folder,
+                             orca_source=live.source if live else None)
+    selected = inventory['selected_printer']
+    if selected not in printers:
+        selected = next(iter(printers), '')
+    return dict(snapshot, entries=[forecast_entry(entry) for entry in current], latest=latest,
+                project=project, printers=printers, selected_printer=selected,
+                safety_margin_g=inventory['safety_margin_g'])
 
 
 class SliceForecast:
-    def __init__(self, session, default_root):
+    def __init__(self, session, default_root, *, orca=None):
         self.session=session; self.default_root=Path(default_root)
         self.observer=None; self.root=None; self.lock=threading.Lock()
+        self.orca = orca
         self.value={'entries':[], 'latest':None, 'checked_at':None, 'error':''}
         self.stopped=threading.Event(); self.thread=None
 
@@ -168,7 +207,11 @@ class SliceForecast:
             ready=[e for e in entries if e['state']=='ready']
             latest=max(ready,key=lambda e:e['completed_at_ns'])['source'] if ready else None
             result=dict(entries=entries,latest=latest,watch_root=str(root),checked_at=time.time(),error='')
-        result=enrich(result,self.session.call('forecast_inventory'))
+        inventory = self.session.call('forecast_inventory')
+        selection = None
+        if self.orca and any(entry['state'] == 'ready' for entry in result['entries']):
+            selection = self.orca.read(root, result['entries'], inventory['printers'])
+        result = enrich(result, inventory, selection)
         with self.lock:
             old=[(e['source'],e['state'],e.get('sha256')) for e in self.value['entries']]
             new=[(e['source'],e['state'],e.get('sha256')) for e in result['entries']]

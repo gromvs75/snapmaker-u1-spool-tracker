@@ -127,13 +127,17 @@
   const enough=t('По прогнозу хватает с резервом','Estimated to be sufficient with reserve','Voraussichtlich ausreichend mit Reserve','За прогнозом вистачить із запасом','Suficiente según la previsión con reserva');
   const shortage=t('По прогнозу материала не хватает','Estimated material shortage','Voraussichtlich zu wenig Material','За прогнозом матеріалу не вистачить','Falta material según la previsión');
   const verify=t('Сверьте головки в окне подготовки Orca','Check heads in the Orca print setup','Köpfe in der Orca-Druckvorbereitung prüfen','Звірте головки у вікні підготовки Orca','Revise los cabezales en la preparación de Orca');
+  const orcaWaiting=t('Ожидаем назначения из Orca','Waiting for Orca head assignments','Warte auf Orca-Kopfzuordnungen','Очікуємо призначення головок Orca','Esperando las asignaciones de Orca');
   const balance=t('Сверьте остатки катушек','Check spool balances','Spulenreste prüfen','Звірте залишки котушок','Compruebe el saldo de las bobinas');
   status.textContent=!materials.length?t('Нет данных о расходе материала','No material usage available','Keine Materialverbrauchsdaten','Немає даних про витрати матеріалу','No hay datos de consumo'):
-   entry.shortage?shortage:entry.requires_mapping?verify:entry.unknown?balance:enough;
+   entry.shortage?shortage:entry.mapping_source==='orca_pending'?orcaWaiting:
+   entry.requires_mapping?verify:entry.unknown?balance:enough;
   if(entry.rows.length){
    status.style.color=entry.shortage?'#ff8f8f':entry.unknown?'':'#82dfb0';
    forecast.querySelector('.forecast-mapping').hidden=false;
-   forecast.querySelector('.forecast-mapping').textContent=t('Расчёт по цвету и типу','Estimated by color and type','Schätzung nach Farbe und Typ','Розрахунок за кольором і типом','Estimación por color y tipo');
+   forecast.querySelector('.forecast-mapping').textContent=entry.mapping_source==='orca'
+    ?t('По назначениям Orca','From Orca head assignments','Nach Orca-Kopfzuordnungen','За призначеннями Orca','Según las asignaciones de Orca')
+    :t('Расчёт по цвету и типу','Estimated by color and type','Schätzung nach Farbe und Typ','Розрахунок за кольором і типом','Estimación por color y tipo');
   }
   const label=t('Материал','Material','Material','Матеріал','Material');
   const rowsByHead=new Map(entry.rows.map(row=>[row.tool,row]));

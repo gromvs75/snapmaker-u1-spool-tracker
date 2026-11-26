@@ -105,7 +105,8 @@ class Library:
                                          and spool and not spool['details'].get('archived') and spool['spool_id'] not in uncertain),
                     reason=('Отправка Spoolman требует сверки' if spool and spool['spool_id'] in uncertain
                             else '' if row and row['usable'] else 'Назначение не подтверждено' if row else 'Катушка не назначена')))
-            printers[p['id']]=dict(id=p['id'],name=settings.get('printer_names',{}).get(p['id'],p['name']),heads=heads)
+            printers[p['id']]=dict(id=p['id'],name=settings.get('printer_names',{}).get(p['id'],p['name']),
+                                    configured_name=p['name'],heads=heads)
         accounted={}
         for row in self.db.execute("SELECT p.profile FROM uid_recovery_profiles p JOIN uid_motion_captures c ON c.history_key=p.history_key JOIN uid_jobs j ON j.job_key=c.key WHERE j.state='completed'"):
             profile=json.loads(row[0]);digest=profile.get('file_sha256')

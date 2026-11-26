@@ -127,8 +127,9 @@ def current_print_forecast(data, lifecycle):
 
 def forecast_view(forecast,printer_id):
     """Use the new freshness/identity rules through the established forecast view."""
+    printer = forecast.get('printers', {}).get(printer_id, {})
     entries=[]
-    for e in forecast.get('printers',{}).get(printer_id,{}).get('entries',forecast.get('entries',[])):
+    for e in printer.get('entries', forecast.get('entries', [])):
         # The original renderer only accepts complete entries. Pending/removed
         # entries must disappear, rather than retain a green outdated result.
         if e['state']!='ready':continue
@@ -136,13 +137,15 @@ def forecast_view(forecast,printer_id):
                    name=(r['spool'] or {}).get('name',''),used=r['used'],remaining=r['remaining'],
                    deficit=r['deficit'],
                    after=r['after'],enough=r['enough'],unknown=r['unknown'],
-                   active_print_g=r.get('active_print_g',0),provisional=r.get('provisional',False)) for r in e['rows']]
+                   active_print_g=r.get('active_print_g',0),provisional=r.get('provisional',False),
+                   mapping_source=e.get('mapping_source')) for r in e['rows']]
         source=Path(e['source'])
         entries.append(dict(e,rows=rows,label='Plate '+str(e['plate'] or '?'),source_label=source.parent.parent.name+' · '+source.name,
                             observed_at=e.get('completed_at_ns',0)/1e9 or e.get('observed_at',0),
                             unknown=e['status']=='unknown',shortage=e['status']=='shortage'))
-    value=dict(entries=entries,printer_id=printer_id,latest=forecast.get('latest'),safety_margin_g=forecast.get('safety_margin_g',5),
-               project=forecast.get('project'),error=forecast.get('error',''),mapping=None,mapping_assumed=False)
+    value=dict(entries=entries,printer_id=printer_id,latest=printer.get('latest',forecast.get('latest')),safety_margin_g=forecast.get('safety_margin_g',5),
+               project=printer.get('project',forecast.get('project')),orca_source=printer.get('orca_source'),
+               error=forecast.get('error',''),mapping=None,mapping_assumed=False)
     from tracker_uid_library import revision
     value['revision']=revision(value)
     # Inventory changes update the forecast but are not a newly completed slice.

@@ -13,7 +13,7 @@ def grams(value, digits=1):
 
 def tray_model(snapshot):
     printer=snapshot.get('printers',{}).get(snapshot.get('selected_printer'),{})
-    entry=next((e for e in printer.get('entries',snapshot.get('entries',[])) if e['source']==snapshot.get('latest')),None)
+    entry=next((e for e in printer.get('entries',snapshot.get('entries',[])) if e['source']==printer.get('latest', snapshot.get('latest'))),None)
     materials = entry['materials'] if entry and not snapshot.get('error') else []
     label = 'Ожидаем нарезку Snorca'
     mapping = ''
@@ -22,9 +22,11 @@ def tray_model(snapshot):
         estimate = {'ok': '✓ По прогнозу хватает', 'shortage': '✕ По прогнозу не хватает',
                     'unknown': 'Нужно сверить головки или остатки'}[status]
         label = estimate + ' · Расход ' + grams(sum(m['grams'] for m in materials), 2)
-        mapping = ('Уточните головки в окне подготовки Orca' if entry['requires_mapping']
+        mapping = ('Ожидаем назначения из Orca' if entry.get('mapping_source') == 'orca_pending'
+                   else 'Уточните головки в окне подготовки Orca' if entry['requires_mapping']
                    else 'Расход текущей печати пока неизвестен' if entry.get('active_print_unknown')
                    else 'С учётом текущей печати' if entry.get('includes_active_print')
+                   else 'По назначениям Orca' if entry.get('mapping_source') == 'orca'
                    else 'Прогноз по цвету и типу')
     if entry:
         if not materials:label='Нет данных о расходе материала'
@@ -45,9 +47,13 @@ def tray_model(snapshot):
                 title += ' · Не хватает с резервом ' + grams(row['deficit'], 2)
         heads.append(dict(title=title, color=(spool.get('details', {}).get('color') or None) if spool else None,
                           status=row['status'] if row else None))
+    # Changing Orca's target plate or heads refreshes the menu without opening it.
+    event = entry
+    if printer.get('orca_source'):
+        event = next((e for e in snapshot['entries'] if e['source'] == snapshot.get('latest')), None)
     return dict(title=(printer.get('name') or 'Snapmaker U1')+' (4 головки)',status=status,
                 forecast=label,mapping=mapping,materials=materials,heads=heads,
-                event=(entry['source'],entry['completed_at_ns'],entry.get('sha256')) if entry else None)
+                event=(event['source'],event['completed_at_ns'],event.get('sha256')) if event else None)
 
 
 def build_menu(model, show, forecast, quit):

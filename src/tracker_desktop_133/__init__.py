@@ -41,6 +41,7 @@ def integration_html(token,version):
                       'const next = await response.json(); if(request<appliedSequence || (desktopFormData && next.printer_id!==desktopFormData.selected_printer)) return; appliedSequence=request; const changed')
     html=html.replace('const changed = next.revision !== revision','const changed = next.slice_revision !== revision')
     html=html.replace('revision = next.revision;','revision = next.slice_revision;')
+    html=html.replace('   state = next;', '   if (next.orca_source && next.orca_source !== state?.orca_source) selected = next.orca_source;\n   state = next;')
     html=html.replace('  const entry = entries.find(e => e.source === selected);','  const entry = entries.find(e => e.source === selected);\n  window.desktopForecastSource?.(entry,headData);')
     # The 2.1 dashboard renders forecasts by physical head and spool identity.
     html=html.replace('   const row = entry && entry.rows[i];','   const row = null;')

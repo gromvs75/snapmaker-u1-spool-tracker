@@ -3,6 +3,7 @@ import copy
 import logging
 import math
 from collections import Counter, defaultdict
+from colorsys import rgb_to_hsv
 from pathlib import Path
 import threading
 import time
@@ -11,15 +12,35 @@ from material_guard import material_family
 from slice_observer import HEX_COLOUR, SliceObserver
 
 
-# Allow minor differences between colors saved in Orca and Tracker, including
-# a near-black spool against pure black. Ambiguous shades require a choice.
+# Keep the close RGB match for subtle colors and hues near a category boundary.
 MAX_COLOR_DISTANCE = 55
+HUE_LIMITS = (
+    (15, 'red'), (45, 'orange'), (75, 'yellow'), (168, 'green'),
+    (205, 'cyan'), (252, 'blue'), (290, 'purple'), (345, 'pink'), (360, 'red'),
+)
 
 
 def rgb(color):
     if isinstance(color, str) and HEX_COLOUR.fullmatch(color):
         return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
     return None
+
+
+def visual_color(color):
+    """Group swatches by their basic visual color for a pre-print estimate."""
+    hue, saturation, value = rgb_to_hsv(*(component / 255 for component in color))
+    if value <= .18:
+        return 'black'
+    if saturation <= .15:
+        return 'white' if value >= .87 else 'gray'
+    if saturation < .3:
+        return None
+    group = next(name for limit, name in HUE_LIMITS if hue * 360 < limit)
+    if group == 'orange' and value < .65:
+        return 'brown'
+    if group == 'red' and saturation < .55 and value >= .72:
+        return 'pink'
+    return group
 
 
 def forecast_entry(entry, heads=(), reserve=0):
@@ -51,10 +72,13 @@ def forecast_entry(entry, heads=(), reserve=0):
         family = material_family(types[index]) if index < len(types) else None
         color = rgb(material['color'])
         compatible = [channel for channel, (kind, _) in spool_profiles.items() if family and kind == family]
-        close = [(channel, math.dist(color, spool_profiles[channel][1])) for channel in compatible
-                 if color is not None and spool_profiles[channel][1] is not None]
-        exact = [channel for channel, distance in close if distance == 0]
-        candidates = exact or [channel for channel, distance in close if distance <= MAX_COLOR_DISTANCE]
+        swatches = [(channel, spool_profiles[channel][1]) for channel in compatible
+                    if color is not None and spool_profiles[channel][1] is not None]
+        group = visual_color(color) if color is not None else None
+        exact = [channel for channel, spool_color in swatches if color == spool_color]
+        candidates = exact or [channel for channel, spool_color in swatches
+                               if math.dist(color, spool_color) <= MAX_COLOR_DISTANCE
+                               or (group is not None and group == visual_color(spool_color))]
         choices[index + 1] = candidates or (compatible if family else spool_profiles)
         if len(candidates) == 1:
             proposed[index + 1] = candidates[0]

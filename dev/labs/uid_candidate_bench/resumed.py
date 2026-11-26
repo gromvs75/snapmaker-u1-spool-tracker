@@ -95,9 +95,11 @@ def main():
                 data['spools'][sid]['spoolman'] = dict(url=smurl, id=1)
                 for channel, color, remaining in [
                     ('1', '#151a1c', 430.7), ('2', '#ffffff', 193.8), ('3', '#ff7f26', 833.6),
+                    ('4', '#2b9c70', 817.59),
                 ]:
                     key = 'fixture-head-' + channel
-                    data['spools'][key] = dict(name=key, material='PLA', remaining_g=remaining, color=color)
+                    data['spools'][key] = dict(name=key, material='PLA+' if channel == '4' else 'PLA',
+                                              remaining_g=remaining, color=color)
                     data['slots'][channel] = key
             else: data['slots']['1'] = sid
         old.update(seed); package = create_backup(old, '1.3.3')
@@ -192,6 +194,20 @@ def main():
             assert 'Orca' not in page.locator('.forecast-mapping').text_content()
             assert not state()['debits'] and not sm.puts
             checks.append('slice: white RGBA forecasts 4.27 g on T1 without debit or an Orca check')
+
+            temporary.write_bytes(payload('0, 0, 0, 23.30').replace(
+                b'; printer_model', b'; filament_colour = #161616FF;#FFFFFFFF;#FF8800FF;#2FAD24\n'
+                b'; filament_type = PLA;PLA;PLA;PLA\n; printer_model'))
+            temporary.replace(plate)
+            expect(page.locator('#desktop-forecast-materials > span')).to_have_text(
+                ['Материал 4 · 23,3 гр. → T3'], timeout=20000)
+            green_plan = cards.nth(3).locator('.dash-head-forecast')
+            expect(green_plan).to_contain_text('По нарезке 23,3 гр.')
+            expect(green_plan).to_contain_text('После ≈ 794,3 гр.')
+            assert page.locator('.dash-head-forecast').count() == 1
+            assert not state()['debits'] and not sm.puts
+            page.screenshot(path=str(out/'forecast-visual-green.png'), full_page=True)
+            checks.append('slice: different green shades place the 23.30 g estimate on T3 without debit')
 
             page.locator('#nav-history').click()
             row = page.locator('.history-row').filter(has_text='unobserved-tangle.gcode')

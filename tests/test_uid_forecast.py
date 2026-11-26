@@ -80,6 +80,35 @@ def test_color_and_type_forecast_uses_physical_heads_and_checks_reserve():
     assert preview['rows'][0]['remaining'] is None
 
 
+def test_visual_green_matches_unique_compatible_spool_with_exact_color_priority():
+    assigned = heads()
+    for head, color, kind in zip(assigned, ('#151a1c', '#ffffff', '#ff7f26', '#2b9c70'),
+                                 ('PLA', 'PLA', 'PLA. +', 'PLA+')):
+        head['spool']['details'] = dict(color=color, material=kind)
+    assigned[3]['spool']['remaining_mg'] = 817590
+    sliced = entry([0, 0, 0, 23.30], colors=['#161616', '#FFFFFF', '#FF8800', '#2FAD24'],
+                   filament_types=['PLA'] * 4)
+
+    preview = forecast_entry(sliced, assigned, 5)
+    assert not preview['requires_mapping']
+    assert [(row['channel'], row['used'], round(row['after'], 2)) for row in preview['rows']] == [
+        ('3', 23.30, 794.29),
+    ]
+
+    assigned[2]['spool']['details']['color'] = '#41af25'
+    ambiguous = forecast_entry(sliced, assigned, 5)
+    assert ambiguous['requires_mapping'] and not ambiguous['rows']
+    assert [choice['channel'] for choice in ambiguous['materials'][0]['choices']] == ['2', '3']
+
+    assigned[2]['spool']['details'] = dict(color='#2fad24', material='PLA')
+    assert forecast_entry(sliced, assigned, 5)['rows'][0]['channel'] == '2'
+    assigned[2]['spool']['details']['material'] = 'PETG'
+    assert forecast_entry(sliced, assigned, 5)['rows'][0]['channel'] == '3'
+
+    sliced['colors'][3] = None
+    assert forecast_entry(sliced, assigned, 5)['requires_mapping']
+
+
 def test_forecast_printer_isolation_and_accounted_file_exclusion():
     e=entry([25,0,0,0]);snap=dict(entries=[e],latest=e['source'])
     inv=dict(printers={'a':dict(heads=heads(30000)),'b':dict(heads=heads(29000))},

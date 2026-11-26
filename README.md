@@ -1,3 +1,5 @@
+<img width="1280" alt="Snapmaker U1 Spool Tracker overview during a demo print, showing progress, spool balances and the G-code estimate on T0" src="docs/images/tracker-overview.png" />
+
 # Snapmaker U1 Spool Tracker
 
 Track filament on the four U1 toolheads, compare spool balances with estimated usage, and record how much each print used. **Manual spool assignments and print accounting work with the official Snapmaker U1 firmware.** Spoolman is optional.
@@ -37,5 +39,3 @@ Save the preset, **select it in the current project**, and slice again. Check th
 - [Developer guide](docs/development.md) · [Release history](https://github.com/gromvs75/snapmaker-u1-spool-tracker/releases) · [Report a problem](https://github.com/gromvs75/snapmaker-u1-spool-tracker/issues)
 
 Source is in `src/`, tests in `tests/`, guides in `docs/`, packaging in `packaging/`, and simulators in `dev/`. The release tags identify the source for each package. [MIT license](LICENSE)
-
-<img width="1672" height="941" alt="Snapmaker U1 Spool Tracker project banner with the earlier interface" src="docs/images/tracker-banner.png" />

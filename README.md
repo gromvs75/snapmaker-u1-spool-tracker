@@ -1,6 +1,6 @@
 # Snapmaker U1 Spool Tracker
 
-Track filament on the four U1 toolheads, compare spool balances with the estimated usage, and record how much each print used. Assign spools manually on stock U1 firmware. Spoolman is optional.
+Track filament on the four U1 toolheads, compare spool balances with estimated usage, and record how much each print used. **Manual spool assignments and print accounting work with the official Snapmaker U1 firmware.** Spoolman is optional.
 
 | Release | Downloads | Setup |
 | --- | --- | --- |
@@ -15,7 +15,11 @@ Start a print from **Snapmaker Space** on your phone while Tracker is running an
 2. With the printer idle, add your spools and enter their remaining filament weight. In **Overview → Assignments**, match the installed spools to T0–T3 and click **Confirm positions**.
 3. Keep the computer awake and connected, then start a short print from Space. Check the cards during printing and the balances afterward.
 
-The macOS beta was tested on a real U1. In a four-toolhead print started from Snapmaker Space, Tracker recorded usage for all four spools. The Windows EXE passed simulator checks in WebView2. Real-printer testing of the Windows beta and third-party RFID tags is planned.
+The macOS beta was tested on a real U1. In a four-toolhead print started from Snapmaker Space, Tracker recorded usage for all four spools. The Windows EXE passed simulator checks in WebView2. The next Windows test is on a real U1.
+
+## RFID on stock Snapmaker firmware
+
+The experimental RFID add-on runs alongside the original Snapmaker firmware and passes tag IDs from the U1’s built-in readers to Tracker. On a U1 running factory version `2.1.0.157`, the add-on read original Snapmaker spool tags and reported the same tag ID after a spool moved to another toolhead. Up next is a repeat-read test with a blank third-party NFC tag on the printer.
 
 ## Show plate numbers after slicing in Snapmaker Orca
 
